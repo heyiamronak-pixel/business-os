@@ -69,8 +69,10 @@ jobs:
           PGPASSWORD: postgres
         run: psql -h localhost -U postgres -d business_sutra_test -v ON_ERROR_STOP=1 -f lib/db/migrations/tests/0001_rls_smoke_test.sql
 
-      - name: Run focused business logic regression tests
-        run: pnpm --filter @workspace/scripts exec tsx --test ./src/business-logic.test.ts ./src/api-auth.test.ts
+      - name: Run focused business logic and API integration tests
+        env:
+          DATABASE_URL: postgresql://business_sutra_api_test:ci-only-password@localhost:5432/business_sutra_test
+        run: pnpm --filter @workspace/scripts exec tsx --test ./src/business-logic.test.ts ./src/api-auth.test.ts ./src/business-api.integration.test.ts
 
       - name: Run workspace typecheck and production build
         run: pnpm build
