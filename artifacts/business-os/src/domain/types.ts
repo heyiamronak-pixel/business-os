@@ -15,6 +15,9 @@ export type WorkspaceSetup = {
   email: string;
   website: string;
   address: string;
+  gstRegistered?: boolean;
+  gstin?: string;
+  legalBusinessName?: string;
   logoDataUrl: string;
   brandColor: string;
   themeId: ThemeId;
