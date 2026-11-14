@@ -1,89 +1,85 @@
-# Business OS — Development Roadmap
+# Business OS — Consolidated Development Roadmap
 
-This roadmap is deliberately staged. Do not start later phases until their dependencies are understood and the prior milestone is tested.
+This roadmap reflects the source code currently present in the repository, rather than assuming a clean-slate foundation.
 
-## Milestone 0 — Source audit (first)
+## Milestone 0 — Source audit
 
-**Blocked on:** canonical source ZIP / repository export.
+**Code-level inspection completed: 14 November 2026.**
 
-- Import the original ZIP and inspect its full folder tree.
-- Identify package manager, scripts, dependencies, router/bootstrap, state/store, domain models, calculation engines, persistence, and UI entry points.
-- Compare any active prototype infrastructure and retain only compatible pieces.
-- Identify missing files, conflicting architectures, build/type errors, and unfinished modules.
-- Establish a reproducible install, typecheck, build, and test baseline.
-- Record what works before changing it.
-- Create a checkpoint before structural edits.
+- Mapped the 259-file repository.
+- Identified the active React/Vite frontend entry point and Wouter route table.
+- Identified workspace context, domain types, local repository, and business logic.
+- Identified the Express API route tree and Drizzle schema scaffold.
+- Identified a separate mockup sandbox and avoided treating it as the active frontend.
+- Identified implemented prototype workflows and routes still mapped to placeholders.
 
-**Exit criteria:** written audit, verified commands, working local setup or a precise list of blockers. No claim of functionality without a successful test.
+**Still required:** run dependency installation, typecheck, production build, and browser workflows in the actual Replit/local runtime. No runtime pass is claimed.
 
-## Milestone 1 — Stabilize the current application
+## Milestone 1 — Stabilize current prototype
 
-- Preserve the canonical source architecture and business logic.
-- Resolve dependency/toolchain compatibility.
-- Restore missing bootstrap and routing files only after confirming the actual router.
-- Connect existing screens and navigation.
-- Preserve responsive behavior and themes.
-- Run typecheck, production build, tests, route checks, and mobile viewport checks.
-- Fix regressions before adding new platform capabilities.
+- Preserve existing UI, domain models, and calculations.
+- Reproduce dependency, typecheck, and build baseline.
+- Verify workspace setup and browser persistence.
+- Verify product, customer, expense, inventory, target, and task create/edit/delete flows.
+- Verify sales stock deduction, insufficient-stock handling, sale update, and delete/stock restoration.
+- Confirm which route is canonical and keep mockup sandbox separate.
+- Add regression tests for calculations and state transitions.
+- Replace stale project documentation with accurate status.
 
-**Exit criteria:** app starts and builds reproducibly; existing critical flows pass agreed tests.
+**Exit criteria:** repeatable build and successful browser tests for the existing workflows.
 
-## Milestone 2 — Identity and organization foundation
+## Milestone 2 — Sales workflow completion
+
+- Verify sales UI route and connect an actual sales page rather than a generic placeholder.
+- Validate sale inputs and product/customer references.
+- Ensure sale updates and reversals keep stock and totals consistent.
+- Add history/filtering and payment status only with verified data behavior.
+
+**Exit criteria:** complete end-to-end sales workflow and regression tests.
+
+## Milestone 3 — Identity and organization foundation
 
 - Implement authentication and user profiles.
-- Add organizations and organization memberships.
-- Support users belonging to multiple organizations and switching workspaces.
-- Add organization-scoped Owner/Admin/Manager/Employee roles.
-- Add backend authorization and secure tenant isolation.
-- Add tests that prove one organization cannot read or modify another organization's records.
-- Add organization-level settings, currency, timezone, industry, and enabled modules.
+- Add organizations and memberships.
+- Support multiple organizations per user and workspace switching.
+- Add organization-specific Owner/Admin/Manager/Employee roles.
+- Enforce backend authorization and tenant isolation.
+- Add organization settings (industry, currency, timezone, branding, enabled modules).
 
-**Exit criteria:** tenant boundary tests pass for reads, writes, exports, storage, and background processing.
+**Exit criteria:** cross-tenant read/write tests pass; client-supplied organization IDs are never trusted without membership checks.
 
-## Milestone 3 — Core business operations
+## Milestone 4 — PostgreSQL and business API
 
-Verify and complete the connected workflows for:
-- Products and categories.
-- Inventory movements and low-stock alerts.
-- POS and sales transactions.
-- Customer purchase history.
-- Expenses.
-- Revenue targets.
-- Tasks and team workflows.
+- Define tenant-scoped Drizzle tables and migrations.
+- Implement validated API contracts and business endpoints.
+- Move persistence behind repository/service abstractions.
+- Migrate existing local prototype data only through an explicit, tested migration/export path.
+- Add transaction boundaries for sales and inventory.
 
-A completed sale must update relevant stock, transaction, customer history, and reporting records consistently. Reversals and edits must preserve data integrity.
+**Exit criteria:** business records persist across devices and users with tested tenant isolation and transaction integrity.
 
-**Exit criteria:** end-to-end tests confirm the related records and calculations remain consistent.
+## Milestone 5 — Team, reports, and Action Center
 
-## Milestone 4 — Reports and Action Center
+- Complete team membership and permissions.
+- Build reports only from actual authorized records.
+- Add date filters and transparent calculations.
+- Add alerts tied to verifiable business conditions.
+- Keep missing data visible rather than filling gaps with invented values.
 
-- Build reports on actual authorized records.
-- Add date ranges, filters, and comparisons.
-- Add revenue, expenses, profitability, product, inventory, customer, marketing, and team analysis as supported by the data model.
-- Generate actionable alerts from verifiable conditions.
-- Make missing data visible rather than filling it with fabricated figures.
+## Milestone 6 — AI Business Advisor and industry modules
 
-## Milestone 5 — AI Business Advisor
+- Provide only authorized organization context to the Advisor.
+- Separate stored facts, calculations, and recommendations.
+- Start with transparent rules where practical.
+- Add industry-specific workflows independently (retail, hospitality, travel, agencies, manufacturing, e-commerce, services).
+- Evaluate paid AI/third-party integrations only after cost, privacy, and access review.
 
-- Provide organization-scoped structured context retrieval.
-- Distinguish facts, calculations, and recommendations.
-- Begin with transparent rules where practical.
-- Evaluate model provider, privacy, token costs, rate limits, and permission boundaries before connecting a paid LLM.
+## Milestone 7 — Billing and launch readiness
 
-## Milestone 6 — Industry expansion and integrations
+- Add independent organization subscription, invoice, plan, and usage boundaries.
+- Ensure suspension in one organization cannot affect another.
+- Test backups, restore, security, performance, accessibility, mobile responsiveness, monitoring, and rollback.
 
-Add and validate hospitality, travel, agency, manufacturing, e-commerce, and other industry workflows as separate modules. Add Meta Ads, Google Ads, WhatsApp, email, and payment integrations only when permissions, pricing, value, and operational requirements are clear.
+## Delivery discipline
 
-## Milestone 7 — Launch readiness
-
-- Security and privacy review.
-- Backup and restore test.
-- Performance and load tests.
-- Mobile responsiveness and accessibility checks.
-- Monitoring, error reporting, and support process.
-- Production deployment and rollback plan.
-- PWA/mobile packaging only after the responsive web product is stable.
-
-## Release discipline
-
-Each milestone should be delivered in small, reviewable changes. Keep a rollback point. Record changed files, test commands, outcomes, and known limitations.
+Keep changes reversible. Do not rebuild the app from scratch or migrate routers/storage as incidental cleanup. Record changed files and actual test outputs. A feature is not complete until its end-to-end tests pass.
