@@ -90,7 +90,7 @@ jobs:
           SQL
 
       - name: Run tenant isolation integration tests against PostgreSQL
-        run: pnpm --filter @workspace/scripts exec tsx --test ./src/tenant-isolation.test.ts
+        run: pnpm --filter @workspace/scripts exec tsx --test ../lib/db/test/tenant-isolation.test.ts
 
       - name: Run focused business logic regression tests
         run: pnpm --filter @workspace/scripts exec tsx --test ./src/business-logic.test.ts
