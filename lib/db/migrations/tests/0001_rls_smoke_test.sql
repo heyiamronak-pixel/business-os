@@ -34,8 +34,7 @@ SELECT public.app_sync_authenticated_user(
  'Synced User'
 );
 SELECT set_config('app.user_id','00000000-0000-4000-8000-000000000003',true);
-DO $
-BEGIN
+DO $$BEGIN
  IF NOT EXISTS (
    SELECT 1 FROM public.app_users
    WHERE id='00000000-0000-4000-8000-000000000003'
@@ -44,7 +43,7 @@ BEGIN
  ) THEN
    RAISE EXCEPTION 'Verified identity provisioning failed';
  END IF;
-END $;
+END $$;
 ROLLBACK;
 
 BEGIN;
