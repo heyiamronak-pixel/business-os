@@ -18,7 +18,6 @@ INSERT INTO branches (id,business_id,code,name) VALUES
 INSERT INTO audit_logs (business_id,actor_user_id,action,entity_type,entity_id)
 VALUES ('10000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000002','created','branch','20000000-0000-4000-8000-000000000002');
 
-CREATE ROLE business_sutra_runtime NOLOGIN;
 GRANT USAGE ON SCHEMA public TO business_sutra_runtime;
 GRANT SELECT ON app_users,businesses,business_memberships,user_preferences,branches,audit_logs TO business_sutra_runtime;
 GRANT INSERT ON branches,audit_logs TO business_sutra_runtime;
