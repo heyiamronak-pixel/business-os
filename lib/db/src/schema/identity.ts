@@ -1,5 +1,6 @@
 import {
   boolean,
+  check,
   index,
   integer,
   jsonb,
@@ -10,6 +11,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 /**
  * Better Auth-compatible core identity tables.
@@ -197,6 +199,7 @@ export const branch = pgTable(
   (table) => [
     uniqueIndex("branch_organization_code_unique").on(table.organizationId, table.code),
     index("branch_organization_id_idx").on(table.organizationId),
+    check("branch_geofence_radius_positive", sql`${table.geofenceRadiusMeters} > 0`),
   ],
 );
 
