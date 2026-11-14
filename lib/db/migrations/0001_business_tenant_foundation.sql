@@ -70,15 +70,18 @@ AS $body$ SELECT NULLIF(current_setting('app.user_id',true),'')::uuid $body$;
 CREATE FUNCTION app_is_business_member(target_business_id uuid) RETURNS boolean
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,public
 AS $body$ SELECT EXISTS(SELECT 1 FROM public.business_memberships m WHERE m.business_id=target_business_id
- AND m.user_id=public.app_current_user_id() AND m.status='active') $body$;
+ AND m.user_id=public.app_current_user_id() AND m.status='active'
+ AND EXISTS(SELECT 1 FROM public.app_users u WHERE u.id=m.user_id AND u.status='active')) $body$;
 CREATE FUNCTION app_has_business_role(target_business_id uuid, allowed_roles membership_role[]) RETURNS boolean
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,public
 AS $body$ SELECT EXISTS(SELECT 1 FROM public.business_memberships m WHERE m.business_id=target_business_id
- AND m.user_id=public.app_current_user_id() AND m.status='active' AND m.role=ANY(allowed_roles)) $body$;
+ AND m.user_id=public.app_current_user_id() AND m.status='active' AND m.role=ANY(allowed_roles)
+ AND EXISTS(SELECT 1 FROM public.app_users u WHERE u.id=m.user_id AND u.status='active')) $body$;
 CREATE FUNCTION app_is_business_creator(target_business_id uuid) RETURNS boolean
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,public
 AS $body$ SELECT EXISTS(SELECT 1 FROM public.businesses b WHERE b.id=target_business_id
- AND b.created_by=public.app_current_user_id()) $body$;
+ AND b.created_by=public.app_current_user_id()
+ AND EXISTS(SELECT 1 FROM public.app_users u WHERE u.id=b.created_by AND u.status='active')) $body$;
 
 ALTER TABLE app_users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE businesses ENABLE ROW LEVEL SECURITY;
