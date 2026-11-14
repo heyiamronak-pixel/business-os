@@ -16,6 +16,7 @@ import RevenueTargets from '@/pages/revenue-targets';
 import Setup from '@/pages/setup';
 import Settings from '@/pages/settings';
 import Tasks from '@/pages/tasks';
+import Attendance from '@/pages/attendance';
 import NotFound from '@/pages/not-found';
 import {
   Route,
@@ -45,6 +46,7 @@ function Router() {
             <Route path="/marketing" component={ModulePlaceholder} />
             <Route path="/tasks" component={Tasks} />
             <Route path="/team" component={ModulePlaceholder} />
+            <Route path="/attendance" component={Attendance} />
             <Route path="/reports" component={ModulePlaceholder} />
             <Route path="/ai-advisor" component={ModulePlaceholder} />
             <Route path="/settings" component={Settings} />
