@@ -14,6 +14,7 @@ import ModulesOverview from '@/pages/modules-overview';
 import Products from '@/pages/products';
 import RevenueTargets from '@/pages/revenue-targets';
 import Setup from '@/pages/setup';
+import Sales from '@/pages/sales';
 import Settings from '@/pages/settings';
 import Tasks from '@/pages/tasks';
 import Attendance from '@/pages/attendance';
@@ -37,7 +38,7 @@ function Router() {
             <Route path="/dashboard" component={Dashboard} />
             <Route path="/setup" component={Setup} />
             <Route path="/modules" component={ModulesOverview} />
-            <Route path="/sales" component={ModulePlaceholder} />
+            <Route path="/sales" component={Sales} />
             <Route path="/products" component={Products} />
             <Route path="/inventory" component={Inventory} />
             <Route path="/customers" component={Customers} />
