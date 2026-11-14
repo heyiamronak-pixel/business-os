@@ -12,6 +12,24 @@ function respondWithError(res: Response, error: unknown) {
     res.status(403).json({ error: { code: "account_suspended", message: error.message } });
     return;
   }
+
+  const databaseCode =
+    error && typeof error === "object" && "code" in error
+      ? String(error.code)
+      : "";
+  if (databaseCode === "42501") {
+    res.status(403).json({ error: { code: "forbidden", message: "You do not have permission to access this business." } });
+    return;
+  }
+  if (databaseCode === "23505") {
+    res.status(409).json({ error: { code: "duplicate_record", message: "A record with these details already exists." } });
+    return;
+  }
+  if (databaseCode === "23514" || databaseCode === "22023" || databaseCode === "22P02") {
+    res.status(400).json({ error: { code: "invalid_request", message: "Some submitted details are invalid." } });
+    return;
+  }
+
   logger.error({ err: error }, "Business API request failed");
   res.status(500).json({ error: { code: "internal_error", message: "The request could not be completed." } });
 }
