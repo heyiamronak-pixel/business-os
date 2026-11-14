@@ -39,6 +39,9 @@ const initialForm: WorkspaceSetup = {
   email: '',
   website: '',
   address: '',
+  gstRegistered: false,
+  gstin: '',
+  legalBusinessName: '',
   logoDataUrl: '',
   brandColor: '#1f2937',
   themeId: 'professional',
@@ -205,6 +208,23 @@ export default function Setup() {
             <label className="grid gap-2 text-sm font-semibold" htmlFor="website">Website <span className="text-xs font-normal text-[hsl(var(--muted-foreground))]">Optional</span><input id="website" type="url" value={form.website} onChange={(event) => update('website', event.target.value)} placeholder="https://" className="min-h-12 rounded-xl border border-[hsl(var(--input))] bg-[hsl(var(--background))] px-3 text-sm font-normal" /></label>
             <label className="grid gap-2 text-sm font-semibold" htmlFor="address">Address <span className="text-xs font-normal text-[hsl(var(--muted-foreground))]">Optional</span><textarea id="address" value={form.address} onChange={(event) => update('address', event.target.value)} rows={2} className="min-h-12 rounded-xl border border-[hsl(var(--input))] bg-[hsl(var(--background))] px-3 py-3 text-sm font-normal" /></label>
           </div>
+        </section>
+
+        <section className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 sm:p-6">
+          <div className="mb-4">
+            <p className="text-xs font-semibold">GST & invoicing</p>
+            <p className="mt-1 text-[11px] text-[hsl(var(--muted-foreground))]">Optional. You can enable GST details now or add them later. Tax will not be applied unless you configure it.</p>
+          </div>
+          <label className="flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border border-[hsl(var(--border))] px-3">
+            <input type="checkbox" checked={!!form.gstRegistered} onChange={(event) => update('gstRegistered', event.target.checked)} className="size-4 accent-[hsl(var(--accent))]" />
+            <span className="text-sm font-semibold">My business is GST registered</span>
+          </label>
+          {form.gstRegistered && (
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <label className="grid gap-2 text-sm font-semibold" htmlFor="gstin">GSTIN<input id="gstin" value={form.gstin ?? ''} onChange={(event) => update('gstin', event.target.value.toUpperCase())} placeholder="15-character GSTIN" maxLength={15} className="min-h-12 rounded-xl border border-[hsl(var(--input))] bg-[hsl(var(--background))] px-3 text-sm font-normal uppercase" /></label>
+              <label className="grid gap-2 text-sm font-semibold" htmlFor="legal-business-name">Legal business name<input id="legal-business-name" value={form.legalBusinessName ?? ''} onChange={(event) => update('legalBusinessName', event.target.value)} placeholder="As per GST registration" className="min-h-12 rounded-xl border border-[hsl(var(--input))] bg-[hsl(var(--background))] px-3 text-sm font-normal" /></label>
+            </div>
+          )}
         </section>
 
         <section className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 sm:p-6">
