@@ -104,7 +104,7 @@ export function MarketingScreen() {
       {campaigns.length === 0 ? (
         <EmptyState
           title="No campaigns logged"
-          body="Enter spend, clicks, leads and attributed revenue. Vestra calculates CPC, CPL, conversion, CAC and ROAS from those numbers only."
+          body="Enter spend, clicks, leads and attributed revenue. Business Sutra calculates CPC, CPL, conversion, CAC and ROAS from those numbers only."
           action={<Button onClick={() => start()}>Log a campaign</Button>}
         />
       ) : (
