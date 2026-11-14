@@ -1,4 +1,5 @@
 import test, { after, before } from "node:test";
+import { randomUUID } from "node:crypto";
 import assert from "node:assert/strict";
 import { and, eq, inArray } from "drizzle-orm";
 import {
@@ -14,7 +15,7 @@ import {
   user,
 } from "../../lib/db/src/schema/index.ts";
 
-const suffix = crypto.randomUUID();
+const suffix = randomUUID();
 const userA = `p2-user-a-${suffix}`;
 const userB = `p2-user-b-${suffix}`;
 const orgA = `p2-org-a-${suffix}`;
