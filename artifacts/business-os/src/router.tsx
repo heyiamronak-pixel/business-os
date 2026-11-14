@@ -10,7 +10,7 @@ const basepath =
 function PendingScreen() {
   return (
     <main className="flex min-h-dvh items-center justify-center bg-background text-foreground">
-      <p className="font-display text-lg">Loading Business OS…</p>
+      <p className="font-display text-lg">Loading Business Sutra…</p>
     </main>
   );
 }
