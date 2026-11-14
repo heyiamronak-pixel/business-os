@@ -24,6 +24,7 @@ const pageTitles: Record<string, string> = {
   '/marketing': 'Marketing',
   '/tasks': 'Tasks',
   '/team': 'Team',
+  '/attendance': 'Attendance',
   '/reports': 'Reports',
   '/ai-advisor': 'AI advisor',
   '/settings': 'Settings',
@@ -89,7 +90,7 @@ function Sidebar({ open, onClose, pathname }: { open: boolean; onClose: () => vo
   );
 }
 
-const moreItems = modules.filter((module) => ['products', 'inventory', 'customers', 'expenses', 'revenue-targets', 'marketing', 'team', 'ai-advisor'].includes(module.slug));
+const moreItems = modules.filter((module) => ['products', 'inventory', 'customers', 'expenses', 'revenue-targets', 'marketing', 'team', 'attendance', 'ai-advisor'].includes(module.slug));
 
 function MobileMore({ onClose }: { onClose: () => void }) {
   const SettingsIcon = settingsModule.icon;
