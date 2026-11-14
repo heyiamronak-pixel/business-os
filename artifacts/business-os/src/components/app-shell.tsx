@@ -76,9 +76,36 @@ export function AppPage({
   const ctx = buildContext(db, business);
   const actionCount = deriveActions(ctx).length;
 
+  const desktopNav = [
+    { to: "/", label: "Overview", icon: House },
+    { to: "/sell", label: "Sales", icon: ShoppingBag },
+    { to: "/actions", label: "Actions", icon: ListChecks },
+    { to: "/advisor", label: "AI Advisor", icon: Compass },
+    { to: "/more", label: "All modules", icon: Ellipsis },
+  ];
+
   return (
-    <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col bg-background">
-      <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-border/70 bg-background/90 px-4 py-3 backdrop-blur-md">
+    <>
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-[248px] flex-col border-r border-border bg-card px-4 py-6 lg:flex">
+        <Link to="/" className="mb-8 flex items-center gap-3 px-2">
+          <span className="grid size-10 place-items-center rounded-xl bg-primary font-display text-lg text-primary-foreground">B</span>
+          <span className="min-w-0"><span className="block truncate text-sm font-semibold">Business Sutra</span><span className="mt-0.5 block text-[10px] text-muted-foreground">Everything Connected</span></span>
+        </Link>
+        <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Workspace</p>
+        <nav aria-label="Desktop navigation" className="space-y-1">
+          {desktopNav.map((item) => {
+            const active = item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);
+            const Icon = item.icon;
+            return <Link key={item.to} to={item.to} className={cn("flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors", active ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground")}><Icon className="size-[18px]" />{item.label}</Link>;
+          })}
+        </nav>
+        <div className="mt-auto rounded-xl border border-border bg-background p-3">
+          <p className="truncate text-xs font-semibold">{business.name}</p>
+          <p className="mt-1 text-[11px] text-muted-foreground">{business.industry}</p>
+        </div>
+      </aside>
+      <div className="mx-auto flex min-h-dvh w-full max-w-[1440px] flex-col bg-background lg:ml-[248px] lg:w-[calc(100%-248px)] lg:max-w-none">
+      <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-border/70 bg-background/90 px-4 py-3 backdrop-blur-md sm:px-6 lg:px-8">
         {business.logoDataUrl ? (
           <img src={business.logoDataUrl} alt="" className="size-9 rounded-[var(--radius-sm)] object-cover" />
         ) : (
@@ -100,8 +127,8 @@ export function AppPage({
           </span>
         </Link>
       </header>
-      <main className="flex-1 px-4 pt-4 pb-[calc(var(--nav-h)+var(--safe-b)+16px)]">{children}</main>
-      <nav className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-md border-t border-border bg-card/95 pb-[var(--safe-b)] backdrop-blur-md">
+      <main className="mx-auto w-full max-w-[1200px] flex-1 px-4 pt-5 pb-[calc(var(--nav-h)+var(--safe-b)+16px)] sm:px-6 lg:px-8 lg:pt-8 lg:pb-10">{children}</main>
+      <nav className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-md border-t border-border bg-card/95 pb-[var(--safe-b)] backdrop-blur-md lg:hidden">
         <ul className="grid grid-cols-5">
           {NAV.map((item) => {
             const active = item.match(pathname);
@@ -131,7 +158,8 @@ export function AppPage({
           })}
         </ul>
       </nav>
-    </div>
+      </div>
+    </>
   );
 }
 

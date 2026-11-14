@@ -22,6 +22,7 @@ import {
   createSaleItems,
   makeId,
   saleTotals,
+  revertSaleFromInventory,
 } from '@/services/business-logic';
 import { createLocalBusinessRepository } from '@/services/business-repository';
 import { themeSuggestions } from '@/services/theme-utils';
@@ -308,12 +309,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
     setState((current) => {
       const sale = current.sales.find((item) => item.id === id);
       if (!sale) return current;
-      const restoredProducts = current.products.map((product) => {
-        const quantity = sale.items
-          .filter((item) => item.productId === product.id)
-          .reduce((sum, item) => sum + item.quantity, 0);
-        return quantity ? { ...product, stock: product.stock + quantity, updatedAt: new Date().toISOString() } : product;
-      });
+      const restoredProducts = revertSaleFromInventory(current.products, [sale]);
       return {
         ...current,
         products: restoredProducts,

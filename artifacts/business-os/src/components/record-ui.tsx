@@ -2,7 +2,7 @@ import { type ReactNode } from 'react';
 import { Plus, Search, Trash2 } from 'lucide-react';
 
 export function PageFrame({ children }: { children: ReactNode }) {
-  return <div className="mx-auto w-full max-w-6xl px-4 py-5 pb-28 sm:px-6 sm:py-8 lg:px-9 lg:pb-10">{children}</div>;
+  return <div className="mx-auto w-full max-w-[1600px] px-4 py-5 pb-28 sm:px-6 sm:py-8 lg:px-9 lg:pb-10">{children}</div>;
 }
 
 export function PageIntro({
