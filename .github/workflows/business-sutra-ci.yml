@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - foundation/hardening
+      - phase2/identity-data-foundation
   pull_request:
     branches:
       - main
@@ -19,12 +20,28 @@ concurrency:
 
 jobs:
   verify:
-    name: Typecheck and production build
+    name: Database tests, typecheck and production build
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     env:
       PORT: "4173"
       BASE_PATH: "/"
+      DATABASE_URL: "postgresql://business_sutra_runtime:ci-only-test-password@127.0.0.1:5432/business_sutra"
+      MIGRATION_DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:5432/business_sutra"
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: business_sutra
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d business_sutra"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -43,6 +60,37 @@ jobs:
 
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Create least-privilege runtime database role
+        run: |
+          PGPASSWORD=postgres psql "$MIGRATION_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE business_sutra_runtime
+            LOGIN PASSWORD 'ci-only-test-password'
+            NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
+          GRANT CONNECT ON DATABASE business_sutra TO business_sutra_runtime;
+          GRANT USAGE ON SCHEMA public TO business_sutra_runtime;
+          SQL
+
+      - name: Apply database migrations with the migration role
+        run: pnpm --filter @workspace/db run migrate
+
+      - name: Grant runtime table permissions
+        run: |
+          PGPASSWORD=postgres psql "$MIGRATION_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          GRANT SELECT, INSERT, UPDATE, DELETE ON
+            "user", "organization", "member", "invitation", "session", "account", "verification"
+            TO business_sutra_runtime;
+          GRANT SELECT, INSERT, UPDATE, DELETE ON "branch" TO business_sutra_runtime;
+          GRANT SELECT, INSERT ON "audit_log" TO business_sutra_runtime;
+          SQL
+
+      - name: Run tenant isolation integration tests against PostgreSQL
+        run: pnpm --filter @workspace/scripts exec tsx --test ./src/tenant-isolation.test.ts
 
       - name: Run focused business logic regression tests
         run: pnpm --filter @workspace/scripts exec tsx --test ./src/business-logic.test.ts
