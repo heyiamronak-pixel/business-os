@@ -58,12 +58,8 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: Resolve dependencies and generate the pnpm lockfile
-        run: |
-          pnpm install --no-frozen-lockfile
-          echo "BUSINESS_SUTRA_LOCKFILE_BEGIN"
-          cat pnpm-lock.yaml
-          echo "BUSINESS_SUTRA_LOCKFILE_END"
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Install PostgreSQL client
         run: |
