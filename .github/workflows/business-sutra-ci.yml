@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - foundation/hardening
+      - phase-2/data-foundation
   pull_request:
     branches:
       - main
@@ -19,6 +20,20 @@ concurrency:
 
 jobs:
   verify:
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: business_sutra_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d business_sutra_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     name: Typecheck and production build
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -43,6 +58,16 @@ jobs:
 
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Apply tenant foundation migration to clean PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d business_sutra_test -v ON_ERROR_STOP=1 -f lib/db/migrations/0001_business_tenant_foundation.sql
+
+      - name: Verify tenant isolation and audit immutability
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d business_sutra_test -v ON_ERROR_STOP=1 -f lib/db/migrations/tests/0001_rls_smoke_test.sql
 
       - name: Run focused business logic regression tests
         run: pnpm --filter @workspace/scripts exec tsx --test ./src/business-logic.test.ts
