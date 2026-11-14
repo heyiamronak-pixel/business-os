@@ -1,5 +1,6 @@
 import {
   boolean,
+  check,
   index,
   numeric,
   pgTable,
@@ -7,6 +8,7 @@ import {
   timestamp,
   uniqueIndex,
   uuid,
+  sql,
 } from "drizzle-orm/pg-core";
 import { appUsers } from "./identity";
 
@@ -58,6 +60,9 @@ export const branches = pgTable(
   (table) => [
     uniqueIndex("branches_business_code_uq").on(table.businessId, table.code),
     index("branches_business_active_idx").on(table.businessId, table.isActive),
+    check("branches_latitude_range", sql`${table.latitude} IS NULL OR ${table.latitude} BETWEEN -90 AND 90`),
+    check("branches_longitude_range", sql`${table.longitude} IS NULL OR ${table.longitude} BETWEEN -180 AND 180`),
+    check("branches_geofence_positive", sql`${table.geofenceRadiusMeters} IS NULL OR ${table.geofenceRadiusMeters} > 0`),
   ],
 );
 
