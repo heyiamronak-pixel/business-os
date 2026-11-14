@@ -65,19 +65,19 @@ CREATE INDEX audit_logs_actor_time_idx ON audit_logs(actor_user_id,occurred_at);
 
 -- API sets app.user_id transaction-locally after validating a signed provider identity.
 CREATE FUNCTION app_current_user_id() RETURNS uuid LANGUAGE sql STABLE
-AS $$ SELECT NULLIF(current_setting('app.user_id',true),'')::uuid $$;
+AS $body$ SELECT NULLIF(current_setting('app.user_id',true),'')::uuid $body$;
 CREATE FUNCTION app_is_business_member(target_business_id uuid) RETURNS boolean
-LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public
-AS $$ SELECT EXISTS(SELECT 1 FROM business_memberships m WHERE m.business_id=target_business_id
- AND m.user_id=app_current_user_id() AND m.status='active') $$;
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,public
+AS $body$ SELECT EXISTS(SELECT 1 FROM public.business_memberships m WHERE m.business_id=target_business_id
+ AND m.user_id=public.app_current_user_id() AND m.status='active') $body$;
 CREATE FUNCTION app_has_business_role(target_business_id uuid, allowed_roles membership_role[]) RETURNS boolean
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public
-AS $ SELECT EXISTS(SELECT 1 FROM business_memberships m WHERE m.business_id=target_business_id
- AND m.user_id=app_current_user_id() AND m.status='active' AND m.role=ANY(allowed_roles)) $;
+AS $body$ SELECT EXISTS(SELECT 1 FROM public.business_memberships m WHERE m.business_id=target_business_id
+ AND m.user_id=public.app_current_user_id() AND m.status='active' AND m.role=ANY(allowed_roles)) $body$;
 CREATE FUNCTION app_is_business_creator(target_business_id uuid) RETURNS boolean
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public
-AS $ SELECT EXISTS(SELECT 1 FROM businesses b WHERE b.id=target_business_id
- AND b.created_by=app_current_user_id()) $;
+AS $body$ SELECT EXISTS(SELECT 1 FROM public.businesses b WHERE b.id=target_business_id
+ AND b.created_by=public.app_current_user_id()) $body$;
 
 ALTER TABLE app_users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE businesses ENABLE ROW LEVEL SECURITY;
@@ -104,6 +104,9 @@ CREATE POLICY memberships_update_scope ON business_memberships FOR UPDATE
  AND app_has_business_role(business_id,ARRAY['owner','admin']::membership_role[]))
  WITH CHECK(role IN ('manager','employee') AND user_id<>app_current_user_id()
  AND app_has_business_role(business_id,ARRAY['owner','admin']::membership_role[]));
+CREATE POLICY memberships_delete_scope ON business_memberships FOR DELETE
+ USING(role IN ('manager','employee') AND user_id<>app_current_user_id()
+ AND app_has_business_role(business_id,ARRAY['owner','admin']::membership_role[]));
 
 CREATE POLICY user_preferences_self ON user_preferences FOR ALL
  USING(user_id=app_current_user_id()) WITH CHECK(user_id=app_current_user_id());
@@ -114,6 +117,6 @@ CREATE POLICY branches_update_admin ON branches FOR UPDATE
  USING(app_has_business_role(business_id,ARRAY['owner','admin']::membership_role[]))
  WITH CHECK(app_has_business_role(business_id,ARRAY['owner','admin']::membership_role[]));
 CREATE POLICY audit_logs_select_member ON audit_logs FOR SELECT USING(app_is_business_member(business_id));
-CREATE POLICY audit_logs_insert_member ON audit_logs FOR INSERT WITH CHECK(app_is_business_member(business_id));
+CREATE POLICY audit_logs_insert_member ON audit_logs FOR INSERT WITH CHECK(app_is_business_member(business_id) AND (actor_user_id IS NULL OR actor_user_id=app_current_user_id()));
 -- Audit logs intentionally have no UPDATE or DELETE policy.
 -- Runtime DB role must not own these tables and must not have BYPASSRLS.
