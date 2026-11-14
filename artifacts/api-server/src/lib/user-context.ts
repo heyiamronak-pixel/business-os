@@ -1,6 +1,8 @@
 import { pool } from "@workspace/db";
 import type { SupabaseIdentity } from "../middlewares/supabase-auth";
 
+export type UserDbClient = Awaited<ReturnType<typeof pool.connect>>;
+
 export class SuspendedAccountError extends Error {
   constructor() {
     super("This account is currently suspended.");
@@ -16,7 +18,7 @@ export class SuspendedAccountError extends Error {
 export async function withUserContext<T>(
   identity: SupabaseIdentity,
   work: (
-    client: Awaited<ReturnType<typeof pool.connect>>,
+    client: UserDbClient,
     appUserId: string,
   ) => Promise<T>,
 ): Promise<T> {
