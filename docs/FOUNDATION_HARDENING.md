@@ -11,9 +11,9 @@
 - `src/App.tsx` uses Wouter routing and `BusinessProvider`.
 - The Vite configuration also includes the TanStack Start plugin; this coexistence needs an intentional decision and build verification before changing routing.
 - The current business repository persists workspace data in browser local storage. It is not a shared cloud database.
-- Sales, Marketing, Team, Reports and AI Advisor are currently routed to a module placeholder in the active Wouter app.
+- Sales now has a dedicated active Wouter page for creating sales, selecting customers/products, recording payment status and reviewing/deleting sales. Marketing, Team, Reports and AI Advisor remain placeholders.
 - Product, Inventory, Customers, Expenses, Revenue Targets, Tasks and Dashboard have dedicated page components.
-- Sales creation and inventory adjustment are coupled in the current client-side business context; this must be covered by regression tests before moving persistence to a server.
+- Sales creation and inventory adjustment are coupled in the current client-side business context. Regression tests now cover duplicate cart rows, stock validation, sale totals, stock decrement/movement creation and stock restoration.
 - An Attendance prototype has been added. Its geofence coordinates, selfies and attendance records are stored in the browser and are not tamper-resistant or shared across devices.
 - Optional GST registration fields have been added to workspace onboarding. GST invoice generation, tax calculation, numbering and compliance checks are not yet implemented.
 
@@ -29,13 +29,15 @@
 
 ## Work sequence and acceptance criteria
 
-### 0. Stabilize the current app
-- Install from the lockfile and run typecheck + production build.
-- Resolve compiler/build errors before adding more features.
-- Verify Netlify publish directory and required environment variables.
-- Smoke-test onboarding, product CRUD, inventory movements, sale creation/deletion, customer CRUD, expenses, tasks, backup export and direct route refresh.
-- Add regression tests for sale -> stock decrement and sale deletion -> stock restore.
-- Confirm Attendance route, navigation entry and camera/location permissions; keep prototype clearly labelled until server-backed.
+### 0. Stabilize the current app — technical checks passed; manual acceptance remains
+- [x] Install from the lockfile and run workspace typecheck + production build in GitHub Actions.
+- [x] Add six focused sales/inventory regression tests and run them in CI.
+- [x] Connect the Sales route to a dedicated active page; sale creation validates stock and the existing business logic synchronizes inventory.
+- [x] Widen shared page containers and dashboard workspace for desktop displays; preserve responsive mobile navigation.
+- [x] Confirm Attendance route and navigation entry; keep the prototype limitation visible until it is server-backed.
+- [x] Generate a Netlify Deploy Preview for the pull request: https://deploy-preview-1--businessoperatingsystembyronak.netlify.app
+- [ ] Perform manual browser acceptance on desktop and mobile for onboarding, product CRUD, inventory movements, sale creation/deletion, customer CRUD, expenses, tasks, backup export, direct route refresh and camera/location permissions. The preview is deployed, but this environment cannot render the site in an interactive browser, so this final visual/permission check remains outstanding.
+- [ ] Verify the production deployment only after the pull request is reviewed and merged; production was intentionally not changed.
 
 ### 1. Architecture and data foundation
 - Select one active routing/rendering architecture after build and deployment review; do not perform a blind rewrite.
