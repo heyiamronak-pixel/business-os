@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
   check,
@@ -8,7 +9,6 @@ import {
   timestamp,
   uniqueIndex,
   uuid,
-  sql,
 } from "drizzle-orm/pg-core";
 import { appUsers } from "./identity";
 
