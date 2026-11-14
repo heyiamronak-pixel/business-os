@@ -60,7 +60,7 @@ function Sidebar({ open, onClose, pathname }: { open: boolean; onClose: () => vo
       {open && <button type="button" aria-label="Close navigation" onClick={onClose} data-testid="button-close-navigation-backdrop" className="fixed inset-0 z-40 bg-[hsl(var(--foreground)/0.28)] backdrop-blur-[2px] md:hidden" />}
       <aside data-testid="navigation-sidebar" className={['fixed inset-y-0 left-0 z-50 flex w-[276px] flex-col border-r border-[hsl(var(--sidebar-border))] bg-[hsl(var(--sidebar))] px-4 py-5 text-[hsl(var(--sidebar-foreground))] transition-transform duration-300 md:static md:z-auto md:translate-x-0', open ? 'translate-x-0' : '-translate-x-full'].join(' ')}>
         <div className="flex items-center justify-between px-2">
-          <Link href="/dashboard" onClick={onClose} className="flex items-center gap-3" data-testid="link-brand-dashboard"><BrandMark /><span className="font-semibold tracking-[-0.04em] text-[hsl(var(--sidebar-accent-foreground))]">Business OS</span></Link>
+          <Link href="/dashboard" onClick={onClose} className="flex items-center gap-3" data-testid="link-brand-dashboard"><BrandMark /><span className="flex flex-col leading-tight"><span className="font-semibold tracking-[-0.04em] text-[hsl(var(--sidebar-accent-foreground))]">Business Sutra</span><span className="mt-0.5 text-[9px] font-medium tracking-[0.08em] text-[hsl(var(--sidebar-foreground)/0.62)]">EVERYTHING CONNECTED</span></span></Link>
           <button type="button" onClick={onClose} aria-label="Close navigation" data-testid="button-close-navigation" className="rounded-lg p-2 text-[hsl(var(--sidebar-foreground))] hover:bg-[hsl(var(--sidebar-accent))] md:hidden"><X className="size-4" /></button>
         </div>
 
@@ -97,7 +97,7 @@ function MobileMore({ onClose }: { onClose: () => void }) {
     <div className="fixed inset-0 z-40 bg-[hsl(var(--foreground)/0.3)] md:hidden" onClick={onClose}>
       <div role="dialog" aria-label="More modules" onClick={(event) => event.stopPropagation()} className="absolute inset-x-0 bottom-0 max-h-[82dvh] overflow-y-auto rounded-t-[24px] border-t border-[hsl(var(--border))] bg-[hsl(var(--card))] px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-4 shadow-[0_-18px_50px_hsl(var(--foreground)/0.15)]">
         <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-[hsl(var(--border))]" />
-        <div className="mb-4 flex items-center justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[hsl(var(--muted-foreground))]">Business OS</p><h2 className="mt-1 text-lg font-semibold">More modules</h2></div><button type="button" onClick={onClose} aria-label="Close more modules" data-testid="button-close-more" className="grid size-10 place-items-center rounded-xl border border-[hsl(var(--border))]"><X className="size-4" /></button></div>
+        <div className="mb-4 flex items-center justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[hsl(var(--muted-foreground))]">Business Sutra</p><h2 className="mt-1 text-lg font-semibold">More modules</h2></div><button type="button" onClick={onClose} aria-label="Close more modules" data-testid="button-close-more" className="grid size-10 place-items-center rounded-xl border border-[hsl(var(--border))]"><X className="size-4" /></button></div>
         <div className="grid grid-cols-2 gap-2">
           {moreItems.map((module) => { const Icon = module.icon; return <Link href={`/${module.slug}`} onClick={onClose} key={module.slug} data-testid={`link-more-${module.slug}`} className="flex min-h-14 items-center gap-2 rounded-xl border border-[hsl(var(--border))] px-3 text-xs font-semibold"><Icon className="size-4 text-[hsl(var(--accent-foreground))]" />{module.label}</Link>; })}
           <Link href="/settings" onClick={onClose} data-testid="link-more-settings" className="flex min-h-14 items-center gap-2 rounded-xl border border-[hsl(var(--border))] px-3 text-xs font-semibold"><SettingsIcon className="size-4 text-[hsl(var(--accent-foreground))]" />Settings</Link>
@@ -123,7 +123,7 @@ export function AppShell({ children }: AppShellProps) {
   const [moreOpen, setMoreOpen] = useState(false);
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const { workspace } = useWorkspace();
-  const title = useMemo(() => pageTitles[pathname] ?? 'Business OS', [pathname]);
+  const title = useMemo(() => pageTitles[pathname] ?? 'Business Sutra', [pathname]);
 
   useEffect(() => {
     setMobileOpen(false);
@@ -138,7 +138,7 @@ export function AppShell({ children }: AppShellProps) {
         <header className="sticky top-0 z-30 flex h-[62px] items-center justify-between border-b border-[hsl(var(--border)/0.8)] bg-[hsl(var(--background)/0.94)] px-4 backdrop-blur-xl sm:px-6 lg:px-9">
           <div className="flex min-w-0 items-center gap-3">
             <button type="button" onClick={() => setMobileOpen(true)} aria-label="Open navigation" data-testid="button-open-navigation" className="grid size-10 place-items-center rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--muted-foreground))] md:hidden"><Menu className="size-4" /></button>
-            <div className="min-w-0"><div className="hidden text-[10px] font-semibold uppercase tracking-[0.15em] text-[hsl(var(--muted-foreground))] sm:block">Business OS</div><h1 data-testid="text-page-title" className="truncate text-base font-semibold tracking-[-0.035em] sm:text-lg">{title}</h1></div>
+            <div className="min-w-0"><div className="hidden text-[10px] font-semibold uppercase tracking-[0.15em] text-[hsl(var(--muted-foreground))] sm:block">Business Sutra</div><h1 data-testid="text-page-title" className="truncate text-base font-semibold tracking-[-0.035em] sm:text-lg">{title}</h1></div>
           </div>
           <div className="relative">
             <button type="button" onClick={() => setWorkspaceMenuOpen((open) => !open)} aria-expanded={workspaceMenuOpen} data-testid="button-workspace-switcher" className="flex max-w-[180px] items-center gap-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-left text-xs font-semibold shadow-[0_2px_8px_hsl(var(--foreground)/0.03)]">
