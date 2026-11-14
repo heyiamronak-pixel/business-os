@@ -148,7 +148,7 @@ export function OnboardingScreen() {
         ) : (
           <span className="size-11" />
         )}
-        <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Vestra</p>
+        <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Business Sutra</p>
         <span className="size-11" />
       </div>
 
@@ -161,9 +161,9 @@ export function OnboardingScreen() {
       {step === 0 ? (
         <div className="flex flex-1 flex-col">
           <p className="text-sm font-medium text-primary">Business operating system</p>
-          <h1 className="mt-3 font-display text-[2.6rem] leading-[1.05]">See the whole business. Act on what matters.</h1>
+          <h1 className="mt-3 font-display text-[2.6rem] leading-[1.05]">Everything your business needs. Connected in one place.</h1>
           <p className="mt-4 text-base leading-relaxed text-muted-foreground">
-            Capture activity once. Vestra connects sales, stock, customers, costs, targets and the next action — so you stop living in spreadsheets.
+            Business Sutra connects sales, stock, customers, costs, targets and daily operations — so you can run your business with clarity.
           </p>
           <ul className="mt-8 space-y-3 text-sm text-foreground">
             <li>What happened</li>
@@ -364,7 +364,7 @@ export function OnboardingScreen() {
           </ul>
           {error ? <p className="text-sm text-danger">{error}</p> : null}
           <Button className="mt-auto" size="lg" onClick={finish} disabled={busy}>
-            Open Vestra
+            Open Business Sutra
           </Button>
         </div>
       ) : null}
