@@ -1,7 +1,12 @@
 import { pool } from "@workspace/db";
 import type { SupabaseIdentity } from "../middlewares/supabase-auth";
 
-export type UserDbClient = Awaited<ReturnType<typeof pool.connect>>;
+export interface UserDbClient {
+  query<Row = Record<string, unknown>>(
+    text: string,
+    values?: unknown[],
+  ): Promise<{ rows: Row[] }>;
+}
 
 export class SuspendedAccountError extends Error {
   constructor() {
@@ -52,7 +57,7 @@ export async function withUserContext<T>(
       throw new SuspendedAccountError();
     }
 
-    const result = await work(client, appUserId);
+    const result = await work(client as unknown as UserDbClient, appUserId);
     await client.query("COMMIT");
     transactionStarted = false;
     return result;
