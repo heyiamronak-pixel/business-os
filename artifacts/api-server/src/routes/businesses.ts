@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Router, type IRouter, type Request, type Response } from "express";
 import { logger } from "../lib/logger";
-import { SuspendedAccountError, withUserContext } from "../lib/user-context";
+import { SuspendedAccountError, withUserContext, type UserDbClient } from "../lib/user-context";
 import { requireSupabaseAuth } from "../middlewares/supabase-auth";
 
 const router: IRouter = Router();
@@ -19,7 +19,7 @@ function respondWithError(res: Response, error: unknown) {
 async function inUserContext(
   req: Request,
   res: Response,
-  work: Parameters<typeof withUserContext>[1],
+  work: (client: UserDbClient, appUserId: string) => Promise<unknown>,
 ) {
   if (!req.authUser) {
     res.status(401).json({ error: { code: "authentication_required", message: "Sign in to continue." } });
