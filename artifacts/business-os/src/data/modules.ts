@@ -1,6 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 import {
   BarChart3,
+  CalendarCheck,
   Bot,
   Boxes,
   CheckSquare2,
@@ -98,6 +99,14 @@ export const modules: ModuleDefinition[] = [
     accent: 'gold',
   },
   {
+    slug: 'attendance',
+    label: 'Attendance',
+    description: 'GPS check-in, selfie and shift records',
+    icon: CalendarCheck,
+    group: 'workspace',
+    accent: 'gold',
+  },
+  {
     slug: 'team',
     label: 'Team',
     description: 'People and permissions',
@@ -143,6 +152,7 @@ export const moduleLabels: Record<string, string> = {
   marketing: 'Marketing',
   tasks: 'Tasks',
   team: 'Team',
+  attendance: 'Attendance',
   reports: 'Reports',
   'ai-advisor': 'AI Advisor',
   pos: 'POS',
