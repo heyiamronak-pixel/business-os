@@ -9,7 +9,7 @@ function NotFoundPage() {
     <main className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-background px-6 text-center text-foreground">
       <h1 className="font-display text-3xl">Page not found</h1>
       <a className="text-primary underline underline-offset-4" href={import.meta.env.BASE_URL}>
-        Return to Business OS
+        Return to Business Sutra
       </a>
     </main>
   );
@@ -42,7 +42,7 @@ function RootDocument() {
 export const Route = createRootRoute({
   head: () => ({
     meta: [
-      { title: 'Business OS' },
+      { title: 'Business Sutra' },
       {
         name: 'description',
         content: 'A multi-business workspace for daily operations and decisions.',
