@@ -13,13 +13,14 @@ CREATE TABLE app_users (
 );
 CREATE INDEX app_users_email_idx ON app_users(email);
 CREATE TABLE businesses (
- id uuid PRIMARY KEY DEFAULT gen_random_uuid(), name text NOT NULL, slug text NOT NULL UNIQUE,
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(), name text NOT NULL, slug text NOT NULL,
  industry text NOT NULL DEFAULT 'other', country_code text NOT NULL DEFAULT 'IN',
  currency_code text NOT NULL DEFAULT 'INR', timezone text NOT NULL DEFAULT 'Asia/Kolkata',
  phone text, email text, website text, address text, gst_registered boolean NOT NULL DEFAULT false,
  gstin text, legal_business_name text,
  created_by uuid NOT NULL REFERENCES app_users(id) ON DELETE RESTRICT,
- created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(), archived_at timestamptz
+ created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(), archived_at timestamptz,
+ CONSTRAINT businesses_slug_uq UNIQUE(slug)
 );
 CREATE INDEX businesses_created_by_idx ON businesses(created_by);
 CREATE TABLE business_memberships (
