@@ -72,8 +72,12 @@ AS $$ SELECT EXISTS(SELECT 1 FROM business_memberships m WHERE m.business_id=tar
  AND m.user_id=app_current_user_id() AND m.status='active') $$;
 CREATE FUNCTION app_has_business_role(target_business_id uuid, allowed_roles membership_role[]) RETURNS boolean
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public
-AS $$ SELECT EXISTS(SELECT 1 FROM business_memberships m WHERE m.business_id=target_business_id
- AND m.user_id=app_current_user_id() AND m.status='active' AND m.role=ANY(allowed_roles)) $$;
+AS $ SELECT EXISTS(SELECT 1 FROM business_memberships m WHERE m.business_id=target_business_id
+ AND m.user_id=app_current_user_id() AND m.status='active' AND m.role=ANY(allowed_roles)) $;
+CREATE FUNCTION app_is_business_creator(target_business_id uuid) RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public
+AS $ SELECT EXISTS(SELECT 1 FROM businesses b WHERE b.id=target_business_id
+ AND b.created_by=app_current_user_id()) $;
 
 ALTER TABLE app_users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE businesses ENABLE ROW LEVEL SECURITY;
@@ -92,7 +96,7 @@ CREATE POLICY businesses_update_admin ON businesses FOR UPDATE
 CREATE POLICY memberships_select_scope ON business_memberships FOR SELECT
  USING(user_id=app_current_user_id() OR app_is_business_member(business_id));
 CREATE POLICY memberships_insert_scope ON business_memberships FOR INSERT WITH CHECK(
- (role='owner' AND EXISTS(SELECT 1 FROM businesses b WHERE b.id=business_id AND b.created_by=app_current_user_id()))
+ (role='owner' AND app_is_business_creator(business_id))
  OR (role IN ('manager','employee') AND app_has_business_role(business_id,ARRAY['owner','admin']::membership_role[]))
 );
 CREATE POLICY memberships_update_scope ON business_memberships FOR UPDATE
