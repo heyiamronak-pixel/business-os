@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { Request, Response } from "express";
 import { requireSupabaseAuth } from "../../artifacts/api-server/src/middlewares/supabase-auth";
 
 const USER_ID = "7c0f4b3e-3f2c-4eac-9b8d-86e6a1d0b123";
@@ -11,11 +10,11 @@ function harness(authorization?: string) {
   let continued = false;
   const req = {
     get: (name: string) => name.toLowerCase() === "authorization" ? authorization : undefined,
-  } as unknown as Request;
+  } as Parameters<typeof requireSupabaseAuth>[0];
   const res = {
     status(code: number) { statusCode = code; return this; },
     json(value: unknown) { body = value; return this; },
-  } as unknown as Response;
+  } as Parameters<typeof requireSupabaseAuth>[1];
   const next = () => { continued = true; };
   return {
     req, res, next,
