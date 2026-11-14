@@ -90,14 +90,14 @@ export default function Attendance() {
   }
 
   async function markAttendance() {
-    if (!employee.trim()) return toast.error('Enter your employee name first.');
-    if (!site) return toast.error('Ask your manager to set the branch location first.');
-    if (!selfie) return toast.error('Take or upload a selfie to continue.');
+    if (!employee.trim()) { toast.error('Enter your employee name first.'); return; }
+    if (!site) { toast.error('Ask your manager to set the branch location first.'); return; }
+    if (!selfie) { toast.error('Take or upload a selfie to continue.'); return; }
     setBusy(true);
     try {
       const current = await getLocation();
       const distance = distanceMetres(site, current);
-      if (distance > site.radius) return toast.error(`You are ${Math.round(distance)}m away. Attendance is allowed within ${site.radius}m of ${site.label}.`);
+      if (distance > site.radius) { toast.error(`You are ${Math.round(distance)}m away. Attendance is allowed within ${site.radius}m of ${site.label}.`); return; }
       const now = new Date();
       if (checkedIn && todaysRecord) {
         setRecords((old) => old.map((r) => r.id === todaysRecord.id ? { ...r, checkOutAt: now.toISOString(), checkOutLocation: current, checkOutSelfie: selfie } : r));
