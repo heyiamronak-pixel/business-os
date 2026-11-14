@@ -44,7 +44,7 @@ export function HydrateGate({ children }: { children: React.ReactNode }) {
   if (!hydrated) {
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center bg-background text-foreground">
-        <p className="font-display text-4xl">Vestra</p>
+        <p className="font-display text-4xl">Business Sutra</p>
         <p className="mt-2 text-sm text-muted-foreground">Loading workspace</p>
       </div>
     );
