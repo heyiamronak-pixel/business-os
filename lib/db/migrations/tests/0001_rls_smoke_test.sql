@@ -18,6 +18,15 @@ INSERT INTO branches (id,business_id,code,name) VALUES
 INSERT INTO audit_logs (business_id,actor_user_id,action,entity_type,entity_id)
 VALUES ('10000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000002','created','branch','20000000-0000-4000-8000-000000000002');
 
+DO $role$
+BEGIN
+ IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname='business_sutra_api_test') THEN
+  CREATE ROLE business_sutra_api_test LOGIN INHERIT PASSWORD 'ci-only-password' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+ END IF;
+END
+$role$;
+GRANT business_sutra_runtime TO business_sutra_api_test;
+
 GRANT USAGE ON SCHEMA public TO business_sutra_runtime;
 GRANT SELECT ON app_users,businesses,business_memberships,user_preferences,branches,audit_logs TO business_sutra_runtime;
 GRANT INSERT ON branches,audit_logs TO business_sutra_runtime;
