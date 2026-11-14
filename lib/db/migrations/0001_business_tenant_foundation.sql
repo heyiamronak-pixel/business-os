@@ -71,11 +71,11 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,public
 AS $body$ SELECT EXISTS(SELECT 1 FROM public.business_memberships m WHERE m.business_id=target_business_id
  AND m.user_id=public.app_current_user_id() AND m.status='active') $body$;
 CREATE FUNCTION app_has_business_role(target_business_id uuid, allowed_roles membership_role[]) RETURNS boolean
-LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,public
 AS $body$ SELECT EXISTS(SELECT 1 FROM public.business_memberships m WHERE m.business_id=target_business_id
  AND m.user_id=public.app_current_user_id() AND m.status='active' AND m.role=ANY(allowed_roles)) $body$;
 CREATE FUNCTION app_is_business_creator(target_business_id uuid) RETURNS boolean
-LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,public
 AS $body$ SELECT EXISTS(SELECT 1 FROM public.businesses b WHERE b.id=target_business_id
  AND b.created_by=public.app_current_user_id()) $body$;
 
