@@ -23,6 +23,30 @@ GRANT SELECT ON app_users,businesses,business_memberships,user_preferences,branc
 GRANT INSERT ON branches,audit_logs TO business_sutra_runtime;
 GRANT UPDATE ON audit_logs TO business_sutra_runtime;
 
+-- The API runtime can provision only the Supabase identity it has already
+-- verified; the user context is then scoped to that exact UUID.
+BEGIN;
+SET LOCAL ROLE business_sutra_runtime;
+SELECT public.app_sync_authenticated_user(
+ '00000000-0000-4000-8000-000000000003'::uuid,
+ '00000000-0000-4000-8000-000000000003',
+ 'sync@example.test',
+ 'Synced User'
+);
+SELECT set_config('app.user_id','00000000-0000-4000-8000-000000000003',true);
+DO $
+BEGIN
+ IF NOT EXISTS (
+   SELECT 1 FROM public.app_users
+   WHERE id='00000000-0000-4000-8000-000000000003'
+     AND auth_provider='supabase'
+     AND auth_subject='00000000-0000-4000-8000-000000000003'
+ ) THEN
+   RAISE EXCEPTION 'Verified identity provisioning failed';
+ END IF;
+END $;
+ROLLBACK;
+
 BEGIN;
 SET LOCAL ROLE business_sutra_runtime;
 SELECT set_config('app.user_id','00000000-0000-4000-8000-000000000001',true);
@@ -49,6 +73,23 @@ BEGIN
   EXCEPTION WHEN insufficient_privilege THEN
     NULL;
   END;
+
+  BEGIN
+    INSERT INTO business_memberships (business_id,user_id,role,status)
+    VALUES ('10000000-0000-4000-8000-000000000001',
+            '00000000-0000-4000-8000-000000000002','owner','active');
+    RAISE EXCEPTION 'Membership escalation failed: a user added another owner';
+  EXCEPTION WHEN insufficient_privilege THEN
+    NULL;
+  END;
+
+  IF EXISTS (
+    SELECT 1 FROM business_memberships
+    WHERE business_id='10000000-0000-4000-8000-000000000001'
+      AND user_id='00000000-0000-4000-8000-000000000002'
+  ) THEN
+    RAISE EXCEPTION 'Membership escalation failed: other user was added as owner';
+  END IF;
 
   UPDATE audit_logs SET action='tampered'
   WHERE business_id='10000000-0000-4000-8000-000000000002';
