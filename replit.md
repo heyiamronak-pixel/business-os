@@ -1,58 +1,56 @@
-# Business OS
+# Business OS — Current Repository Notes
 
-Business OS is a modular foundation for multi-organization business management and business intelligence across industries.
+## Current application entry points
 
-## Run & Operate
+- Frontend: `artifacts/business-os/src/main.tsx` → `src/App.tsx`
+- Active frontend routing: Wouter route table in `src/App.tsx`
+- Workspace/business state: `src/hooks/use-workspace.tsx`
+- Business domain types: `src/domain/types.ts`
+- Business calculations: `src/services/business-logic.ts`
+- Browser persistence adapter: `src/services/business-repository.ts`
+- API server: `artifacts/api-server/src/index.ts` → `src/app.ts` → `src/routes`
+- Database package: `lib/db`
+- Mockup sandbox: `artifacts/mockup-sandbox` (separate app; not the active Business OS entry point)
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+## Current frontend features found in source
 
-## Stack
+- Workspace setup and local state
+- Product CRUD
+- Customer CRUD
+- Expense CRUD
+- Inventory movements
+- Sales state/calculation logic
+- Revenue targets
+- Tasks
+- Dashboard and responsive application shell
 
-- pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
-- DB: PostgreSQL + Drizzle ORM
-- Validation: Zod (`zod/v4`), `drizzle-zod`
-- API codegen: Orval (from OpenAPI spec)
-- Build: esbuild (CJS bundle)
+The presence of code does not mean each workflow has passed browser testing.
 
-## Where things live
+## Current limitations
 
-- `artifacts/business-os/` — responsive web application and shared application shell.
-- `artifacts/business-os/src/data/modules.ts` — current module registry and navigation metadata.
-- `artifacts/business-os/src/components/app-shell.tsx` — route-aware shell, workspace context area, and mobile navigation.
-- `artifacts/business-os/src/pages/` — page-level surfaces; feature pages are intentionally placeholders in the foundation phase.
-- `lib/api-spec/openapi.yaml` — shared API contract source of truth when backend endpoints are introduced.
-- `lib/db/src/schema/` — Drizzle schema source of truth when persisted domain models are introduced.
-- `docs/foundation-architecture.md` — modular SaaS architecture decisions and future boundaries.
+- The active business repository persists in browser localStorage; this is not suitable for shared multi-user SaaS data.
+- The Express API currently mounts a health route only.
+- The Drizzle schema export is empty; no business tables are defined yet.
+- Authentication, organization memberships, backend permissions, tenant isolation, subscription/billing boundaries, and production APIs are not implemented.
+- Sales, marketing, team, reports, and AI Advisor route entries need workflow completion; some currently use a generic placeholder.
+- Do not assume the mockup sandbox is integrated into the active app.
 
-## Architecture decisions
+## Commands
 
-- The web app is a shell-first foundation: navigation and route boundaries exist before feature workflows or business data.
-- Module navigation is registry-driven so future industry modules can be enabled without coupling the shell to a specific industry.
-- Organization context and authorization are future server-owned concerns; the UI does not pretend a user or workspace is signed in.
-- API contracts will be defined in OpenAPI before implementation, and persistence will use tenant-scoped PostgreSQL models through Drizzle.
-- The first build intentionally contains no seed data, payment integrations, messaging APIs, ad APIs, or AI provider calls.
+From repository root:
 
-## Product
+- `pnpm install`
+- `pnpm run typecheck`
+- `pnpm run build`
+- `pnpm --filter @workspace/business-os run dev`
+- `pnpm --filter @workspace/api-server run dev`
 
-The long-term product will give business owners and teams a shared operating layer for sales, products, inventory, customers, expenses, targets, marketing, tasks, reporting, AI guidance, and industry-specific modules. This first build only establishes the application foundation.
+The environment must provide the required Node/pnpm versions and configured secrets (including DATABASE_URL for database package operations). Run these commands in the project environment and record their actual results.
 
-## User preferences
+## Working rules
 
-- Build in deliberate phases; explain architecture before starting major feature work.
-- Keep the experience mobile-first, modern, clean, and professional.
-- Do not add fake business data during the foundation phase.
-
-## Gotchas
-
-- Do not add domain tables, authentication flows, or feature APIs until the user approves the next phase.
-- Keep `lib/api-spec/openapi.yaml` as the source of truth for any future backend endpoint and regenerate clients after changes.
-
-## Pointers
-
-- See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
+- Preserve the active Wouter app and existing business logic unless a tested migration plan justifies change.
+- Do not replace local persistence with an unverified database implementation.
+- Do not add seed/fake production business data.
+- Do not introduce paid external services without approval.
+- Implement backend authorization before claiming multi-tenant security.
