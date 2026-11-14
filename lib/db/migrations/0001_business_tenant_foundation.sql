@@ -129,7 +129,10 @@ ALTER TABLE branches ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY app_users_select_self ON app_users FOR SELECT USING(id=app_current_user_id());
-CREATE POLICY businesses_select_member ON businesses FOR SELECT USING(app_is_business_member(id) OR app_is_business_creator(id));
+CREATE POLICY businesses_select_member ON businesses FOR SELECT USING(app_is_business_member(id));
+-- The creator must be able to read the row returned by initial business INSERT
+-- before the owner membership row is created in the same transaction.
+CREATE POLICY businesses_select_creator ON businesses FOR SELECT USING(created_by=app_current_user_id());
 CREATE POLICY businesses_create_self ON businesses FOR INSERT WITH CHECK(created_by=app_current_user_id());
 CREATE POLICY businesses_update_admin ON businesses FOR UPDATE
  USING(app_has_business_role(id,ARRAY['owner','admin']::membership_role[]))
