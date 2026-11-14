@@ -44,5 +44,8 @@ jobs:
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Run focused business logic regression tests
+        run: pnpm --filter @workspace/scripts exec tsx --test ./src/business-logic.test.ts
+
       - name: Run workspace typecheck and production build
         run: pnpm build
