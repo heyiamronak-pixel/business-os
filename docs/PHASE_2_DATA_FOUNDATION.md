@@ -16,7 +16,7 @@
 5. [~] Select Supabase Auth + PostgreSQL. External project provisioning, runtime credentials and API hosting configuration remain deployment gates.
 6. [x] Implement Supabase Auth token verification in the API. Runtime verification requires the project URL and public anon key in API environment settings.
 7. [x] Add transaction-local verified user context, business listing/creation, branch listing/creation and server-side PostgreSQL RLS enforcement.
-8. [~] Add database-level cross-tenant and role-escalation tests plus API auth middleware tests. Full HTTP-to-PostgreSQL integration tests remain a release gate.
+8. [x] Add database-level cross-tenant, owner-escalation and audit-immutability tests, API auth middleware tests, and HTTP-to-PostgreSQL integration tests using two identities and a restricted runtime database login.
 9. [ ] Migrate the active Wouter app repository from localStorage to API-backed repositories, with explicit export, preview, validation, backup and rollback.
 10. [x] Keep the legacy localStorage state readable and untouched until the cloud migration is accepted; never silently overwrite or delete it.
 
@@ -36,10 +36,10 @@
 - Do not run a migration against a live database until the schema has been applied to a disposable database and tenant-isolation tests pass.
 
 ## Current status (2026-11-15)
-- Implemented in this branch: typed schema, SQL migration, restricted non-login API role, verified Supabase token middleware, server-side identity sync, transaction-local user context, business and branch endpoints, CORS allow-listing, database-level RLS tests and API auth middleware tests.
-- Verified in GitHub Actions: clean PostgreSQL migration, tenant visibility checks, cross-tenant insert rejection, owner-role escalation rejection, append-only audit check, workspace typecheck and production build. The latest verification run is linked from the Phase 2 pull request.
+- Implemented in this branch: typed schema, SQL migration, restricted non-login API role, verified Supabase token middleware, server-side identity sync, transaction-local user context, business and branch endpoints, CORS allow-listing, database-level RLS tests, API auth middleware tests and HTTP-to-PostgreSQL multi-tenant integration tests.
+- Verified in GitHub Actions run [43634169220](https://github.com/heyiamronak-pixel/business-os/actions/runs/43634169220): clean PostgreSQL migration, tenant visibility checks, cross-tenant insert rejection, owner-role escalation rejection, append-only audit check, two-user HTTP-to-PostgreSQL integration, Supabase token middleware tests, workspace typecheck and production build all passed.
 - Not yet live: no Supabase project or API hosting environment has been provisioned/configured by this repository. The API is not deployed and sign-in is not enabled in the production frontend.
 - Not yet migrated: active Wouter data is still in browser localStorage (`business-os-state-v2`). No user data has been uploaded, copied or deleted.
-- Phase 2 is not considered production-complete until project provisioning, HTTP/database integration tests, active-client migration and rollback acceptance are completed.
+- Phase 2 backend implementation and automated verification are complete in this branch. Production cutover is still pending Supabase project and API-host provisioning, live environment verification, frontend sign-in/API repository integration, and a safe localStorage export/import with backup and tested rollback.
 
 See [PHASE_2_SETUP.md](./PHASE_2_SETUP.md) for the exact environment setup and deployment gate.
