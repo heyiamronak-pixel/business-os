@@ -4,6 +4,7 @@ import {
   applySaleToInventory,
   createSaleItems,
   saleTotals,
+  revertSaleFromInventory,
 } from '../../artifacts/business-os/src/services/business-logic.ts';
 import type { Product, SaleItem } from '../../artifacts/business-os/src/domain/types.ts';
 
@@ -80,4 +81,22 @@ test('inventory is decremented once for merged sale items and movement is record
   assert.equal(result.products[0].stock, 2);
   assert.equal(result.inventoryMovements.length, 1);
   assert.equal(result.inventoryMovements[0].quantity, 3);
+});
+
+test('deleting a sale restores its stock quantities', () => {
+  const saleItems = createSaleItems([product], [{ productId: 'p1', quantity: 3 }]);
+  const afterSale = [{ ...product, stock: 2 }];
+  const restored = revertSaleFromInventory(afterSale, [{
+    id: 's1',
+    customerId: '',
+    items: saleItems,
+    subtotal: 300,
+    discount: 0,
+    total: 300,
+    costTotal: 120,
+    grossProfit: 180,
+    paymentStatus: 'paid',
+    createdAt: '2026-01-02T00:00:00.000Z',
+  }]);
+  assert.equal(restored[0].stock, 5);
 });
