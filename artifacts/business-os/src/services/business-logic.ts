@@ -70,10 +70,21 @@ export function createSaleItems(
   products: Product[],
   cart: Array<{ productId: string; quantity: number }>,
 ): SaleItem[] {
-  return cart.map(({ productId, quantity }) => {
+  // Merge repeated cart rows before checking stock. Otherwise two rows for the
+  // same product could each pass validation while the combined quantity
+  // exceeds stock, and inventory would only deduct the first row.
+  const quantities = new Map<string, number>();
+  for (const item of cart) {
+    if (!item.productId || !Number.isFinite(item.quantity) || item.quantity <= 0) {
+      throw new Error('Enter a valid product and a quantity greater than zero.');
+    }
+    quantities.set(item.productId, (quantities.get(item.productId) ?? 0) + item.quantity);
+  }
+
+  return Array.from(quantities, ([productId, quantity]) => {
     const product = products.find((item) => item.id === productId);
     if (!product) throw new Error('One of the selected products no longer exists.');
-    if (quantity <= 0 || quantity > product.stock) {
+    if (quantity > product.stock) {
       throw new Error(`${product.name} does not have enough stock.`);
     }
     return {
@@ -101,9 +112,18 @@ export function applySaleToInventory(
   movementFactory: (item: SaleItem) => InventoryMovement,
   movements: InventoryMovement[],
 ) {
+  const quantitiesByProduct = new Map<string, number>();
+  for (const item of items) {
+    quantitiesByProduct.set(
+      item.productId,
+      (quantitiesByProduct.get(item.productId) ?? 0) + item.quantity,
+    );
+  }
   const updatedProducts = products.map((product) => {
-    const item = items.find((saleItem) => saleItem.productId === product.id);
-    return item ? { ...product, stock: product.stock - item.quantity, updatedAt: new Date().toISOString() } : product;
+    const quantity = quantitiesByProduct.get(product.id) ?? 0;
+    return quantity
+      ? { ...product, stock: product.stock - quantity, updatedAt: new Date().toISOString() }
+      : product;
   });
   return {
     products: updatedProducts,
