@@ -1,6 +1,8 @@
 -- Business Sutra Phase 2 / Migration 0001
 -- PostgreSQL 15+. Review and apply only to a newly provisioned database.
 -- No existing customer, product, financial or attendance records are changed.
+-- Run atomically: if any statement fails, PostgreSQL rolls back the whole migration.
+BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 -- A non-login group role for the API. Production must connect through a
@@ -180,3 +182,5 @@ GRANT EXECUTE ON FUNCTION app_current_user_id() TO business_sutra_runtime;
 GRANT EXECUTE ON FUNCTION app_is_business_member(uuid) TO business_sutra_runtime;
 GRANT EXECUTE ON FUNCTION app_has_business_role(uuid,membership_role[]) TO business_sutra_runtime;
 GRANT EXECUTE ON FUNCTION app_is_business_creator(uuid) TO business_sutra_runtime;
+
+COMMIT;
