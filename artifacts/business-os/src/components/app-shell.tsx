@@ -167,7 +167,6 @@ export function AppPage({
               <span className="hidden size-1 rounded-full bg-border sm:inline-block" />
               <span className="truncate text-sm font-semibold tracking-[-0.02em]">{title ?? business.name}</span>
             </div>
-            <p className="mt-0.5 truncate text-[10px] capitalize text-muted-foreground">{business.industry.replaceAll("_", " ")} · {business.currency}</p>
           </div>
           {action}
           <Link
