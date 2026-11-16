@@ -449,6 +449,15 @@ export function deriveInsights(ctx: BusinessContext): Insight[] {
     });
   }
 
+  if (ctx.procurement.outstanding > 0) {
+    insights.push({
+      id: "supplier-payables",
+      tone: "warn",
+      title: "Supplier payments are outstanding",
+      body: `${fmt(ctx.procurement.outstanding, ctx)} remains payable across ${ctx.procurement.openCount} purchases.`,
+    });
+  }
+
   if (payments.count > 0) {
     insights.push({
       id: "unpaid",
@@ -559,6 +568,16 @@ export function deriveActions(ctx: BusinessContext): ActionItem[] {
       href: "/tasks",
       cta: "Open",
       entityId: t.id,
+    });
+  }
+  if (ctx.procurement.outstanding > 0) {
+    actions.push({
+      id: "supplier-payables",
+      severity: "medium",
+      title: `Review ${ctx.procurement.openCount} open supplier purchases`,
+      body: `${fmt(ctx.procurement.outstanding, ctx)} payable across recorded purchases.`,
+      href: "/purchases",
+      cta: "Review payables",
     });
   }
   if (ctx.target && !ctx.target.onTrack) {
@@ -710,14 +729,21 @@ export interface AdvisorReply {
 }
 
 const ADVISOR_PROMPTS = [
-  "Analyze my business",
-  "Why is my profit falling?",
+  "Give me a business health summary",
+  "Show this month's sales performance",
+  "How much customer payment is pending?",
+  "Which products are low or out of stock?",
   "Which product makes the most profit?",
-  "Where am I losing money?",
+  "How are my marketing campaigns performing?",
+  "Show supplier payments and purchase balance",
   "Which customers need follow-up?",
   "What should I focus on today?",
   "Will I hit my revenue target?",
-  "What is causing my costs to increase?",
+  "Why is my profit falling?",
+  "Where am I losing money?",
+  "Aaj mujhe kis par focus karna chahiye?",
+  "Kitna customer payment lena baaki hai?",
+  "Mera stock kahan kam ho raha hai?",
 ];
 
 export { ADVISOR_PROMPTS };
