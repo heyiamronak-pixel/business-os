@@ -188,6 +188,26 @@ export function SettingsScreen() {
         })}
       </Card>
 
+      <Card className="mb-4 space-y-3">
+        <h2 className="text-sm font-semibold">Available modules</h2>
+        <p className="text-xs text-muted-foreground">Enable additional workflows for this business. They will appear in the More menu.</p>
+        {Object.values(MODULE_CATALOG)
+          .filter((module) => !business.moduleOrder.includes(module.id))
+          .map((module) => (
+            <div key={module.id} className="flex items-center gap-3 py-1">
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium">{module.label}</p>
+                <p className="text-xs text-muted-foreground">{module.description}</p>
+              </div>
+              <Switch
+                checked={business.enabledModules.includes(module.id)}
+                onCheckedChange={() => toggleModule(module.id)}
+                label={`Enable ${module.label}`}
+              />
+            </div>
+          ))}
+      </Card>
+
       <Button
         variant="ghost"
         className="w-full text-danger"
