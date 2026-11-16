@@ -6,6 +6,8 @@ export type TaskStatus = 'Todo' | 'In Progress' | 'Completed';
 export type TaskPriority = 'Low' | 'Medium' | 'High';
 export type TeamRole = 'Owner' | 'Admin' | 'Manager' | 'Executive' | 'Staff';
 export type CampaignStatus = 'Draft' | 'Active' | 'Completed';
+export type SupplierStatus = 'Active' | 'Inactive';
+export type PurchasePaymentStatus = 'Paid' | 'Partial' | 'Pending';
 
 export type WorkspaceSetup = {
   businessName: string;
@@ -121,6 +123,43 @@ export type Task = {
   updatedAt: string;
 };
 
+export type Supplier = {
+  id: string;
+  name: string;
+  contactName: string;
+  email: string;
+  phone: string;
+  address: string;
+  taxId: string;
+  notes: string;
+  status: SupplierStatus;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type PurchaseItem = {
+  productId: string;
+  name: string;
+  quantity: number;
+  unitCost: number;
+  total: number;
+};
+
+export type Purchase = {
+  id: string;
+  supplierId: string;
+  supplierName: string;
+  items: PurchaseItem[];
+  subtotal: number;
+  total: number;
+  paidAmount: number;
+  balance: number;
+  paymentStatus: PurchasePaymentStatus;
+  note: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type TeamMember = {
   id: string;
   name: string;
@@ -164,6 +203,8 @@ export type BusinessState = {
   tasks: Task[];
   teamMembers: TeamMember[];
   campaigns: MarketingCampaign[];
+  suppliers: Supplier[];
+  purchases: Purchase[];
 };
 
 export type BusinessMetrics = {
