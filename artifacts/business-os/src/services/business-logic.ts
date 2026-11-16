@@ -20,6 +20,17 @@ function localDateKey(date: Date) {
   return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
 }
 
+export function inventoryMovementDelta(type: InventoryMovementType, quantity: number): number {
+  if (!Number.isFinite(quantity) || quantity === 0) {
+    throw new Error('Enter a non-zero quantity.');
+  }
+  if (type !== 'adjustment' && quantity < 0) {
+    throw new Error('Use a positive quantity for stock in or stock out. Use adjustment for negative corrections.');
+  }
+  if (type === 'stock-in') return quantity;
+  if (type === 'stock-out') return -quantity;
+  return quantity;
+}
 export function calculateMetrics(state: BusinessState, today = new Date()): BusinessMetrics {
   const revenue = state.sales
     .filter((sale) => sale.paymentStatus === 'paid')

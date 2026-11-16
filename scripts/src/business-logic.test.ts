@@ -6,6 +6,7 @@ import {
   calculateMetrics,
   createPurchaseItems,
   createSaleItems,
+  inventoryMovementDelta,
   saleTotals,
   purchasePaymentSummary,
   revertSaleFromInventory,
@@ -205,4 +206,13 @@ test('purchase payment summary classifies pending, partial and paid balances', (
   assert.deepEqual(purchasePaymentSummary(100, 40), { paidAmount: 40, balance: 60, paymentStatus: 'Partial' });
   assert.deepEqual(purchasePaymentSummary(100, 100), { paidAmount: 100, balance: 0, paymentStatus: 'Paid' });
   assert.throws(() => purchasePaymentSummary(100, 101), /between zero/);
+});
+
+test('inventory movements require positive in/out quantities and allow signed adjustments', () => {
+  assert.equal(inventoryMovementDelta('stock-in', 4), 4);
+  assert.equal(inventoryMovementDelta('stock-out', 2.5), -2.5);
+  assert.equal(inventoryMovementDelta('adjustment', -3), -3);
+  assert.throws(() => inventoryMovementDelta('stock-in', -2), /positive quantity/);
+  assert.throws(() => inventoryMovementDelta('stock-out', -2), /positive quantity/);
+  assert.throws(() => inventoryMovementDelta('adjustment', 0), /non-zero quantity/);
 });

@@ -23,6 +23,7 @@ import type {
 import {
   applyPurchaseToInventory,
   applySaleToInventory,
+  inventoryMovementDelta,
   calculateMetrics,
   createPurchaseItems,
   createSaleItems,
@@ -351,11 +352,10 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
     quantity: number,
     note: string,
   ) => {
-    if (!Number.isFinite(quantity) || quantity === 0) throw new Error('Enter a non-zero quantity.');
+    const delta = inventoryMovementDelta(type, quantity);
     setState((current) => {
       const product = current.products.find((item) => item.id === productId);
       if (!product) throw new Error('Select a valid product.');
-      const delta = type === 'stock-in' ? Math.abs(quantity) : type === 'stock-out' ? -Math.abs(quantity) : quantity;
       const nextStock = product.stock + delta;
       if (nextStock < 0) throw new Error('Stock cannot go below zero.');
       const movement: InventoryMovement = {
