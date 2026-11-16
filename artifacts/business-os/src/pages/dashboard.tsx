@@ -19,6 +19,7 @@ export default function Dashboard() {
   const paidSales = state.sales.filter(s => s.paymentStatus === 'paid');
   const paidRevenue = paidSales.reduce((sum, s) => sum + s.total, 0);
   const pendingPayments = state.sales.filter(s => s.paymentStatus === 'pending').reduce((sum, s) => sum + s.total, 0);
+  const supplierPayables = state.purchases.reduce((sum, purchase) => sum + purchase.balance, 0);
   const lowStock = state.products.filter(p => p.stock <= p.minimumStock);
   const overdue = state.tasks.filter(t => t.status !== 'Completed' && t.dueDate && t.dueDate < todayKey);
   const recentSales = [...state.sales].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 5);
@@ -49,6 +50,8 @@ export default function Dashboard() {
     { label: 'Stock alerts', value: String(lowStock.length), detail: metrics.outOfStockCount + ' out of stock', icon: PackageSearch, href: '/inventory' },
     { label: 'Team members', value: String(state.teamMembers.length), detail: state.teamMembers.filter(m => m.status === 'Active').length + ' active', icon: UsersRound, href: '/team' },
     { label: 'Campaigns', value: String(state.campaigns.length), detail: state.campaigns.filter(c => c.status === 'Active').length + ' active campaigns', icon: Megaphone, href: '/marketing' },
+    { label: 'Suppliers', value: String(state.suppliers.length), detail: state.suppliers.filter(s => s.status === 'Active').length + ' active suppliers', icon: Truck, href: '/suppliers' },
+    { label: 'Supplier payables', value: money(supplierPayables, currency), detail: state.purchases.length + ' purchase entries', icon: ShoppingCart, href: '/purchases' },
   ];
   const alerts = [
     ...(pendingPayments > 0 ? [{ title: 'Pending payments', detail: money(pendingPayments, currency) + ' across ' + state.sales.filter(s => s.paymentStatus === 'pending').length + ' sale(s)', href: '/sales' }] : []),
@@ -62,6 +65,8 @@ export default function Dashboard() {
     { label: 'Review insights', href: '/ai-advisor', icon: Bot, description: 'Get recommendations from your data' },
     { label: 'New campaign', href: '/marketing', icon: Megaphone, description: 'Track marketing performance' },
     { label: 'Set revenue target', href: '/revenue-targets', icon: Target, description: 'Plan the next revenue milestone' },
+    { label: 'Record purchase', href: '/purchases', icon: ShoppingCart, description: 'Receive goods and increase stock' },
+    { label: 'Add supplier', href: '/suppliers', icon: Truck, description: 'Save a vendor contact' },
   ];
   return <PageFrame>
     <section className="mb-5 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 sm:p-7">
