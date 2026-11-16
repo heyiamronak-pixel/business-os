@@ -2,6 +2,7 @@ import type {
   BusinessMetrics,
   BusinessState,
   InventoryMovement,
+  InventoryMovementType,
   Product,
   PurchaseItem,
   PurchasePaymentStatus,
