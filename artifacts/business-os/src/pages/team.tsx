@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Mail, Phone, UserRound, UsersRound, Edit3, ShieldCheck } from 'lucide-react';
+import { Mail, Phone, UserRound, Edit3, ShieldCheck } from 'lucide-react';
 import { useBusiness } from '@/hooks/use-workspace';
 import { AddButton, DeleteButton, EmptyState, inputClass, PageFrame, PageIntro, SearchField, SectionCard } from '@/components/record-ui';
 import type { TeamMember, TeamRole } from '@/domain/types';
