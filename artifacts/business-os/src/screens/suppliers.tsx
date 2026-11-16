@@ -41,8 +41,9 @@ export function SuppliersScreen() {
   const [deleteTarget, setDeleteTarget] = React.useState<Supplier | null>(null);
 
   if (!business) return null;
-  const suppliers = db.suppliers.filter((supplier) => supplier.businessId === business.id);
-  const purchases = db.purchases.filter((purchase) => purchase.businessId === business.id);
+  const businessId = business.id;
+  const suppliers = db.suppliers.filter((supplier) => supplier.businessId === businessId);
+  const purchases = db.purchases.filter((purchase) => purchase.businessId === businessId);
   const outstandingBySupplier = new Map<string, number>();
   for (const purchase of purchases) {
     outstandingBySupplier.set(
@@ -86,7 +87,7 @@ export function SuppliersScreen() {
       const result = upsertSupplier(useAppStore.getState().db, {
         ...draft,
         id: editing?.id,
-        businessId: business.id,
+        businessId: businessId,
       });
       apply(result.db);
       toast.success(editing ? "Supplier updated" : "Supplier added");
