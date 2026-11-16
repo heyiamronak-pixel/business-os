@@ -1,9 +1,8 @@
 import * as React from "react";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { ArrowRight, Bot, HelpCircle, MessageCircle, Move, Send, Sparkles, X } from "lucide-react";
+import { ArrowRight, Bot, HelpCircle, MessageCircle, Send, Sparkles, X } from "lucide-react";
 import { advise, buildContext, ADVISOR_PROMPTS } from "@/lib/engines";
 import { useAppStore, useBusiness } from "@/lib/store";
-import { money } from "@/lib/format";
 
 type AssistantMode = "help" | "business";
 type Message = {
@@ -268,7 +267,6 @@ export function FloatingAssistant() {
     const trimmed = value.trim();
     if (!trimmed || !context || busy) return;
     const userMessage: Message = { id: makeId(), role: "user", text: trimmed };
-    setMessages((current) => [...current, userMessage]);
     setQuestion("");
     setBusy(true);
 
