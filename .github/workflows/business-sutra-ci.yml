@@ -82,7 +82,7 @@ jobs:
       - name: Run focused business logic and API integration tests
         env:
           DATABASE_URL: postgresql://business_sutra_api_test:ci-only-password@localhost:5432/business_sutra_test
-        run: pnpm --filter @workspace/scripts exec tsx --test ./src/business-logic.test.ts ./src/business-os-purchasing.test.ts ./src/api-auth.test.ts ./src/business-api.integration.test.ts ./src/business-repository.test.ts
+        run: pnpm --filter @workspace/scripts exec tsx --test ./src/business-logic.test.ts ./src/advisor-intelligence.test.ts ./src/business-os-purchasing.test.ts ./src/api-auth.test.ts ./src/business-api.integration.test.ts ./src/business-repository.test.ts
 
       - name: Run workspace typecheck and production build
         run: pnpm build
