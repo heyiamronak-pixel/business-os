@@ -2,6 +2,7 @@ import { createRootRoute, HeadContent, Outlet, Scripts, useRouterState } from '@
 import { Toaster } from 'sonner';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { HydrateGate, ThemeRuntime } from '@/components/app-shell';
+import { FloatingAssistant } from '@/components/floating-assistant';
 import appCss from '../styles.css?url';
 
 function NotFoundPage() {
