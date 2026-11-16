@@ -361,7 +361,7 @@ export function upsertSupplier(
   const name = input.name.trim();
   if (!name) throw new ServiceError("Supplier name is required.");
   const email = input.email?.trim().toLowerCase() || undefined;
-  if (email && !/^[^\s@]+@[^\s@]+\\.[^\s@]+$/.test(email)) {
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     throw new ServiceError("Enter a valid supplier email address.");
   }
   const businessSuppliers = byBiz(db.suppliers, input.businessId);
