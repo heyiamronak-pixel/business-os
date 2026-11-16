@@ -45,6 +45,7 @@ type BusinessContextValue = {
   metrics: BusinessMetrics;
   saveWorkspace: (setup: WorkspaceSetup) => void;
   clearWorkspace: () => void;
+  restoreBackup: (backup: BusinessState) => void;
   saveProduct: (product: ProductInput) => void;
   deleteProduct: (id: string) => void;
   saveCustomer: (customer: CustomerInput) => void;
@@ -125,6 +126,24 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
 
   const clearWorkspace = () => {
     setState((current) => ({ ...current, workspace: null }));
+  };
+
+  const restoreBackup = (backup: BusinessState) => {
+    if (!backup || typeof backup !== 'object' || !Array.isArray(backup.products) || !Array.isArray(backup.inventoryMovements) || !Array.isArray(backup.customers) || !Array.isArray(backup.sales) || !Array.isArray(backup.expenses) || !Array.isArray(backup.revenueTargets) || !Array.isArray(backup.tasks)) {
+      throw new Error('Backup file is missing required workspace data.');
+    }
+    setState({
+      workspace: backup.workspace && typeof backup.workspace === 'object' ? backup.workspace : null,
+      products: backup.products,
+      inventoryMovements: backup.inventoryMovements,
+      customers: backup.customers,
+      sales: backup.sales,
+      expenses: backup.expenses,
+      revenueTargets: backup.revenueTargets,
+      tasks: backup.tasks,
+      teamMembers: Array.isArray(backup.teamMembers) ? backup.teamMembers : [],
+      campaigns: Array.isArray(backup.campaigns) ? backup.campaigns : [],
+    });
   };
 
   const saveProduct = (product: ProductInput) => {
@@ -374,6 +393,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
       metrics: calculateMetrics(state),
       saveWorkspace,
       clearWorkspace,
+      restoreBackup,
       saveProduct,
       deleteProduct,
       saveCustomer,
