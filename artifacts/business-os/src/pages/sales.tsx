@@ -5,10 +5,89 @@ import { EmptyState, inputClass, money, PageFrame, PageIntro, SectionCard } from
 import type { PaymentStatus } from '@/domain/types';
 
 type CartLine = { productId: string; quantity: number };
+
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  })[character] ?? character);
+}
+
+function openSaleReceipt(sale: import('@/domain/types').Sale, customer: import('@/domain/types').Customer | undefined, workspace: import('@/domain/types').WorkspaceSetup | null) {
+  const printWindow = window.open('', '_blank', 'width=760,height=800');
+  if (!printWindow) return false;
+
+  const businessDetails = [
+    workspace?.address,
+    workspace?.phone ? 'Phone: ' + workspace.phone : '',
+    workspace?.email ? 'Email: ' + workspace.email : '',
+    workspace?.gstRegistered && workspace.gstin ? 'GSTIN: ' + workspace.gstin : '',
+  ].filter(Boolean).map(value => '<p>' + escapeHtml(value) + '</p>').join('');
+
+  const items = sale.items.map(item =>
+    '<tr><td>' + escapeHtml(item.name) + '</td><td class="number">' + item.quantity +
+    '</td><td class="number">' + escapeHtml(money(item.unitPrice, workspace?.currency)) +
+    '</td><td class="number">' + escapeHtml(money(item.total, workspace?.currency)) + '</td></tr>'
+  ).join('');
+
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sales receipt</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 36px; color: #171717; font: 14px/1.5 Arial, sans-serif; }
+  .receipt { max-width: 720px; margin: 0 auto; }
+  header { display: flex; justify-content: space-between; gap: 24px; padding-bottom: 20px; border-bottom: 2px solid #222; }
+  h1 { margin: 0 0 8px; font-size: 24px; }
+  h2 { margin: 28px 0 8px; font-size: 15px; }
+  p { margin: 2px 0; color: #555; }
+  .meta { text-align: right; }
+  table { width: 100%; margin-top: 20px; border-collapse: collapse; }
+  th, td { padding: 10px 8px; border-bottom: 1px solid #ddd; text-align: left; }
+  th { font-size: 11px; text-transform: uppercase; color: #666; }
+  .number { text-align: right; white-space: nowrap; }
+  .totals { width: 280px; margin: 18px 0 0 auto; }
+  .totals div { display: flex; justify-content: space-between; gap: 16px; padding: 5px 0; }
+  .grand { border-top: 2px solid #222; margin-top: 5px; padding-top: 10px !important; font-size: 17px; font-weight: 700; }
+  .status { display: inline-block; margin-top: 12px; border: 1px solid #999; border-radius: 20px; padding: 4px 10px; font-size: 11px; text-transform: uppercase; }
+  footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #ddd; color: #666; font-size: 11px; }
+  @media print { body { padding: 0; } .receipt { max-width: none; } }
+</style>
+</head>
+<body>
+<div class="receipt">
+<header>
+  <div><h1>${escapeHtml(workspace?.businessName || 'Business')}</h1>${businessDetails}</div>
+  <div class="meta"><h1>Sales Receipt</h1><p>Reference: ${escapeHtml(sale.id)}</p><p>${escapeHtml(new Date(sale.createdAt).toLocaleString())}</p><span class="status">${escapeHtml(sale.paymentStatus)}</span></div>
+</header>
+<section><h2>Customer</h2><p>${escapeHtml(customer?.name || 'Walk-in customer')}</p>${customer?.phone ? '<p>' + escapeHtml(customer.phone) + '</p>' : ''}${customer?.email ? '<p>' + escapeHtml(customer.email) + '</p>' : ''}</section>
+<table><thead><tr><th>Item</th><th class="number">Qty</th><th class="number">Unit price</th><th class="number">Total</th></tr></thead><tbody>${items}</tbody></table>
+<div class="totals">
+  <div><span>Subtotal</span><strong>${escapeHtml(money(sale.subtotal, workspace?.currency))}</strong></div>
+  <div><span>Discount</span><strong>${escapeHtml(money(sale.discount, workspace?.currency))}</strong></div>
+  <div class="grand"><span>Total</span><strong>${escapeHtml(money(sale.total, workspace?.currency))}</strong></div>
+</div>
+<footer><p>Thank you for your business.</p><p>This is a sales receipt generated from the records in this workspace. It does not calculate GST or replace a compliant tax invoice.</p></footer>
+</div>
+</body>
+</html>`;
+  printWindow.document.open();
+  printWindow.document.write(html);
+  printWindow.document.close();
+  printWindow.focus();
+  window.setTimeout(() => printWindow.print(), 250);
+  return true;
+}
 const newLine = (): CartLine => ({ productId: '', quantity: 1 });
 
 export default function Sales() {
-  const { state, workspace, createSale, deleteSale } = useBusiness();
+  const { state, workspace, createSale, updateSale, deleteSale } = useBusiness();
   const [customerId, setCustomerId] = useState('');
   const [lines, setLines] = useState<CartLine[]>([newLine()]);
   const [discount, setDiscount] = useState(0);
@@ -44,6 +123,7 @@ export default function Sales() {
   };
 
   return <PageFrame>
+    {error && <p role="alert" className="mb-3 text-xs font-semibold text-[hsl(var(--destructive))]">{error}</p>}
     <PageIntro eyebrow="Revenue" title="Sales" description="Record sales, keep payment status visible, and update inventory automatically." />
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.9fr)]">
       <SectionCard>
@@ -77,7 +157,7 @@ export default function Sales() {
           const customer = state.customers.find((item) => item.id === sale.customerId);
           return <div key={sale.id} className="rounded-xl border border-[hsl(var(--border))] p-3">
             <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="text-sm font-semibold">{customer?.name ?? 'Walk-in customer'}</p><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{new Date(sale.createdAt).toLocaleString()} · {sale.items.reduce((sum, item) => sum + item.quantity, 0)} items</p></div><strong className="shrink-0 text-sm">{money(sale.total, workspace?.currency)}</strong></div>
-            <div className="mt-3 flex items-center justify-between gap-2"><span className="rounded-full bg-[hsl(var(--muted))] px-2.5 py-1 text-[10px] font-bold capitalize">{sale.paymentStatus}</span><button type="button" onClick={() => deleteSale(sale.id)} className="text-xs font-semibold text-[hsl(var(--destructive))]">Delete sale & restore stock</button></div>
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2"><span className="rounded-full bg-[hsl(var(--muted))] px-2.5 py-1 text-[10px] font-bold capitalize">{sale.paymentStatus}</span><div className="flex flex-wrap gap-2"><button type="button" onClick={() => { if (!openSaleReceipt(sale, customer, workspace)) setError('Allow pop-ups to print the sales receipt.'); }} className="min-h-9 rounded-lg border border-[hsl(var(--border))] px-3 text-xs font-semibold">Print receipt</button>{sale.paymentStatus === 'pending' && <button type="button" onClick={() => updateSale(sale.id, { customerId: sale.customerId, discount: sale.discount, paymentStatus: 'paid' })} className="min-h-9 rounded-lg border border-[hsl(var(--border))] px-3 text-xs font-semibold">Mark as paid</button>}<button type="button" onClick={() => { if (window.confirm('Delete this sale and restore its stock quantities?')) deleteSale(sale.id); }} className="min-h-9 rounded-lg border border-[hsl(var(--destructive)/0.3)] px-3 text-xs font-semibold text-[hsl(var(--destructive))]">Delete & restore stock</button></div></div>
           </div>;
         })}</div>}
       </SectionCard>
