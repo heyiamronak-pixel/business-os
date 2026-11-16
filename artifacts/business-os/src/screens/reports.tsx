@@ -196,7 +196,7 @@ export function ReportsScreen() {
 
   function exportCsv() {
     const rows = [
-      ["Business Sutra Report", business.name],
+      ["Business Sutra Report", business?.name ?? "Unknown business"],
       ["Period", range.label],
       ["Custom filter logic", logic === "all" ? "Match all rules (AND)" : "Match any rule (OR)"],
       ["Active custom rules", activeRuleCount],
@@ -342,7 +342,7 @@ export function ReportsScreen() {
                 <span className="text-xs font-medium text-muted-foreground">Match</span>
                 <Segmented
                   value={logic}
-                  onChange={setLogic}
+                  onChange={(value) => setLogic(value as ReportFilterLogic)}
                   options={[{ id: "all", label: "All conditions (AND)" }, { id: "any", label: "Any condition (OR)" }]}
                 />
               </div>
