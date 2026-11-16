@@ -10,7 +10,7 @@ const HINDI_LATIN_WORDS = new Set([
   "sakta", "sakte", "sakti", "se", "tum", "tumhara", "tumhari", "tumhare",
   "unka", "unke", "unki", "wala", "wali", "wale", "ye", "yeh", "iska",
   "iski", "iske", "kya", "kis", "kisko", "jaisa", "jaise", "chalo",
-  "milega", "milega", "kr", "krna", "krdo", "kro", "btao", "bta", "m"
+  "milega", "kr", "krna", "krdo", "kro", "btao", "bta"
 ]);
 
 export function detectAssistantLanguage(input: string): AssistantLanguage {
