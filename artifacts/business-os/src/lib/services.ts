@@ -13,6 +13,10 @@ import {
   type ModuleId,
   type PaymentMethod,
   type Product,
+  type Purchase,
+  type PurchaseItem,
+  type Supplier,
+  type SupplierStatus,
   type Sale,
   type SaleItem,
   type StockMovement,
@@ -129,6 +133,8 @@ export function deleteBusiness(db: WorkspaceDB, id: string): WorkspaceDB {
     products: drop(db.products),
     movements: drop(db.movements),
     customers: drop(db.customers),
+    suppliers: drop(db.suppliers),
+    purchases: drop(db.purchases),
     sales: drop(db.sales),
     expenses: drop(db.expenses),
     expenseCategories: drop(db.expenseCategories),
@@ -335,6 +341,192 @@ export function upsertCustomer(
 
 export function deleteCustomer(db: WorkspaceDB, id: string): WorkspaceDB {
   return { ...db, customers: db.customers.filter((c) => c.id !== id) };
+}
+
+export function upsertSupplier(
+  db: WorkspaceDB,
+  input: {
+    id?: string;
+    businessId: string;
+    name: string;
+    contactName?: string;
+    email?: string;
+    phone?: string;
+    address?: string;
+    taxId?: string;
+    notes?: string;
+    status?: SupplierStatus;
+  },
+): { db: WorkspaceDB; supplier: Supplier } {
+  const name = input.name.trim();
+  if (!name) throw new ServiceError("Supplier name is required.");
+  const email = input.email?.trim().toLowerCase() || undefined;
+  if (email && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+    throw new ServiceError("Enter a valid supplier email address.");
+  }
+  const businessSuppliers = byBiz(db.suppliers, input.businessId);
+  if (businessSuppliers.some((supplier) =>
+    supplier.id !== input.id && supplier.name.trim().toLowerCase() === name.toLowerCase()
+  )) {
+    throw new ServiceError("A supplier with this name already exists.");
+  }
+  const now = nowIso();
+  if (input.id) {
+    const previous = db.suppliers.find((supplier) =>
+      supplier.id === input.id && supplier.businessId === input.businessId
+    );
+    if (!previous) throw new ServiceError("Supplier not found in this business.");
+    const supplier: Supplier = {
+      ...previous,
+      name,
+      contactName: input.contactName?.trim() || undefined,
+      email,
+      phone: input.phone?.trim() || undefined,
+      address: input.address?.trim() || undefined,
+      taxId: input.taxId?.trim().toUpperCase() || undefined,
+      notes: input.notes?.trim() || undefined,
+      status: input.status ?? previous.status,
+      updatedAt: now,
+    };
+    return { db: { ...db, suppliers: replace(db.suppliers, supplier.id, supplier) }, supplier };
+  }
+  const supplier: Supplier = {
+    id: createId("sup"),
+    businessId: input.businessId,
+    name,
+    contactName: input.contactName?.trim() || undefined,
+    email,
+    phone: input.phone?.trim() || undefined,
+    address: input.address?.trim() || undefined,
+    taxId: input.taxId?.trim().toUpperCase() || undefined,
+    notes: input.notes?.trim() || undefined,
+    status: input.status ?? "active",
+    createdAt: now,
+    updatedAt: now,
+  };
+  return { db: { ...db, suppliers: [supplier, ...db.suppliers] }, supplier };
+}
+
+export function deleteSupplier(db: WorkspaceDB, supplierId: string): WorkspaceDB {
+  const supplier = db.suppliers.find((item) => item.id === supplierId);
+  if (!supplier) return db;
+  if (db.purchases.some((purchase) => purchase.supplierId === supplierId)) {
+    throw new ServiceError("This supplier has purchase history. Mark it inactive to preserve records.");
+  }
+  return { ...db, suppliers: db.suppliers.filter((item) => item.id !== supplierId) };
+}
+
+export function createPurchase(
+  db: WorkspaceDB,
+  input: {
+    businessId: string;
+    supplierId: string;
+    items: Array<{ productId: string; quantity: number; unitCost: number }>;
+    paidAmount: number;
+    note?: string;
+  },
+): { db: WorkspaceDB; purchase: Purchase } {
+  if (!input.items.length) throw new ServiceError("Add at least one product to this purchase.");
+  const supplier = db.suppliers.find((item) =>
+    item.id === input.supplierId && item.businessId === input.businessId
+  );
+  if (!supplier) throw new ServiceError("Select a supplier from this business.");
+  if (supplier.status !== "active") throw new ServiceError("This supplier is inactive.");
+  const productMap = new Map(db.products.map((product) => [product.id, product]));
+  const items: PurchaseItem[] = input.items.map((line) => {
+    if (!line.productId || !Number.isFinite(line.quantity) || line.quantity <= 0) {
+      throw new ServiceError("Enter a product and a quantity greater than zero.");
+    }
+    if (!Number.isFinite(line.unitCost) || line.unitCost < 0) {
+      throw new ServiceError("Purchase cost must be a valid non-negative amount.");
+    }
+    const product = productMap.get(line.productId);
+    if (!product || product.businessId !== input.businessId || product.archived) {
+      throw new ServiceError("A selected product is missing or unavailable.");
+    }
+    const quantity = roundMoney(line.quantity);
+    const unitCost = roundMoney(line.unitCost);
+    return {
+      productId: product.id,
+      name: product.name,
+      sku: product.sku,
+      quantity,
+      unitCost,
+      total: roundMoney(quantity * unitCost),
+    };
+  });
+  const subtotal = roundMoney(items.reduce((sum, item) => sum + item.total, 0));
+  const total = subtotal;
+  const paidAmount = roundMoney(input.paidAmount);
+  if (!Number.isFinite(paidAmount) || paidAmount < 0 || paidAmount > total) {
+    throw new ServiceError("Amount paid must be between zero and the purchase total.");
+  }
+  const balance = roundMoney(total - paidAmount);
+  const paymentStatus = balance <= 0 ? "paid" : paidAmount > 0 ? "partial" : "pending";
+  const now = nowIso();
+  const purchase: Purchase = {
+    id: createId("pur"),
+    businessId: input.businessId,
+    supplierId: supplier.id,
+    supplierName: supplier.name,
+    items,
+    subtotal,
+    total,
+    paidAmount,
+    balance,
+    paymentStatus,
+    note: input.note?.trim() || undefined,
+    createdAt: now,
+    updatedAt: now,
+  };
+  let products = db.products;
+  let movements = db.movements;
+  for (const item of items) {
+    const current = products.find((product) => product.id === item.productId);
+    if (!current || current.businessId !== input.businessId) {
+      throw new ServiceError("A selected product changed while the purchase was being saved.");
+    }
+    const nextStock = roundMoney(current.stock + item.quantity);
+    products = replace(products, current.id, { stock: nextStock, updatedAt: now });
+    movements = [{
+      id: createId("mov"),
+      businessId: input.businessId,
+      productId: current.id,
+      type: "in",
+      quantity: item.quantity,
+      resultingStock: nextStock,
+      reason: `Purchase ${purchase.id.slice(-6).toUpperCase()} · ${supplier.name}`,
+      refId: purchase.id,
+      createdAt: now,
+    }, ...movements];
+  }
+  return {
+    db: { ...db, products, movements, purchases: [purchase, ...db.purchases] },
+    purchase,
+  };
+}
+
+export function updatePurchasePayment(db: WorkspaceDB, purchaseId: string, amount: number): WorkspaceDB {
+  const purchase = db.purchases.find((item) => item.id === purchaseId);
+  if (!purchase) throw new ServiceError("Purchase not found.");
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new ServiceError("Enter a payment greater than zero.");
+  }
+  if (amount > purchase.balance) {
+    throw new ServiceError("Payment cannot be greater than the outstanding balance.");
+  }
+  const paidAmount = roundMoney(purchase.paidAmount + amount);
+  const balance = roundMoney(Math.max(0, purchase.total - paidAmount));
+  const paymentStatus = balance <= 0 ? "paid" : "partial";
+  return {
+    ...db,
+    purchases: replace(db.purchases, purchaseId, {
+      paidAmount,
+      balance,
+      paymentStatus,
+      updatedAt: nowIso(),
+    }),
+  };
 }
 
 export function addCustomerNote(db: WorkspaceDB, businessId: string, customerId: string, note: string): WorkspaceDB {
