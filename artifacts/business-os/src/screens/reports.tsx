@@ -173,7 +173,7 @@ export function ReportsScreen() {
   function addRule() {
     setRules((current) => [
       ...current,
-      { id: `report-filter-${nextRuleId.current++}`, field: "recordType", operator: "equals", value: "sale" },
+      { id: `report-filter-${nextRuleId.current++}`, field: "recordType", operator: "equals", value: "" },
     ]);
   }
 
@@ -299,7 +299,7 @@ export function ReportsScreen() {
                       onChange={(event) => updateRule(rule.id, {
                         field: event.target.value as ReportFilterField,
                         operator: "equals",
-                        value: event.target.value === "recordType" ? "sale" : "",
+                        value: "",
                       })}
                     >
                       {Object.entries(FIELD_LABELS).map(([field, label]) => <option key={field} value={field}>{label}</option>)}
@@ -313,7 +313,7 @@ export function ReportsScreen() {
                   <label className="text-xs font-medium text-muted-foreground">Value
                     {rule.field === "recordType" ? (
                       <Select className="mt-1.5" value={rule.value} onChange={(event) => updateRule(rule.id, { value: event.target.value })}>
-                        <option value="sale">Sale</option><option value="expense">Expense</option><option value="purchase">Purchase</option><option value="campaign">Marketing campaign</option>
+                        <option value="">Choose record type</option><option value="sale">Sale</option><option value="expense">Expense</option><option value="purchase">Purchase</option><option value="campaign">Marketing campaign</option>
                       </Select>
                     ) : rule.field === "status" ? (
                       <Select className="mt-1.5" value={rule.value} onChange={(event) => updateRule(rule.id, { value: event.target.value })}>
