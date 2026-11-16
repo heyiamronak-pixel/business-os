@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import {
   Boxes,
   ChartColumn,
+  CalendarCheck,
   ClipboardList,
   Megaphone,
   Package,
@@ -63,6 +64,12 @@ export function MoreScreen() {
             </li>
           );
         })}
+        <li>
+          <Link to="/attendance" className="flex min-h-24 flex-col justify-between rounded-[var(--radius-xl)] border border-border bg-card p-3">
+            <CalendarCheck className="size-5 text-primary" />
+            <div><p className="text-sm font-semibold">Attendance</p><p className="text-xs text-muted-foreground">GPS and selfie check-in</p></div>
+          </Link>
+        </li>
         <li>
           <Link to="/settings" className="flex min-h-24 flex-col justify-between rounded-[var(--radius-xl)] border border-border bg-card p-3">
             <Settings className="size-5 text-primary" />

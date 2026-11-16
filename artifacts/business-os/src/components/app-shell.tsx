@@ -2,6 +2,7 @@ import * as React from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   Bell,
+  ChartColumn,
   Compass,
   Ellipsis,
   House,
@@ -79,6 +80,7 @@ export function AppPage({
   const desktopNav = [
     { to: "/", label: "Overview", icon: House },
     { to: "/sell", label: "Sales", icon: ShoppingBag },
+    { to: "/reports", label: "Reports", icon: ChartColumn },
     { to: "/actions", label: "Actions", icon: ListChecks },
     { to: "/advisor", label: "AI Advisor", icon: Compass },
     { to: "/more", label: "All modules", icon: Ellipsis },

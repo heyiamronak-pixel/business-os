@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ActionsRouteImport } from './routes/actions'
+import { Route as AttendanceRouteImport } from './routes/attendance'
 import { Route as AdvisorRouteImport } from './routes/advisor'
 import { Route as CustomersRouteImport } from './routes/customers'
 import { Route as ExpensesRouteImport } from './routes/expenses'
@@ -18,6 +19,7 @@ import { Route as InboxRouteImport } from './routes/inbox'
 import { Route as InventoryRouteImport } from './routes/inventory'
 import { Route as MarketingRouteImport } from './routes/marketing'
 import { Route as MoreRouteImport } from './routes/more'
+import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as ProductsRouteImport } from './routes/products'
 import { Route as SalesRouteImport } from './routes/sales'
@@ -35,6 +37,11 @@ const IndexRoute = IndexRouteImport.update({
 const ActionsRoute = ActionsRouteImport.update({
   id: '/actions',
   path: '/actions',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AttendanceRoute = AttendanceRouteImport.update({
+  id: '/attendance',
+  path: '/attendance',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdvisorRoute = AdvisorRouteImport.update({
@@ -70,6 +77,11 @@ const MarketingRoute = MarketingRouteImport.update({
 const MoreRoute = MoreRouteImport.update({
   id: '/more',
   path: '/more',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReportsRoute = ReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OnboardingRoute = OnboardingRouteImport.update({
@@ -116,6 +128,7 @@ const TeamRoute = TeamRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/actions': typeof ActionsRoute
+  '/attendance': typeof AttendanceRoute
   '/advisor': typeof AdvisorRoute
   '/customers': typeof CustomersRoute
   '/expenses': typeof ExpensesRoute
@@ -123,6 +136,7 @@ export interface FileRoutesByFullPath {
   '/inventory': typeof InventoryRoute
   '/marketing': typeof MarketingRoute
   '/more': typeof MoreRoute
+  '/reports': typeof ReportsRoute
   '/onboarding': typeof OnboardingRoute
   '/products': typeof ProductsRoute
   '/sales': typeof SalesRoute
@@ -135,6 +149,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/actions': typeof ActionsRoute
+  '/attendance': typeof AttendanceRoute
   '/advisor': typeof AdvisorRoute
   '/customers': typeof CustomersRoute
   '/expenses': typeof ExpensesRoute
@@ -142,6 +157,7 @@ export interface FileRoutesByTo {
   '/inventory': typeof InventoryRoute
   '/marketing': typeof MarketingRoute
   '/more': typeof MoreRoute
+  '/reports': typeof ReportsRoute
   '/onboarding': typeof OnboardingRoute
   '/products': typeof ProductsRoute
   '/sales': typeof SalesRoute
@@ -155,6 +171,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/actions': typeof ActionsRoute
+  '/attendance': typeof AttendanceRoute
   '/advisor': typeof AdvisorRoute
   '/customers': typeof CustomersRoute
   '/expenses': typeof ExpensesRoute
@@ -162,6 +179,7 @@ export interface FileRoutesById {
   '/inventory': typeof InventoryRoute
   '/marketing': typeof MarketingRoute
   '/more': typeof MoreRoute
+  '/reports': typeof ReportsRoute
   '/onboarding': typeof OnboardingRoute
   '/products': typeof ProductsRoute
   '/sales': typeof SalesRoute
@@ -176,6 +194,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/actions'
+    | '/attendance'
     | '/advisor'
     | '/customers'
     | '/expenses'
@@ -183,6 +202,7 @@ export interface FileRouteTypes {
     | '/inventory'
     | '/marketing'
     | '/more'
+    | '/reports'
     | '/onboarding'
     | '/products'
     | '/sales'
@@ -234,6 +254,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ActionsRoute: typeof ActionsRoute
+  AttendanceRoute: typeof AttendanceRoute
   AdvisorRoute: typeof AdvisorRoute
   CustomersRoute: typeof CustomersRoute
   ExpensesRoute: typeof ExpensesRoute
@@ -241,6 +262,7 @@ export interface RootRouteChildren {
   InventoryRoute: typeof InventoryRoute
   MarketingRoute: typeof MarketingRoute
   MoreRoute: typeof MoreRoute
+  ReportsRoute: typeof ReportsRoute
   OnboardingRoute: typeof OnboardingRoute
   ProductsRoute: typeof ProductsRoute
   SalesRoute: typeof SalesRoute
@@ -265,6 +287,13 @@ declare module '@tanstack/react-router' {
       path: '/actions'
       fullPath: '/actions'
       preLoaderRoute: typeof ActionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/attendance': {
+      id: '/attendance'
+      path: '/attendance'
+      fullPath: '/attendance'
+      preLoaderRoute: typeof AttendanceRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/advisor': {
@@ -314,6 +343,13 @@ declare module '@tanstack/react-router' {
       path: '/more'
       fullPath: '/more'
       preLoaderRoute: typeof MoreRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reports': {
+      id: '/reports'
+      path: '/reports'
+      fullPath: '/reports'
+      preLoaderRoute: typeof ReportsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/onboarding': {
@@ -378,6 +414,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ActionsRoute: ActionsRoute,
+  AttendanceRoute: AttendanceRoute,
   AdvisorRoute: AdvisorRoute,
   CustomersRoute: CustomersRoute,
   ExpensesRoute: ExpensesRoute,
@@ -385,6 +422,7 @@ const rootRouteChildren: RootRouteChildren = {
   InventoryRoute: InventoryRoute,
   MarketingRoute: MarketingRoute,
   MoreRoute: MoreRoute,
+  ReportsRoute: ReportsRoute,
   OnboardingRoute: OnboardingRoute,
   ProductsRoute: ProductsRoute,
   SalesRoute: SalesRoute,
