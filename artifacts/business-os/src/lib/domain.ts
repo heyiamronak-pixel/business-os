@@ -346,6 +346,7 @@ export type AppHref =
   | "/advisor"
   | "/inbox"
   | "/reports"
+  | "/attendance"
   | "/onboarding";
 
 export interface ModuleDef {
