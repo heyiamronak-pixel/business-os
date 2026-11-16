@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   createPurchase,
   deleteSupplier,
+  recordPayment,
   updatePurchasePayment,
   upsertSupplier,
 } from "../../artifacts/business-os/src/lib/services.ts";
@@ -123,4 +124,31 @@ test("supplier with purchase history is protected from deletion", () => {
     paidAmount: 0,
   });
   assert.throws(() => deleteSupplier(purchase.db, supplier.id), /purchase history/);
+});
+
+test("customer collection rejects amounts above the remaining sale balance", () => {
+  const { db } = setup();
+  const sale = {
+    id: "sale-collection",
+    businessId: "business-1",
+    customerId: undefined,
+    customerName: "Walk-in",
+    items: [],
+    subtotal: 100,
+    discount: 0,
+    total: 100,
+    costTotal: 0,
+    grossProfit: 100,
+    paymentMethod: "credit" as const,
+    paymentStatus: "partial" as const,
+    paidAmount: 60,
+    outstanding: 40,
+    createdAt: "2026-11-16T10:00:00.000Z",
+  };
+  const withSale = { ...db, sales: [sale] };
+  assert.throws(() => recordPayment(withSale, sale.id, 41), /greater than the outstanding balance/);
+  const paid = recordPayment(withSale, sale.id, 40);
+  assert.equal(paid.sales[0].paidAmount, 100);
+  assert.equal(paid.sales[0].outstanding, 0);
+  assert.equal(paid.sales[0].paymentStatus, "paid");
 });
