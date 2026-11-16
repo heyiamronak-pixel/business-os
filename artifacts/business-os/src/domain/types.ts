@@ -4,6 +4,8 @@ export type PaymentStatus = 'paid' | 'pending' | 'refunded';
 export type InventoryMovementType = 'stock-in' | 'stock-out' | 'adjustment';
 export type TaskStatus = 'Todo' | 'In Progress' | 'Completed';
 export type TaskPriority = 'Low' | 'Medium' | 'High';
+export type TeamRole = 'Owner' | 'Admin' | 'Manager' | 'Executive' | 'Staff';
+export type CampaignStatus = 'Draft' | 'Active' | 'Completed';
 
 export type WorkspaceSetup = {
   businessName: string;
@@ -119,6 +121,38 @@ export type Task = {
   updatedAt: string;
 };
 
+export type TeamMember = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  role: TeamRole;
+  department: string;
+  status: 'Active' | 'Inactive';
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type MarketingCampaign = {
+  id: string;
+  name: string;
+  channel: string;
+  objective: string;
+  status: CampaignStatus;
+  startDate: string;
+  endDate: string;
+  budget: number;
+  spend: number;
+  impressions: number;
+  clicks: number;
+  leads: number;
+  conversions: number;
+  revenue: number;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type BusinessState = {
   workspace: WorkspaceSetup | null;
   products: Product[];
@@ -128,6 +162,8 @@ export type BusinessState = {
   expenses: Expense[];
   revenueTargets: RevenueTarget[];
   tasks: Task[];
+  teamMembers: TeamMember[];
+  campaigns: MarketingCampaign[];
 };
 
 export type BusinessMetrics = {
