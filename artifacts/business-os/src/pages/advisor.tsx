@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Bot, Lightbulb, RefreshCw, Send, Sparkles, AlertTriangle, CheckCircle2, UserRound, BrainCircuit } from 'lucide-react';
 import { Link } from 'wouter';
 import { useBusiness } from '@/hooks/use-workspace';
-import { money, PageFrame, PageIntro, SectionCard } from '@/components/record-ui';
+import { inputClass, money, PageFrame, PageIntro, SectionCard } from '@/components/record-ui';
 import type { BusinessState } from '@/domain/types';
 
 type Finding = { title: string; detail: string; action: string; tone: 'positive' | 'warning' | 'neutral'; href: string };
