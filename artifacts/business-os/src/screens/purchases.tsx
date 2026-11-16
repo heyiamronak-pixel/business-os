@@ -1,10 +1,10 @@
 import * as React from "react";
-import { Plus, ReceiptText, Wallet } from "lucide-react";
+import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { AppPage, PageHeader, SearchField } from "@/components/app-shell";
 import { BottomSheet } from "@/components/sheet";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, Stat, Textarea } from "@/components/ui";
-import type { Product, Purchase, Supplier } from "@/lib/domain";
+import type { Purchase } from "@/lib/domain";
 import { formatDateTime, money } from "@/lib/format";
 import { createPurchase, updatePurchasePayment } from "@/lib/services";
 import { useAppStore, useBusiness } from "@/lib/store";
