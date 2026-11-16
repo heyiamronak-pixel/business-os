@@ -5,7 +5,13 @@
     "rootDir": "src",
     "types": [
       "node"
-    ]
+    ],
+    "baseUrl": "..",
+    "paths": {
+      "@/*": [
+        "artifacts/business-os/src/*"
+      ]
+    }
   },
   "include": [
     "src"
