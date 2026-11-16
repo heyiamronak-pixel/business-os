@@ -296,7 +296,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
 
   const saveSupplier = (supplier: SupplierInput) => {
     if (!supplier.name.trim()) throw new Error('Enter a supplier name.');
-    if (supplier.email && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(supplier.email)) throw new Error('Enter a valid email address.');
+    if (supplier.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(supplier.email)) throw new Error('Enter a valid email address.');
     setState((current) => {
       const next = withDates({ ...supplier, name: supplier.name.trim(), contactName: supplier.contactName.trim(), email: supplier.email.trim(), phone: supplier.phone.trim(), address: supplier.address.trim(), taxId: supplier.taxId.trim(), notes: supplier.notes.trim() });
       const exists = current.suppliers.some((item) => item.id === next.id);
