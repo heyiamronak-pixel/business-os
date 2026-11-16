@@ -25,7 +25,7 @@ function openSaleReceipt(sale: import('@/domain/types').Sale, customer: import('
     workspace?.phone ? 'Phone: ' + workspace.phone : '',
     workspace?.email ? 'Email: ' + workspace.email : '',
     workspace?.gstRegistered && workspace.gstin ? 'GSTIN: ' + workspace.gstin : '',
-  ].filter(Boolean).map(value => '<p>' + escapeHtml(value) + '</p>').join('');
+  ].filter((value): value is string => typeof value === 'string' && value.length > 0).map(value => '<p>' + escapeHtml(value) + '</p>').join('');
 
   const items = sale.items.map(item =>
     '<tr><td>' + escapeHtml(item.name) + '</td><td class="number">' + item.quantity +
