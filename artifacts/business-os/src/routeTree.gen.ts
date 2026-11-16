@@ -18,6 +18,7 @@ import { Route as InboxRouteImport } from './routes/inbox'
 import { Route as InventoryRouteImport } from './routes/inventory'
 import { Route as MarketingRouteImport } from './routes/marketing'
 import { Route as MoreRouteImport } from './routes/more'
+import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as ProductsRouteImport } from './routes/products'
 import { Route as SalesRouteImport } from './routes/sales'
@@ -72,6 +73,11 @@ const MoreRoute = MoreRouteImport.update({
   path: '/more',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ReportsRoute = ReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const OnboardingRoute = OnboardingRouteImport.update({
   id: '/onboarding',
   path: '/onboarding',
@@ -123,6 +129,9 @@ export interface FileRoutesByFullPath {
   '/inventory': typeof InventoryRoute
   '/marketing': typeof MarketingRoute
   '/more': typeof MoreRoute
+  '/reports': typeof ReportsRoute
+  '/reports': typeof ReportsRoute
+  '/reports': typeof ReportsRoute
   '/onboarding': typeof OnboardingRoute
   '/products': typeof ProductsRoute
   '/sales': typeof SalesRoute
@@ -183,6 +192,9 @@ export interface FileRouteTypes {
     | '/inventory'
     | '/marketing'
     | '/more'
+    | '/reports'
+    | '/reports'
+    | '/reports'
     | '/onboarding'
     | '/products'
     | '/sales'
@@ -241,6 +253,7 @@ export interface RootRouteChildren {
   InventoryRoute: typeof InventoryRoute
   MarketingRoute: typeof MarketingRoute
   MoreRoute: typeof MoreRoute
+  ReportsRoute: typeof ReportsRoute
   OnboardingRoute: typeof OnboardingRoute
   ProductsRoute: typeof ProductsRoute
   SalesRoute: typeof SalesRoute
@@ -316,6 +329,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MoreRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/reports': {
+      id: '/reports'
+      path: '/reports'
+      fullPath: '/reports'
+      preLoaderRoute: typeof ReportsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/onboarding': {
       id: '/onboarding'
       path: '/onboarding'
@@ -385,6 +405,7 @@ const rootRouteChildren: RootRouteChildren = {
   InventoryRoute: InventoryRoute,
   MarketingRoute: MarketingRoute,
   MoreRoute: MoreRoute,
+  ReportsRoute: ReportsRoute,
   OnboardingRoute: OnboardingRoute,
   ProductsRoute: ProductsRoute,
   SalesRoute: SalesRoute,
