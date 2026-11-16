@@ -151,6 +151,8 @@ test('dashboard metrics exclude pending sales and scope target achievement to ta
     tasks: [],
     teamMembers: [],
     campaigns: [],
+    suppliers: [],
+    purchases: [],
   };
 
   const metrics = calculateMetrics(state, new Date(2026, 10, 16, 12, 0, 0));
