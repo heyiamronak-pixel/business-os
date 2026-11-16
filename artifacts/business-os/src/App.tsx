@@ -22,6 +22,7 @@ import Advisor from '@/pages/advisor';
 import Reports from '@/pages/reports';
 import Team from '@/pages/team';
 import Marketing from '@/pages/marketing';
+import Actions from '@/pages/actions';
 import NotFound from '@/pages/not-found';
 import {
   Route,
@@ -54,6 +55,7 @@ function Router() {
             <Route path="/attendance" component={Attendance} />
             <Route path="/reports" component={Reports} />
             <Route path="/ai-advisor" component={Advisor} />
+            <Route path="/actions" component={Actions} />
             <Route path="/settings" component={Settings} />
             <Route component={NotFound} />
           </Switch>
