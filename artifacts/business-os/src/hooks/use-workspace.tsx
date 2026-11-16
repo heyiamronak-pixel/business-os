@@ -153,6 +153,8 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
       tasks: backup.tasks,
       teamMembers: Array.isArray(backup.teamMembers) ? backup.teamMembers : [],
       campaigns: Array.isArray(backup.campaigns) ? backup.campaigns : [],
+      suppliers: Array.isArray(backup.suppliers) ? backup.suppliers : [],
+      purchases: Array.isArray(backup.purchases) ? backup.purchases : [],
     });
   };
 
