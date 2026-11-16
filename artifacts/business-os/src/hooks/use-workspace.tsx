@@ -12,6 +12,8 @@ import type {
   Sale,
   SaleItem,
   Task,
+  TeamMember,
+  MarketingCampaign,
   ThemeId,
   ThemeMode,
   WorkspaceSetup,
@@ -34,6 +36,8 @@ type CustomerInput = Omit<Customer, 'id' | 'createdAt' | 'updatedAt'> & { id?: s
 type ExpenseInput = Omit<Expense, 'id' | 'createdAt' | 'updatedAt'> & { id?: string };
 type TargetInput = Omit<RevenueTarget, 'id' | 'createdAt' | 'updatedAt'> & { id?: string };
 type TaskInput = Omit<Task, 'id' | 'createdAt' | 'updatedAt'> & { id?: string };
+type TeamMemberInput = Omit<TeamMember, 'id' | 'createdAt' | 'updatedAt'> & { id?: string };
+type CampaignInput = Omit<MarketingCampaign, 'id' | 'createdAt' | 'updatedAt'> & { id?: string };
 
 type BusinessContextValue = {
   state: BusinessState;
@@ -52,6 +56,10 @@ type BusinessContextValue = {
   saveTask: (task: TaskInput) => void;
   deleteTask: (id: string) => void;
   setTaskStatus: (id: string, status: Task['status']) => void;
+  saveTeamMember: (member: TeamMemberInput) => void;
+  deleteTeamMember: (id: string) => void;
+  saveCampaign: (campaign: CampaignInput) => void;
+  deleteCampaign: (id: string) => void;
   recordInventoryMovement: (
     productId: string,
     type: InventoryMovementType,
@@ -227,6 +235,38 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
     }));
   };
 
+  const saveTeamMember = (member: TeamMemberInput) => {
+    if (!member.name.trim()) throw new Error('Enter a team member name.');
+    if (member.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(member.email)) throw new Error('Enter a valid email address.');
+    setState((current) => {
+      const next = withDates({ ...member, name: member.name.trim(), email: member.email.trim(), phone: member.phone.trim(), department: member.department.trim() });
+      const exists = current.teamMembers.some((item) => item.id === next.id);
+      return { ...current, teamMembers: exists ? current.teamMembers.map((item) => item.id === next.id ? { ...item, ...next } : item) : [next, ...current.teamMembers] };
+    });
+  };
+
+  const deleteTeamMember = (id: string) => {
+    setState((current) => ({ ...current, teamMembers: current.teamMembers.filter((member) => member.id !== id) }));
+  };
+
+  const saveCampaign = (campaign: CampaignInput) => {
+    if (!campaign.name.trim()) throw new Error('Enter a campaign name.');
+    if (campaign.startDate && campaign.endDate && campaign.endDate < campaign.startDate) throw new Error('Campaign end date must be on or after its start date.');
+    const numericFields = [campaign.budget, campaign.spend, campaign.impressions, campaign.clicks, campaign.leads, campaign.conversions, campaign.revenue];
+    if (numericFields.some((value) => !Number.isFinite(value) || value < 0)) throw new Error('Campaign metrics must be valid non-negative numbers.');
+    if (campaign.clicks > campaign.impressions && campaign.impressions > 0) throw new Error('Clicks cannot exceed impressions.');
+    if (campaign.conversions > campaign.leads && campaign.leads > 0) throw new Error('Conversions cannot exceed leads.');
+    setState((current) => {
+      const next = withDates({ ...campaign, name: campaign.name.trim(), channel: campaign.channel.trim(), objective: campaign.objective.trim(), notes: campaign.notes.trim() });
+      const exists = current.campaigns.some((item) => item.id === next.id);
+      return { ...current, campaigns: exists ? current.campaigns.map((item) => item.id === next.id ? { ...item, ...next } : item) : [next, ...current.campaigns] };
+    });
+  };
+
+  const deleteCampaign = (id: string) => {
+    setState((current) => ({ ...current, campaigns: current.campaigns.filter((campaign) => campaign.id !== id) }));
+  };
+
   const recordInventoryMovement = (
     productId: string,
     type: InventoryMovementType,
@@ -345,6 +385,10 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
       saveTask,
       deleteTask,
       setTaskStatus,
+      saveTeamMember,
+      deleteTeamMember,
+      saveCampaign,
+      deleteCampaign,
       recordInventoryMovement,
       createSale,
       updateSale,
