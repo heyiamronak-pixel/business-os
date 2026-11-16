@@ -4,13 +4,16 @@ import { AppPage, PageHeader } from "@/components/app-shell";
 import { Badge, Button, Card, EmptyState, Stat } from "@/components/ui";
 import { ADVISOR_PROMPTS, advise, buildContext, type AdvisorReply } from "@/lib/engines";
 import { money } from "@/lib/format";
+import { assistantLabel, detectAssistantLanguage, toHinglish, type AssistantLanguage } from "@/lib/assistant-language";
 import { useAppStore, useBusiness } from "@/lib/store";
+
+type ThreadItem = { reply: AdvisorReply; language: AssistantLanguage };
 
 export function AdvisorScreen() {
   const business = useBusiness();
   const db = useAppStore((state) => state.db);
   const [question, setQuestion] = React.useState("");
-  const [thread, setThread] = React.useState<AdvisorReply[]>([]);
+  const [thread, setThread] = React.useState<ThreadItem[]>([]);
   const [showAllPrompts, setShowAllPrompts] = React.useState(false);
 
   if (!business) return null;
@@ -20,8 +23,18 @@ export function AdvisorScreen() {
   function ask(value: string) {
     const text = value.trim();
     if (!text) return;
+    const language = detectAssistantLanguage(text);
     const reply = advise(text, ctx);
-    setThread((current) => [...current, reply]);
+    const localise = language === "hinglish" ? toHinglish : (value: string) => value;
+    setThread((current) => [...current, {
+      language,
+      reply: {
+        ...reply,
+        facts: reply.facts.map(localise),
+        calculations: reply.calculations.map(localise),
+        recommendations: reply.recommendations.map(localise),
+      },
+    }]);
     setQuestion("");
   }
 
@@ -94,12 +107,12 @@ export function AdvisorScreen() {
       {thread.length === 0 ? (
         <EmptyState
           title="Start with a business question"
-          body="Try “How much customer payment is pending?”, “Which products need restocking?” or “Mera marketing performance kaisa hai?”"
+          body="Try “How much customer payment is pending?”, “Which products need restocking?” or “What should I focus on today?”"
           action={<Button variant="secondary" onClick={() => ask("Give me a business health summary")}> <MessageCircle className="size-4" /> Analyse my business</Button>}
         />
       ) : (
         <div className="space-y-3" aria-live="polite">
-          {thread.map((reply, index) => (
+          {thread.map(({ reply, language }, index) => (
             <Card key={`${index}-${reply.question}`} className="space-y-3">
               <div className="flex items-start gap-2">
                 <span className="grid size-7 shrink-0 place-items-center rounded-full bg-muted text-xs font-semibold">You</span>
@@ -109,9 +122,9 @@ export function AdvisorScreen() {
                 <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-primary">
                   <Bot className="size-4" /> Business Advisor
                 </p>
-                {reply.facts.length ? <Block title="What your data says" items={reply.facts} /> : null}
-                {reply.calculations.length ? <Block title="Calculations" items={reply.calculations} /> : null}
-                {reply.recommendations.length ? <Block title="Recommended next steps" items={reply.recommendations} /> : null}
+                {reply.facts.length ? <Block title={assistantLabel("What your data says", language)} items={reply.facts} /> : null}
+                {reply.calculations.length ? <Block title={assistantLabel("Calculations", language)} items={reply.calculations} /> : null}
+                {reply.recommendations.length ? <Block title={assistantLabel("Recommended next steps", language)} items={reply.recommendations} /> : null}
               </div>
             </Card>
           ))}
@@ -130,7 +143,7 @@ export function AdvisorScreen() {
           onChange={(event) => setQuestion(event.target.value)}
           placeholder="Ask in English or Hinglish…"
           aria-label="Ask Business Advisor"
-          className="h-11 min-w-0 flex-1 rounded-xl border border-border bg-card px-3 text-base outline-none focus:ring-2 focus:ring-ring/40"
+          className="h-11 min-w-0 flex-1 rounded-xl border border-border bg-card px-3 text-sm outline-none focus:border-primary/45 focus:ring-4 focus:ring-ring/10"
         />
         <Button type="submit" disabled={!question.trim()} aria-label="Send question">
           Ask <ArrowUpRight className="size-4" />
