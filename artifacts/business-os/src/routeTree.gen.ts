@@ -137,8 +137,6 @@ export interface FileRoutesByFullPath {
   '/marketing': typeof MarketingRoute
   '/more': typeof MoreRoute
   '/reports': typeof ReportsRoute
-  '/reports': typeof ReportsRoute
-  '/reports': typeof ReportsRoute
   '/onboarding': typeof OnboardingRoute
   '/products': typeof ProductsRoute
   '/sales': typeof SalesRoute
@@ -151,6 +149,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/actions': typeof ActionsRoute
+  '/attendance': typeof AttendanceRoute
   '/advisor': typeof AdvisorRoute
   '/customers': typeof CustomersRoute
   '/expenses': typeof ExpensesRoute
@@ -158,6 +157,7 @@ export interface FileRoutesByTo {
   '/inventory': typeof InventoryRoute
   '/marketing': typeof MarketingRoute
   '/more': typeof MoreRoute
+  '/reports': typeof ReportsRoute
   '/onboarding': typeof OnboardingRoute
   '/products': typeof ProductsRoute
   '/sales': typeof SalesRoute
@@ -171,6 +171,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/actions': typeof ActionsRoute
+  '/attendance': typeof AttendanceRoute
   '/advisor': typeof AdvisorRoute
   '/customers': typeof CustomersRoute
   '/expenses': typeof ExpensesRoute
@@ -178,6 +179,7 @@ export interface FileRoutesById {
   '/inventory': typeof InventoryRoute
   '/marketing': typeof MarketingRoute
   '/more': typeof MoreRoute
+  '/reports': typeof ReportsRoute
   '/onboarding': typeof OnboardingRoute
   '/products': typeof ProductsRoute
   '/sales': typeof SalesRoute
@@ -200,8 +202,6 @@ export interface FileRouteTypes {
     | '/inventory'
     | '/marketing'
     | '/more'
-    | '/reports'
-    | '/reports'
     | '/reports'
     | '/onboarding'
     | '/products'
