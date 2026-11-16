@@ -165,7 +165,7 @@ function getGuide(question: string, pathname: string) {
   if (/(custom filter|filter builder|saved view|advanced filter)/.test(q)) {
     return {
       title: "Custom filters",
-      intro: "Universal custom filter builder abhi build queue mein hai. Kuch modules mein abhi date, status aur search filters available hain, lekin shared AND/OR rules aur saved views har jagah active nahi hain.",
+      intro: "Universal custom filter builder abhi build queue mein hai. Kuch modules mein date, status aur search filters available hain, lekin shared AND/OR rules aur saved views har jagah active nahi hain.",
       steps: ["Abhi ke liye current module ke search aur filters use karo.", "Universal filters mein date, status, owner, branch, amount range, sorting, grouping aur saved views include kiye jayenge.", "Saved filters ko personal ya team-shared rakhne ka option design mein rahega."],
       href: pathname,
       cta: "Stay on this screen",
@@ -181,10 +181,29 @@ function getGuide(question: string, pathname: string) {
     };
   }
 
-  const route = Object.keys(pageGuides)
-    .filter((path) => path !== "/" && pathname.startsWith(path))
-    .sort((a, b) => b.length - a.length)[0] ?? "/";
-  return pageGuides[route];
+  const requestedRoutes: Array<[RegExp, string]> = [
+    [/(record a sale|create a sale|new sale|checkout|sell screen|bikri|sale kaise)/, "/sell"],
+    [/(sales|sale|pending payment|customer payment|collection|payment lena)/, "/sales"],
+    [/(product|sku|barcode|catalogue|catalog)/, "/products"],
+    [/(inventory|stock|reorder|restock|out of stock)/, "/inventory"],
+    [/(supplier|vendor|purchase|maal kharid|purchase order)/, "/purchases"],
+    [/(customer|client|follow.?up)/, "/customers"],
+    [/(expense|kharcha|cost entry)/, "/expenses"],
+    [/(revenue target|target|goal)/, "/targets"],
+    [/(task|reminder|to.?do)/, "/tasks"],
+    [/(employee|team member|staff|department|team)/, "/team"],
+    [/(attendance|check.?in|check.?out)/, "/attendance"],
+    [/(marketing|campaign|ads|lead|roas|cpl)/, "/marketing"],
+    [/(report|analytics|profit|revenue summary)/, "/reports"],
+    [/(action centre|action center|business alert)/, "/actions"],
+    [/(workspace setting|business setting|theme|currency)/, "/settings"],
+  ];
+  const requested = requestedRoutes.find(([pattern]) => pattern.test(q))?.[1];
+  const current = Object.keys(pageGuides)
+    .filter((path) => pathname.startsWith(path))
+    .sort((a, b) => b.length - a.length)[0];
+  const route = requested ?? current ?? "/";
+  return pageGuides[route] ?? pageGuides["/"];
 }
 
 function clampPosition(position: Position): Position {
