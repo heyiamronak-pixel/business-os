@@ -30,6 +30,7 @@ function RootDocument() {
           <HydrateGate>
             <ThemeRuntime />
             <Outlet />
+            {pathname !== '/onboarding' ? <FloatingAssistant /> : null}
             <Toaster position="bottom-center" richColors />
           </HydrateGate>
         </ErrorBoundary>
