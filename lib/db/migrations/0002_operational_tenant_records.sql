@@ -12,20 +12,21 @@ CREATE TABLE products (
  minimum_stock numeric(14,3) NOT NULL DEFAULT 0, unit text NOT NULL DEFAULT 'unit',
  image_data_url text NOT NULL DEFAULT '', created_at timestamptz NOT NULL DEFAULT now(),
  updated_at timestamptz NOT NULL DEFAULT now(),
- CONSTRAINT products_business_sku_uq UNIQUE(business_id,sku),
+ CONSTRAINT products_id_business_uq UNIQUE(id,business_id),
  CONSTRAINT products_cost_nonnegative CHECK(cost_price >= 0),
  CONSTRAINT products_selling_nonnegative CHECK(selling_price >= 0),
  CONSTRAINT products_stock_nonnegative CHECK(stock >= 0),
  CONSTRAINT products_min_stock_nonnegative CHECK(minimum_stock >= 0)
 );
-CREATE INDEX products_business_name_idx ON products(business_id,name);
+CREATE UNIQUE INDEX products_business_sku_uq ON products(business_id,sku) WHERE sku <> '';\nCREATE INDEX products_business_name_idx ON products(business_id,name);
 
 CREATE TABLE customers (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
  business_id uuid NOT NULL REFERENCES businesses(id) ON DELETE RESTRICT,
  name text NOT NULL, phone text NOT NULL DEFAULT '', email text NOT NULL DEFAULT '',
  notes text NOT NULL DEFAULT '', created_at timestamptz NOT NULL DEFAULT now(),
- updated_at timestamptz NOT NULL DEFAULT now()
+ updated_at timestamptz NOT NULL DEFAULT now(),
+ CONSTRAINT customers_id_business_uq UNIQUE(id,business_id)
 );
 CREATE INDEX customers_business_name_idx ON customers(business_id,name);
 CREATE INDEX customers_business_phone_idx ON customers(business_id,phone);
@@ -37,6 +38,7 @@ CREATE TABLE sales (
  subtotal numeric(14,2) NOT NULL, discount numeric(14,2) NOT NULL DEFAULT 0,
  total numeric(14,2) NOT NULL, cost_total numeric(14,2) NOT NULL DEFAULT 0,
  gross_profit numeric(14,2) NOT NULL DEFAULT 0,
+ CONSTRAINT sales_id_business_uq UNIQUE(id,business_id),
  payment_status text NOT NULL CHECK(payment_status IN ('paid','pending','refunded')),
  created_at timestamptz NOT NULL DEFAULT now(),
  CONSTRAINT sales_amounts_nonnegative CHECK(subtotal >= 0 AND discount >= 0 AND total >= 0 AND cost_total >= 0)
@@ -47,11 +49,14 @@ CREATE INDEX sales_business_customer_idx ON sales(business_id,customer_id);
 CREATE TABLE sale_items (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
  business_id uuid NOT NULL REFERENCES businesses(id) ON DELETE RESTRICT,
- sale_id uuid NOT NULL REFERENCES sales(id) ON DELETE RESTRICT,
- product_id uuid REFERENCES products(id) ON DELETE SET NULL,
+ sale_id uuid NOT NULL,
+ product_id uuid,
+
  product_name text NOT NULL, quantity numeric(14,3) NOT NULL,
  unit_price numeric(14,2) NOT NULL, unit_cost numeric(14,2) NOT NULL DEFAULT 0,
  line_total numeric(14,2) NOT NULL,
+ CONSTRAINT sale_items_sale_tenant_fk FOREIGN KEY(sale_id,business_id) REFERENCES sales(id,business_id) ON DELETE RESTRICT,
+ CONSTRAINT sale_items_product_tenant_fk FOREIGN KEY(product_id,business_id) REFERENCES products(id,business_id) ON DELETE SET NULL,
  CONSTRAINT sale_items_quantity_positive CHECK(quantity > 0),
  CONSTRAINT sale_items_amounts_nonnegative CHECK(unit_price >= 0 AND unit_cost >= 0 AND line_total >= 0)
 );
@@ -60,10 +65,11 @@ CREATE INDEX sale_items_business_sale_idx ON sale_items(business_id,sale_id);
 CREATE TABLE inventory_movements (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
  business_id uuid NOT NULL REFERENCES businesses(id) ON DELETE RESTRICT,
- product_id uuid NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
+ product_id uuid NOT NULL,
  movement_type text NOT NULL CHECK(movement_type IN ('stock-in','stock-out','adjustment')),
  quantity numeric(14,3) NOT NULL CHECK(quantity <> 0),
- note text NOT NULL DEFAULT '', created_at timestamptz NOT NULL DEFAULT now()
+ note text NOT NULL DEFAULT '', created_at timestamptz NOT NULL DEFAULT now(),
+ CONSTRAINT inventory_product_tenant_fk FOREIGN KEY(product_id,business_id) REFERENCES products(id,business_id) ON DELETE RESTRICT
 );
 CREATE INDEX inventory_movements_business_product_idx ON inventory_movements(business_id,product_id,created_at DESC);
 
