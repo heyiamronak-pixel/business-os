@@ -4,11 +4,11 @@
 
 Build the complete product experience before connecting external services. The app must be useful and testable with its own workspace data first. Supabase/Auth, CRM, payment gateways, WhatsApp, email, accounting, and third-party AI providers are deliberately deferred until the product build and acceptance checks are complete.
 
-## Stage 0 — Activate the intended workspace app
+## Stage 0 — Stabilise the active workspace app
 
-- [x] Activate the TanStack workspace experience as the application entry point.
+- [x] Keep the active React/Vite/Wouter application entry point and its current page architecture stable; the alternate TanStack route tree remains unused scaffolding.
 - [x] Keep the existing workspace store and local persistence as the development data layer.
-- [x] Expose the main workspace screens: overview, sell, sales, products, inventory, customers, expenses, targets, tasks, team, marketing, inbox, settings, and advisor.
+- [x] Expose the current workspace screens: overview, sales, products, inventory, suppliers, purchases, customers, expenses, targets, tasks, team, marketing, attendance, reports, Action Center, settings, and Advisor.
 - [x] Add a dedicated reports route and CSV export.
 - [x] Expose GPS/selfie attendance in the workspace.
 - [x] Add contextual AI guidance to Action Center.
@@ -17,13 +17,13 @@ Build the complete product experience before connecting external services. The a
 
 - [ ] Complete end-to-end create, view, edit, archive, delete, search, sort, filter, and export behaviour for every core record.
 - [ ] Complete sales checkout, discounts, partial payments, payment collection, refunds/reversals, and stock reconciliation.
-- [ ] Complete product catalogue, SKU/barcode, inventory adjustment, stock transfer, supplier, and purchase workflows.
+- [ ] Complete product catalogue, SKU/barcode, inventory adjustment, stock transfer, supplier and purchase workflows. Initial supplier/purchase CRUD, stock-in receipt and payment-balance tracking are implemented.
 - [ ] Complete customer profiles, notes, history, segmentation, and follow-ups.
 - [ ] Complete expenses, categories, recurring expense UX, budgets, and approvals.
 - [ ] Complete revenue targets, period comparisons, forecasting, and variance views.
 - [ ] Complete tasks, reminders, assignments, recurring tasks, comments, and status history.
-- [ ] Complete team directory, roles, branch assignment, leave and attendance management.
-- [ ] Complete invoice/quotation creation, PDF/print layout, taxes, payment status, and credit notes using editable local data.
+- [ ] Complete team directory, authenticated roles, branch assignment, leave and attendance management. Local team directory and GPS/selfie attendance prototype exist; neither provides secure shared employee access.
+- [ ] Complete invoice/quotation creation, PDF/print layout, taxes, payment status, and credit notes using editable local data. A non-tax sales receipt can be printed; GST tax calculation and compliant invoice numbering are not implemented.
 
 ## Stage 2 — Complete industry modules
 
@@ -38,7 +38,7 @@ Build real workflows, not placeholder tiles, for:
 
 ## Stage 3 — AI across the product
 
-- [x] Provide a data-grounded rule-based advisor and contextual Action Center guidance.
+- [x] Provide a local question-and-answer Advisor, data-grounded recommendations, and contextual Action Center guidance. This is transparent rules-based intelligence, not an external generative AI model.
 - [ ] Add AI actions to sales, inventory, expenses, marketing, reports, tasks, and customer records.
 - [ ] Add explainable recommendations with the source figures shown alongside each suggestion.
 - [ ] Add draft generation for follow-up messages, campaign copy, reports, and business plans.
@@ -47,7 +47,7 @@ Build real workflows, not placeholder tiles, for:
 
 ## Stage 4 — Complete reports and management tools
 
-- [x] Initial financial and marketing report with CSV export.
+- [x] Initial date-filtered financial and marketing report with CSV export. Campaign data is entered manually and is not synced from ad platforms.
 - [ ] Add date-range filters, branch and team filters, comparisons, drill-downs, and scheduled report layouts.
 - [ ] Add cash flow, receivables/payables, profit and loss, inventory valuation, customer cohort, campaign and staff productivity reports.
 - [ ] Add PDF/print-ready report and invoice exports.
@@ -57,7 +57,7 @@ Build real workflows, not placeholder tiles, for:
 - [ ] Desktop-first wide workspace layouts and purpose-built compact mobile layouts.
 - [ ] Accessibility, keyboard support, loading, empty, validation, error, and confirmation states.
 - [ ] Consistent permissions and audit-friendly activity history across all modules.
-- [ ] Import/export, sample workspace, onboarding checklist, and safe reset controls.
+- [ ] Import/export, sample workspace, onboarding checklist, and safe reset controls. JSON backup export and preview-before-restore with pre-restore backup are implemented; a sample workspace and safe reset flow remain outstanding.
 - [ ] Unit, integration, workflow, and browser regression tests for all major actions.
 - [ ] Performance, security, privacy, backup, restore, and release checks.
 
@@ -71,8 +71,8 @@ Only after Stages 1–5 are accepted:
 
 ## Current implementation notes
 
-- The product UI and workflows are being developed on `phase-2/data-foundation`.
+- Product-first UI development is being continued on `development/phase-completion`, based on the tenant data-foundation work.
 - Local workspace persistence remains the active product data layer during this build.
-- The PostgreSQL tenant schema/API foundation is separate groundwork; it is not yet connected to the frontend.
+- The PostgreSQL tenant schema/API foundation is separate groundwork; the active Wouter frontend still uses local browser storage and has not been switched to cloud persistence.
 - Do not merge or publish unfinished work to the production branch merely to make intermediate screens visible.
 - A module is complete only after its main user actions work end-to-end and are covered by tests.
