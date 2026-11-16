@@ -191,7 +191,7 @@ export function SuppliersScreen() {
         title={editing ? "Edit supplier" : "New supplier"}
         description="Keep the contact and tax details used on purchase records."
         footer={
-          <Button block className="w-full" onClick={save}>
+          <Button className="w-full" onClick={save}>
             {editing ? "Save changes" : "Save supplier"}
           </Button>
         }
