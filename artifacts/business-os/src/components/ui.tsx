@@ -3,14 +3,14 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 export const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap font-medium select-none transition-[opacity,transform,background-color] duration-[var(--motion-quick)] ease-[var(--ease-out)] active:scale-[0.98] disabled:pointer-events-none disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap font-semibold tracking-[-0.01em] select-none transition-[opacity,transform,background-color,box-shadow] duration-[var(--motion-quick)] ease-[var(--ease-out)] active:scale-[0.985] disabled:pointer-events-none disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground shadow-none",
-        secondary: "bg-card text-foreground border border-border",
-        ghost: "bg-transparent text-foreground",
-        outline: "border border-border bg-transparent text-foreground",
+        default: "bg-primary text-primary-foreground shadow-[0_5px_14px_color-mix(in_srgb,var(--primary)_18%,transparent)] hover:brightness-[1.04]",
+        secondary: "bg-card text-foreground border border-border shadow-[0_1px_2px_color-mix(in_srgb,var(--foreground)_4%,transparent)] hover:bg-muted/70",
+        ghost: "bg-transparent text-foreground hover:bg-muted",
+        outline: "border border-border bg-card/70 text-foreground hover:bg-muted",
         danger: "bg-danger text-white",
         subtle: "bg-muted text-foreground",
       },
@@ -39,7 +39,7 @@ export const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttribute
     <input
       ref={ref}
       className={cn(
-        "flex h-11 w-full rounded-[var(--radius-md)] border border-border bg-card px-3 text-base text-foreground placeholder:text-subtle outline-none transition-[box-shadow,border-color] duration-[var(--motion-quick)] focus:ring-2 focus:ring-ring/40",
+        "flex h-11 w-full rounded-[var(--radius-md)] border border-border bg-card px-3 text-sm text-foreground placeholder:text-subtle outline-none transition-[box-shadow,border-color] duration-[var(--motion-quick)] focus:border-primary/45 focus:ring-4 focus:ring-ring/10",
         className,
       )}
       {...props}
@@ -53,7 +53,7 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, React.TextareaHTML
     <textarea
       ref={ref}
       className={cn(
-        "flex min-h-24 w-full rounded-[var(--radius-md)] border border-border bg-card px-3 py-2 text-base text-foreground placeholder:text-subtle outline-none focus:ring-2 focus:ring-ring/40",
+        "flex min-h-24 w-full rounded-[var(--radius-md)] border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-subtle outline-none focus:border-primary/45 focus:ring-4 focus:ring-ring/10",
         className,
       )}
       {...props}
@@ -67,7 +67,7 @@ export const Select = React.forwardRef<HTMLSelectElement, React.SelectHTMLAttrib
     <select
       ref={ref}
       className={cn(
-        "flex h-11 w-full rounded-[var(--radius-md)] border border-border bg-card px-3 text-base text-foreground outline-none focus:ring-2 focus:ring-ring/40",
+        "flex h-11 w-full rounded-[var(--radius-md)] border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-primary/45 focus:ring-4 focus:ring-ring/10",
         className,
       )}
       {...props}
@@ -105,7 +105,7 @@ export function Field({
 export function Card({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn("rounded-[var(--radius-xl)] border border-border bg-card p-4", className)}
+      className={cn("rounded-[var(--radius-xl)] border border-border/80 bg-card p-5 shadow-[0_1px_2px_color-mix(in_srgb,var(--foreground)_3%,transparent)]", className)}
       {...props}
     />
   );
@@ -125,7 +125,7 @@ export function Badge({
   };
   return (
     <span
-      className={cn("inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium", tones[tone], className)}
+      className={cn("inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold tracking-[0.01em]", tones[tone], className)}
       {...props}
     />
   );
@@ -220,7 +220,7 @@ export function EmptyState({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-start gap-3 rounded-[var(--radius-xl)] border border-dashed border-border bg-card px-4 py-8">
+    <div className="flex flex-col items-start gap-3 rounded-[var(--radius-xl)] border border-dashed border-border bg-card/80 px-5 py-9 shadow-[0_1px_2px_color-mix(in_srgb,var(--foreground)_3%,transparent)]">
       <h3 className="text-base font-semibold">{title}</h3>
       <p className="text-sm leading-relaxed text-muted-foreground">{body}</p>
       {action}
@@ -244,7 +244,7 @@ export function Stat({
       <p className="text-xs font-medium uppercase tracking-wide text-subtle">{label}</p>
       <p
         className={cn(
-          "mt-1 truncate font-display text-2xl leading-tight tabular",
+          "mt-2 truncate font-sans text-[1.65rem] font-semibold leading-tight tracking-[-0.045em] tabular",
           tone === "good" && "text-success",
           tone === "bad" && "text-danger",
         )}
