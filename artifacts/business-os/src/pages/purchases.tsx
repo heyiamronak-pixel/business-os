@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ArrowDownToLine, Edit3, PackageCheck, Plus, Receipt, Truck } from 'lucide-react';
+import { PackageCheck, Plus, Receipt } from 'lucide-react';
 import { Link } from 'wouter';
 import { useBusiness } from '@/hooks/use-workspace';
 import { EmptyState, inputClass, isoToday, money, PageFrame, PageIntro, SectionCard } from '@/components/record-ui';
