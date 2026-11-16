@@ -1,5 +1,5 @@
-import type { ComponentType } from "react";
-import { Link } from "@tanstack/react-router";
+import { useEffect, type ComponentType } from "react";
+import { Link, useNavigate } from "@tanstack/react-router";
 import {
   Boxes,
   ChartColumn,
@@ -35,10 +35,29 @@ const ICONS: Partial<Record<ModuleId, ComponentType<{ className?: string }>>> = 
 
 export function MoreScreen() {
   const business = useBusiness();
-  if (!business) return null;
+  const navigate = useNavigate();
+
+  // A Netlify Deploy Preview has its own browser storage origin. When it has
+  // no saved workspace yet, send the user through onboarding instead of
+  // rendering a blank screen on a deep link such as /more.
+  useEffect(() => {
+    if (!business) {
+      navigate({ to: "/onboarding", replace: true });
+    }
+  }, [business, navigate]);
+
+  if (!business) {
+    return (
+      <main className="flex min-h-dvh items-center justify-center bg-background px-6 text-center text-foreground">
+        <p className="text-sm text-muted-foreground">Preparing your workspace…</p>
+      </main>
+    );
+  }
+
   const enabled = business.moduleOrder.filter((id) => business.enabledModules.includes(id));
   const extra = business.enabledModules.filter((id) => !enabled.includes(id));
   const modules = [...enabled, ...extra];
+
   return (
     <AppPage>
       <PageHeader title="More" subtitle="Modules for this workspace" />
@@ -51,7 +70,9 @@ export function MoreScreen() {
               <Icon className="size-5 text-primary" />
               <div>
                 <p className="text-sm font-semibold">{def.label}</p>
-                <p className="text-xs text-muted-foreground">{def.implemented ? def.description : "Coming later"}</p>
+                <p className="text-xs text-muted-foreground">
+                  {def.implemented ? def.description : "Coming later"}
+                </p>
               </div>
             </div>
           );
@@ -65,13 +86,22 @@ export function MoreScreen() {
           );
         })}
         <li>
-          <Link to="/attendance" className="flex min-h-24 flex-col justify-between rounded-[var(--radius-xl)] border border-border bg-card p-3">
+          <Link
+            to="/attendance"
+            className="flex min-h-24 flex-col justify-between rounded-[var(--radius-xl)] border border-border bg-card p-3"
+          >
             <CalendarCheck className="size-5 text-primary" />
-            <div><p className="text-sm font-semibold">Attendance</p><p className="text-xs text-muted-foreground">GPS and selfie check-in</p></div>
+            <div>
+              <p className="text-sm font-semibold">Attendance</p>
+              <p className="text-xs text-muted-foreground">GPS and selfie check-in</p>
+            </div>
           </Link>
         </li>
         <li>
-          <Link to="/settings" className="flex min-h-24 flex-col justify-between rounded-[var(--radius-xl)] border border-border bg-card p-3">
+          <Link
+            to="/settings"
+            className="flex min-h-24 flex-col justify-between rounded-[var(--radius-xl)] border border-border bg-card p-3"
+          >
             <Settings className="size-5 text-primary" />
             <div>
               <p className="text-sm font-semibold">Settings</p>
