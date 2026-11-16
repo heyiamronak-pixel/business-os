@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Bot, Lightbulb, RefreshCw, Send, Sparkles, AlertTriangle, CheckCircle2, UserRound, BrainCircuit } from 'lucide-react';
 import { Link } from 'wouter';
 import { useBusiness } from '@/hooks/use-workspace';
-import { inputClass, money, PageFrame, PageIntro, SectionCard } from '@/components/record-ui';
+import { inputClass, isoToday, money, PageFrame, PageIntro, SectionCard } from '@/components/record-ui';
 import type { BusinessState } from '@/domain/types';
 
 type Finding = { title: string; detail: string; action: string; tone: 'positive' | 'warning' | 'neutral'; href: string };
@@ -10,7 +10,7 @@ type Message = { role: 'user' | 'assistant'; content: string };
 
 function buildFindings(state: BusinessState): Finding[] {
   const findings: Finding[] = [];
-  const today = new Date().toISOString().slice(0, 10);
+  const today = isoToday();
   const paidSales = state.sales.filter(s => s.paymentStatus === 'paid');
   const pending = state.sales.filter(s => s.paymentStatus === 'pending');
   const paidRevenue = paidSales.reduce((sum, s) => sum + s.total, 0);
@@ -64,7 +64,7 @@ function answerQuestion(question: string, state: BusinessState): string {
   const leads = state.campaigns.reduce((sum, c) => sum + c.leads, 0);
   const conversions = state.campaigns.reduce((sum, c) => sum + c.conversions, 0);
   const campaignRevenue = state.campaigns.reduce((sum, c) => sum + c.revenue, 0);
-  const activeTarget = state.revenueTargets.find(t => t.startDate <= new Date().toISOString().slice(0, 10) && t.endDate >= new Date().toISOString().slice(0, 10));
+  const activeTarget = state.revenueTargets.find(t => t.startDate <= isoToday() && t.endDate >= isoToday());
 
   if (/stock|inventory|product|reorder/.test(q)) {
     const list = [...zero, ...low].slice(0, 8).map(p => p.name + ' (' + p.stock + ' ' + p.unit + ')').join(', ');
