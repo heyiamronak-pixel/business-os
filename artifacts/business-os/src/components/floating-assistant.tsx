@@ -245,6 +245,7 @@ export function FloatingAssistant() {
   const [question, setQuestion] = React.useState("");
   const [messages, setMessages] = React.useState<Message[]>([]);
   const [busy, setBusy] = React.useState(false);
+  const [activeLanguage, setActiveLanguage] = React.useState<AssistantLanguage>("english");
   const dragRef = React.useRef<DragState | null>(null);
   const movedRef = React.useRef(false);
   const context = React.useMemo(() => business ? buildContext(db, business) : null, [db, business]);
@@ -290,6 +291,7 @@ export function FloatingAssistant() {
     const trimmed = value.trim();
     if (!trimmed || !context || busy) return;
     const language = detectAssistantLanguage(trimmed);
+    setActiveLanguage(language);
     const userMessage: Message = { id: makeId(), role: "user", text: trimmed, language };
     setQuestion("");
     setBusy(true);
@@ -367,28 +369,28 @@ export function FloatingAssistant() {
       {open && (
         <section
           aria-label="Sutra AI assistant"
-          className="fixed z-[70] flex flex-col overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-2xl"
+          className="fixed z-[70] flex flex-col overflow-hidden rounded-[24px] border border-border/80 bg-card text-card-foreground shadow-[0_24px_80px_rgba(12,30,48,0.20)]"
           style={{ left: panelLeft, top: panelTop, width: panelWidth, maxHeight: panelHeight }}
         >
-          <header className="flex items-center gap-3 border-b border-border bg-background/90 px-4 py-3">
-            <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground"><Sparkles className="size-4" /></span>
+          <header className="flex items-center gap-3 border-b border-border/80 bg-card px-4 py-3.5">
+            <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-[#1B4965] via-[#16747A] to-[#55B8AE] text-white shadow-sm"><Sparkles className="size-4" /></span>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-semibold">Sutra AI</p>
-              <p className="text-[11px] text-muted-foreground">Your in-app guide</p>
+              <p className="text-[11px] text-muted-foreground">{assistantLabel("Your in-app guide", activeLanguage)}</p>
             </div>
             <button type="button" aria-label="Close assistant" onClick={() => setOpen(false)} className="grid size-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted"><X className="size-4" /></button>
           </header>
 
-          <div className="grid grid-cols-2 gap-1 border-b border-border bg-muted/35 p-2">
-            <button type="button" onClick={() => setMode("help")} className={`flex min-h-10 items-center justify-center gap-2 rounded-lg px-2 text-xs font-semibold ${mode === "help" ? "bg-card text-primary shadow-sm" : "text-muted-foreground"}`}><HelpCircle className="size-3.5" /> App guide</button>
-            <button type="button" onClick={() => setMode("business")} className={`flex min-h-10 items-center justify-center gap-2 rounded-lg px-2 text-xs font-semibold ${mode === "business" ? "bg-card text-primary shadow-sm" : "text-muted-foreground"}`}><MessageCircle className="size-3.5" /> My business</button>
+          <div className="grid grid-cols-2 gap-1 border-b border-border/80 bg-muted/50 p-2">
+            <button type="button" onClick={() => setMode("help")} className={`flex min-h-10 items-center justify-center gap-2 rounded-lg px-2 text-xs font-semibold ${mode === "help" ? "bg-card text-primary shadow-sm" : "text-muted-foreground"}`}><HelpCircle className="size-3.5" /> {assistantLabel("App guide", activeLanguage)}</button>
+            <button type="button" onClick={() => setMode("business")} className={`flex min-h-10 items-center justify-center gap-2 rounded-lg px-2 text-xs font-semibold ${mode === "business" ? "bg-card text-primary shadow-sm" : "text-muted-foreground"}`}><MessageCircle className="size-3.5" /> {assistantLabel("My business", activeLanguage)}</button>
           </div>
 
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
             {messages.length === 0 ? (
-              <div className="rounded-xl bg-muted/45 p-3">
-                <p className="text-sm font-semibold">{mode === "help" ? "What are you trying to do?" : "Ask about your business"}</p>
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">{mode === "help" ? "Main current screen ke hisaab se steps bataunga. Try: “How do I record a purchase?”" : "Sales, pending payments, stock, customers, purchases ya today's focus ke baare mein pucho."}</p>
+              <div className="rounded-2xl border border-border/70 bg-muted/45 p-4">
+                <p className="text-sm font-semibold">{assistantLabel(mode === "help" ? "What are you trying to do?" : "Ask about your business", activeLanguage)}</p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">{mode === "help" ? (activeLanguage === "hinglish" ? "Main current screen ke hisaab se steps bataunga. Try: “Purchase kaise record karun?”" : "I can guide you through the current screen. Try: “How do I record a purchase?”") : (activeLanguage === "hinglish" ? "Sales, pending payments, stock, customers, purchases ya aaj ke focus ke baare mein poochho." : "Ask about sales, pending payments, stock, customers, purchases or today's priorities.")}</p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {(mode === "help" ? ["How do I record a sale?", "How do I add a team member?", "Where can I see pending payments?"] : ADVISOR_PROMPTS.slice(0, 3)).map((prompt) => (
                     <button key={prompt} type="button" onClick={() => ask(prompt)} className="rounded-full border border-border bg-card px-3 py-2 text-left text-[11px] font-medium hover:border-primary/40 hover:text-primary">{prompt}</button>
@@ -400,7 +402,7 @@ export function FloatingAssistant() {
                 <article key={message.id} className={message.role === "user" ? "ml-8 rounded-xl bg-primary px-3 py-2.5 text-primary-foreground" : "mr-2 rounded-xl border border-border bg-background px-3 py-3"}>
                   <p className="whitespace-pre-wrap text-xs leading-5">{message.text}</p>
                   {message.facts?.length ? <ul className="mt-2 space-y-1.5 text-xs leading-5 text-muted-foreground">{message.facts.map((fact, index) => <li key={index} className="flex gap-2"><span className="mt-2 size-1 shrink-0 rounded-full bg-primary" />{fact}</li>)}</ul> : null}
-                  {message.calculations?.length ? <div className="mt-2 rounded-lg bg-muted/60 p-2"><p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Calculations</p><ul className="mt-1 space-y-1 text-xs leading-5">{message.calculations.map((item, index) => <li key={index}>{item}</li>)}</ul></div> : null}
+                  {message.calculations?.length ? <div className="mt-2 rounded-lg bg-muted/60 p-2"><p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{assistantLabel("Calculations", message.language ?? "english")}</p><ul className="mt-1 space-y-1 text-xs leading-5">{message.calculations.map((item, index) => <li key={index}>{item}</li>)}</ul></div> : null}
                   {message.recommendations?.length ? <div className="mt-2 rounded-lg bg-primary/5 p-2"><p className="text-[10px] font-bold uppercase tracking-wide text-primary">{assistantLabel("Next steps", message.language ?? "english")}</p><ul className="mt-1 space-y-1 text-xs leading-5">{message.recommendations.map((item, index) => <li key={index}>• {item}</li>)}</ul></div> : null}
                   {message.href ? <button type="button" onClick={() => { setOpen(false); navigate({ to: message.href as never }); }} className="mt-3 inline-flex min-h-9 items-center gap-2 rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground">{message.cta ?? "Open module"} <ArrowRight className="size-3.5" /></button> : null}
                   {message.notice ? <p className="mt-2 border-t border-border pt-2 text-[10px] leading-4 text-muted-foreground">{message.notice}</p> : null}
@@ -409,13 +411,13 @@ export function FloatingAssistant() {
             )}
           </div>
 
-          <form onSubmit={submit} className="flex items-center gap-2 border-t border-border bg-background p-3">
+          <form onSubmit={submit} className="flex items-center gap-2 border-t border-border/80 bg-card p-3">
             <input value={question} onChange={(event) => setQuestion(event.target.value)} placeholder={mode === "help" ? "Ask how to use this screen..." : "Ask about your business..."} className="h-11 min-w-0 flex-1 rounded-xl border border-border bg-card px-3 text-base text-foreground outline-none placeholder:text-muted-foreground focus:ring-2 focus:ring-ring/40" />
             <button type="submit" disabled={!question.trim() || busy} aria-label="Send question" className="grid size-11 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground disabled:opacity-40"><Send className="size-4" /></button>
           </form>
-          <footer className="flex items-center justify-between gap-2 px-3 pb-3 text-[10px] text-muted-foreground">
-            <span className="flex items-center gap-1"><Bot className="size-3" /> Rules + workspace data</span>
-            <button type="button" onClick={() => setMessages([])} className="font-semibold hover:text-foreground">Clear chat</button>
+          <footer className="flex items-center justify-between gap-2 px-4 pb-3.5 text-[10px] text-muted-foreground">
+            <span className="flex items-center gap-1"><Bot className="size-3" /> {assistantLabel("Rules + workspace data", activeLanguage)}</span>
+            <button type="button" onClick={() => setMessages([])} className="font-semibold hover:text-foreground">{assistantLabel("Clear chat", activeLanguage)}</button>
           </footer>
         </section>
       )}
@@ -434,7 +436,7 @@ export function FloatingAssistant() {
             setOpen((current) => !current);
           }
         }}
-        className="fixed z-[71] grid size-[58px] touch-none select-none place-items-center rounded-full border border-primary-foreground/20 bg-primary text-primary-foreground shadow-[0_10px_35px_hsl(var(--primary)/0.32)] transition-transform hover:scale-[1.04] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring/40 active:cursor-grabbing"
+        className="fixed z-[71] grid size-[58px] touch-none select-none place-items-center rounded-[21px] border border-white/25 bg-gradient-to-br from-[#1B4965] via-[#16747A] to-[#55B8AE] text-white shadow-[0_12px_32px_rgba(18,99,105,0.34)] transition-transform hover:scale-[1.045] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring/40 active:cursor-grabbing"
         style={{ left: position.x, top: position.y, cursor: "grab" }}
       >
         {open ? <X className="size-5" /> : <Sparkles className="size-5" />}
