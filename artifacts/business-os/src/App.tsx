@@ -20,6 +20,8 @@ import Tasks from '@/pages/tasks';
 import Attendance from '@/pages/attendance';
 import Advisor from '@/pages/advisor';
 import Reports from '@/pages/reports';
+import Team from '@/pages/team';
+import Marketing from '@/pages/marketing';
 import NotFound from '@/pages/not-found';
 import {
   Route,
@@ -46,9 +48,9 @@ function Router() {
             <Route path="/customers" component={Customers} />
             <Route path="/expenses" component={Expenses} />
             <Route path="/revenue-targets" component={RevenueTargets} />
-            <Route path="/marketing" component={ModulePlaceholder} />
+            <Route path="/marketing" component={Marketing} />
             <Route path="/tasks" component={Tasks} />
-            <Route path="/team" component={ModulePlaceholder} />
+            <Route path="/team" component={Team} />
             <Route path="/attendance" component={Attendance} />
             <Route path="/reports" component={Reports} />
             <Route path="/ai-advisor" component={Advisor} />
