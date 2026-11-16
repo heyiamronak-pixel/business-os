@@ -21,6 +21,7 @@ export type ModuleId =
   | "marketing"
   | "reports"
   | "suppliers"
+  | "purchases"
   | "bookings"
   | "trips"
   | "vehicles"
@@ -165,6 +166,49 @@ export interface Sale {
   createdAt: string;
 }
 
+export type SupplierStatus = "active" | "inactive";
+export type PurchasePaymentStatus = "paid" | "partial" | "pending";
+
+export interface Supplier {
+  id: string;
+  businessId: string;
+  name: string;
+  contactName?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  taxId?: string;
+  notes?: string;
+  status: SupplierStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PurchaseItem {
+  productId: string;
+  name: string;
+  sku: string;
+  quantity: number;
+  unitCost: number;
+  total: number;
+}
+
+export interface Purchase {
+  id: string;
+  businessId: string;
+  supplierId: string;
+  supplierName: string;
+  items: PurchaseItem[];
+  subtotal: number;
+  total: number;
+  paidAmount: number;
+  balance: number;
+  paymentStatus: PurchasePaymentStatus;
+  note?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Expense {
   id: string;
   businessId: string;
@@ -270,6 +314,8 @@ export interface WorkspaceDB {
   products: Product[];
   movements: StockMovement[];
   customers: Customer[];
+  suppliers: Supplier[];
+  purchases: Purchase[];
   sales: Sale[];
   expenses: Expense[];
   expenseCategories: ExpenseCategory[];
@@ -550,6 +596,8 @@ export function emptyDb(): WorkspaceDB {
     products: [],
     movements: [],
     customers: [],
+    suppliers: [],
+    purchases: [],
     sales: [],
     expenses: [],
     expenseCategories: [],
