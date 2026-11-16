@@ -34,11 +34,11 @@ CREATE INDEX customers_business_phone_idx ON customers(business_id,phone);
 CREATE TABLE sales (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
  business_id uuid NOT NULL REFERENCES businesses(id) ON DELETE RESTRICT,
- customer_id uuid REFERENCES customers(id) ON DELETE SET NULL,
+ customer_id uuid,
  subtotal numeric(14,2) NOT NULL, discount numeric(14,2) NOT NULL DEFAULT 0,
  total numeric(14,2) NOT NULL, cost_total numeric(14,2) NOT NULL DEFAULT 0,
  gross_profit numeric(14,2) NOT NULL DEFAULT 0,
- CONSTRAINT sales_id_business_uq UNIQUE(id,business_id),
+ CONSTRAINT sales_id_business_uq UNIQUE(id,business_id),\n CONSTRAINT sales_customer_tenant_fk FOREIGN KEY(customer_id,business_id) REFERENCES customers(id,business_id) ON DELETE RESTRICT,
  payment_status text NOT NULL CHECK(payment_status IN ('paid','pending','refunded')),
  created_at timestamptz NOT NULL DEFAULT now(),
  CONSTRAINT sales_amounts_nonnegative CHECK(subtotal >= 0 AND discount >= 0 AND total >= 0 AND cost_total >= 0)
@@ -56,7 +56,7 @@ CREATE TABLE sale_items (
  unit_price numeric(14,2) NOT NULL, unit_cost numeric(14,2) NOT NULL DEFAULT 0,
  line_total numeric(14,2) NOT NULL,
  CONSTRAINT sale_items_sale_tenant_fk FOREIGN KEY(sale_id,business_id) REFERENCES sales(id,business_id) ON DELETE RESTRICT,
- CONSTRAINT sale_items_product_tenant_fk FOREIGN KEY(product_id,business_id) REFERENCES products(id,business_id) ON DELETE SET NULL,
+ CONSTRAINT sale_items_product_tenant_fk FOREIGN KEY(product_id,business_id) REFERENCES products(id,business_id) ON DELETE RESTRICT,
  CONSTRAINT sale_items_quantity_positive CHECK(quantity > 0),
  CONSTRAINT sale_items_amounts_nonnegative CHECK(unit_price >= 0 AND unit_cost >= 0 AND line_total >= 0)
 );
