@@ -37,7 +37,6 @@ const PHRASE_REPLACEMENTS: Array<[RegExp, string]> = [
   [/out of stock/gi, "stock khatam"],
   [/low stock/gi, "kam stock"],
   [/cash collected/gi, "collect hua cash"],
-  [/booked revenue/gi, "book hui revenue"],
   [/customer balances outstanding/gi, "customers se pending amount"],
   [/supplier payments/gi, "supplier payments"],
   [/supplier payables/gi, "supplier ko pending payment"],
@@ -99,10 +98,6 @@ const WORD_REPLACEMENTS: Array<[RegExp, string]> = [
 
 export function toHinglish(value: string): string {
   let result = value;
-  for (const [pattern, replacement] of PHRASE_REPLACEMENTS) {
-    result = result.replace(pattern, replacement);
-  }
-
   // Preserve exact figures while changing the sentence structure around them.
   result = result
     .replace(/Booked revenue:\s*(.+?)\s+across\s+(\d+) sales\./i, (_match: string, amount: string, count: string) => `Booked revenue ${amount} hai (${count} sales mein).`)
@@ -124,6 +119,10 @@ export function toHinglish(value: string): string {
     .replace(/(\d+) purchase records worth (.+?)\./i, (_match: string, count: string, total: string) => `${count} purchase records ki total value ${total} hai.`)
     .replace(/Paid to suppliers:\s*(.+?); outstanding:\s*(.+?)\s+across\s+(\d+) open purchases\./i, (_match: string, paid: string, pending: string, count: string) => `Suppliers ko paid amount ${paid} hai; ${count} open purchases mein ${pending} pending hai.`)
     .replace(/Supplier payment ratio:\s*(.+?)\./i, (_match: string, ratio: string) => `Supplier payment ratio ${ratio} hai.`);
+
+  for (const [pattern, replacement] of PHRASE_REPLACEMENTS) {
+    result = result.replace(pattern, replacement);
+  }
 
   for (const [pattern, replacement] of WORD_REPLACEMENTS) {
     result = result.replace(pattern, replacement);
