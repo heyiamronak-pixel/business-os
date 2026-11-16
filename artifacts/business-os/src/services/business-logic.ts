@@ -32,6 +32,11 @@ export function inventoryMovementDelta(type: InventoryMovementType, quantity: nu
   if (type === 'stock-out') return -quantity;
   return quantity;
 }
+export function paidRevenueWithinRange(sales: Sale[], startDate: string, endDate: string): number {
+  return sales
+    .filter(sale => sale.paymentStatus === 'paid' && sale.createdAt.slice(0, 10) >= startDate && sale.createdAt.slice(0, 10) <= endDate)
+    .reduce((sum, sale) => sum + sale.total, 0);
+}
 export function calculateMetrics(state: BusinessState, today = new Date()): BusinessMetrics {
   const revenue = state.sales
     .filter((sale) => sale.paymentStatus === 'paid')
@@ -46,9 +51,7 @@ export function calculateMetrics(state: BusinessState, today = new Date()): Busi
   });
   const revenueTarget = currentTarget?.amount ?? 0;
   const revenueAchieved = currentTarget
-    ? state.sales
-        .filter((sale) => sale.paymentStatus === 'paid' && sale.createdAt.slice(0, 10) >= currentTarget.startDate && sale.createdAt.slice(0, 10) <= currentTarget.endDate)
-        .reduce((sum, sale) => sum + sale.total, 0)
+    ? paidRevenueWithinRange(state.sales, currentTarget.startDate, currentTarget.endDate)
     : 0;
   const targetRemaining = Math.max(revenueTarget - revenueAchieved, 0);
   const daysRemaining = currentTarget

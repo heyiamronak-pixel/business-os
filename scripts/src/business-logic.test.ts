@@ -4,6 +4,7 @@ import {
   applyPurchaseToInventory,
   applySaleToInventory,
   calculateMetrics,
+  paidRevenueWithinRange,
   createPurchaseItems,
   createSaleItems,
   inventoryMovementDelta,
@@ -215,4 +216,14 @@ test('inventory movements require positive in/out quantities and allow signed ad
   assert.throws(() => inventoryMovementDelta('stock-in', -2), /positive quantity/);
   assert.throws(() => inventoryMovementDelta('stock-out', -2), /positive quantity/);
   assert.throws(() => inventoryMovementDelta('adjustment', 0), /non-zero quantity/);
+});
+
+test('target revenue calculation includes only paid sales within target dates', () => {
+  const sales = [
+    { id: 'before', createdAt: '2026-10-31T23:59:00.000Z', paymentStatus: 'paid', total: 100 },
+    { id: 'inside', createdAt: '2026-11-10T09:00:00.000Z', paymentStatus: 'paid', total: 250 },
+    { id: 'pending', createdAt: '2026-11-12T09:00:00.000Z', paymentStatus: 'pending', total: 500 },
+    { id: 'after', createdAt: '2026-12-01T00:00:00.000Z', paymentStatus: 'paid', total: 700 },
+  ] as BusinessState['sales'];
+  assert.equal(paidRevenueWithinRange(sales, '2026-11-01', '2026-11-30'), 250);
 });
