@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { ArrowRight, AlertTriangle, Bot, ChartNoAxesCombined, CircleDollarSign, ClipboardCheck, ContactRound, Megaphone, PackageSearch, Receipt, ShoppingBag, Target, UsersRound, Wallet } from 'lucide-react';
 import { Link } from 'wouter';
 import { useBusiness } from '@/hooks/use-workspace';
-import { money, PageFrame, SectionCard } from '@/components/record-ui';
+import { isoToday, money, PageFrame, SectionCard } from '@/components/record-ui';
 
 function monthKey(date: Date) {
   return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0');
@@ -15,7 +15,7 @@ export default function Dashboard() {
   const { state, workspace, metrics } = useBusiness();
   const currency = workspace?.currency;
   const today = new Date();
-  const todayKey = today.toISOString().slice(0, 10);
+  const todayKey = isoToday();
   const paidSales = state.sales.filter(s => s.paymentStatus === 'paid');
   const paidRevenue = paidSales.reduce((sum, s) => sum + s.total, 0);
   const pendingPayments = state.sales.filter(s => s.paymentStatus === 'pending').reduce((sum, s) => sum + s.total, 0);
