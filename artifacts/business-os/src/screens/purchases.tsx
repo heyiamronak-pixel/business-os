@@ -28,10 +28,11 @@ export function PurchasesScreen() {
   const [payment, setPayment] = React.useState("");
 
   if (!business) return null;
-  const suppliers = db.suppliers.filter((supplier) => supplier.businessId === business.id);
+  const businessId = business.id;
+  const suppliers = db.suppliers.filter((supplier) => supplier.businessId === businessId);
   const activeSuppliers = suppliers.filter((supplier) => supplier.status === "active");
-  const products = db.products.filter((product) => product.businessId === business.id && !product.archived);
-  const purchases = db.purchases.filter((purchase) => purchase.businessId === business.id);
+  const products = db.products.filter((product) => product.businessId === businessId && !product.archived);
+  const purchases = db.purchases.filter((purchase) => purchase.businessId === businessId);
   const totalValue = purchases.reduce((sum, purchase) => sum + purchase.total, 0);
   const totalPaid = purchases.reduce((sum, purchase) => sum + purchase.paidAmount, 0);
   const totalDue = purchases.reduce((sum, purchase) => sum + purchase.balance, 0);
@@ -68,7 +69,7 @@ export function PurchasesScreen() {
   function savePurchase() {
     try {
       const result = createPurchase(useAppStore.getState().db, {
-        businessId: business.id,
+        businessId: businessId,
         supplierId,
         items: lines.filter((line) => line.productId),
         paidAmount: Number(paidAmount),
