@@ -62,7 +62,7 @@ export function calculateMetrics(state: BusinessState, today = new Date()): Busi
     revenueTarget,
     revenueAchieved,
     targetRemaining,
-    targetAchievement: revenueTarget ? Math.min((revenue / revenueTarget) * 100, 100) : 0,
+    targetAchievement: revenueTarget ? Math.min((revenueAchieved / revenueTarget) * 100, 100) : 0,
     requiredDailyRevenue: daysRemaining ? targetRemaining / daysRemaining : 0,
     requiredWeeklyRevenue: daysRemaining ? (targetRemaining / daysRemaining) * 7 : 0,
     salesCount: state.sales.length,
