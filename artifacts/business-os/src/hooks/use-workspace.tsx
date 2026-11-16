@@ -16,7 +16,6 @@ import type {
   MarketingCampaign,
   Supplier,
   Purchase,
-  PurchasePaymentStatus,
   ThemeId,
   ThemeMode,
   WorkspaceSetup,
@@ -313,16 +312,17 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
   };
 
   const createPurchase = ({ supplierId, items, paidAmount, note }: { supplierId: string; items: Array<{ productId: string; quantity: number; unitCost: number }>; paidAmount: number; note: string }) => {
-    if (!supplierId) throw new Error('Select a supplier.');
+    const supplier = state.suppliers.find((item) => item.id === supplierId);
+    if (!supplier || supplier.status !== 'Active') throw new Error('Select an active supplier.');
+    const purchaseItems = createPurchaseItems(state.products, items);
+    const total = purchaseItems.reduce((sum, item) => sum + item.total, 0);
+    const payment = purchasePaymentSummary(total, paidAmount);
+    const now = new Date().toISOString();
+    const id = makeId('purchase');
+    const purchase: Purchase = { id, supplierId, supplierName: supplier.name, items: purchaseItems, subtotal: total, total, ...payment, note: note.trim(), createdAt: now, updatedAt: now };
     setState((current) => {
-      const supplier = current.suppliers.find((item) => item.id === supplierId);
-      if (!supplier || supplier.status !== 'Active') throw new Error('Select an active supplier.');
-      const purchaseItems = createPurchaseItems(current.products, items);
-      const total = purchaseItems.reduce((sum, item) => sum + item.total, 0);
-      const payment = purchasePaymentSummary(total, paidAmount);
-      const now = new Date().toISOString();
-      const id = makeId('purchase');
-      const purchase: Purchase = { id, supplierId, supplierName: supplier.name, items: purchaseItems, subtotal: total, total, ...payment, note: note.trim(), createdAt: now, updatedAt: now };
+      const currentSupplier = current.suppliers.find((item) => item.id === supplierId);
+      if (!currentSupplier || currentSupplier.status !== 'Active') return current;
       const inventory = applyPurchaseToInventory(
         current.products,
         purchaseItems,
@@ -334,13 +334,13 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
   };
 
   const updatePurchasePayment = (id: string, paidAmount: number) => {
-    if (!Number.isFinite(paidAmount) || paidAmount < 0) throw new Error('Enter a valid paid amount.');
-    setState((current) => {
-      const purchase = current.purchases.find((item) => item.id === id);
-      if (!purchase) return current;
-      const payment = purchasePaymentSummary(purchase.total, paidAmount);
-      return { ...current, purchases: current.purchases.map((item) => item.id === id ? { ...item, ...payment, updatedAt: new Date().toISOString() } : item) };
-    });
+    const purchase = state.purchases.find((item) => item.id === id);
+    if (!purchase) return;
+    const payment = purchasePaymentSummary(purchase.total, paidAmount);
+    setState((current) => ({
+      ...current,
+      purchases: current.purchases.map((item) => item.id === id ? { ...item, ...payment, updatedAt: new Date().toISOString() } : item),
+    }));
   };
 
   const recordInventoryMovement = (
