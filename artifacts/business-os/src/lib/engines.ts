@@ -857,7 +857,7 @@ function procurementAdvice(ctx: BusinessContext, question: string): AdvisorReply
 }
 
 export function advise(question: string, ctx: BusinessContext): AdvisorReply {
-  const q = question.toLowerCase().normalize("NFKC").replace(/\\s+/g, " ").trim();
+  const q = question.toLowerCase().normalize("NFKC").replace(/\s+/g, " ").trim();
   if (!q) return {
     question,
     facts: [],
