@@ -1,85 +1,78 @@
-# Business OS — Consolidated Development Roadmap
+# Business Sutra — Product-first development roadmap
 
-This roadmap reflects the source code currently present in the repository, rather than assuming a clean-slate foundation.
+## Delivery rule
 
-## Milestone 0 — Source audit
+Build the complete product experience before connecting external services. The app must be useful and testable with its own workspace data first. Supabase/Auth, CRM, payment gateways, WhatsApp, email, accounting, and third-party AI providers are deliberately deferred until the product build and acceptance checks are complete.
 
-**Code-level inspection completed: 14 November 2026.**
+## Stage 0 — Activate the intended workspace app
 
-- Mapped the 259-file repository.
-- Identified the active React/Vite frontend entry point and Wouter route table.
-- Identified workspace context, domain types, local repository, and business logic.
-- Identified the Express API route tree and Drizzle schema scaffold.
-- Identified a separate mockup sandbox and avoided treating it as the active frontend.
-- Identified implemented prototype workflows and routes still mapped to placeholders.
+- [x] Activate the TanStack workspace experience as the application entry point.
+- [x] Keep the existing workspace store and local persistence as the development data layer.
+- [x] Expose the main workspace screens: overview, sell, sales, products, inventory, customers, expenses, targets, tasks, team, marketing, inbox, settings, and advisor.
+- [x] Add a dedicated reports route and CSV export.
+- [x] Expose GPS/selfie attendance in the workspace.
+- [x] Add contextual AI guidance to Action Center.
 
-**Still required:** run dependency installation, typecheck, production build, and browser workflows in the actual Replit/local runtime. No runtime pass is claimed.
+## Stage 1 — Finish universal business workflows
 
-## Milestone 1 — Stabilize current prototype
+- [ ] Complete end-to-end create, view, edit, archive, delete, search, sort, filter, and export behaviour for every core record.
+- [ ] Complete sales checkout, discounts, partial payments, payment collection, refunds/reversals, and stock reconciliation.
+- [ ] Complete product catalogue, SKU/barcode, inventory adjustment, stock transfer, supplier, and purchase workflows.
+- [ ] Complete customer profiles, notes, history, segmentation, and follow-ups.
+- [ ] Complete expenses, categories, recurring expense UX, budgets, and approvals.
+- [ ] Complete revenue targets, period comparisons, forecasting, and variance views.
+- [ ] Complete tasks, reminders, assignments, recurring tasks, comments, and status history.
+- [ ] Complete team directory, roles, branch assignment, leave and attendance management.
+- [ ] Complete invoice/quotation creation, PDF/print layout, taxes, payment status, and credit notes using editable local data.
 
-- Preserve existing UI, domain models, and calculations.
-- Reproduce dependency, typecheck, and build baseline.
-- Verify workspace setup and browser persistence.
-- Verify product, customer, expense, inventory, target, and task create/edit/delete flows.
-- Verify sales stock deduction, insufficient-stock handling, sale update, and delete/stock restoration.
-- Confirm which route is canonical and keep mockup sandbox separate.
-- Add regression tests for calculations and state transitions.
-- Replace stale project documentation with accurate status.
+## Stage 2 — Complete industry modules
 
-**Exit criteria:** repeatable build and successful browser tests for the existing workflows.
+Build real workflows, not placeholder tiles, for:
+- Retail and POS: suppliers, purchase orders, stock transfers, returns, barcode workflows.
+- Hospitality: properties, rooms, rates, reservations, guests, housekeeping, OTA performance.
+- Travel and tourism: leads, bookings, itineraries, vehicles, drivers, trips, fuel, maintenance.
+- Agencies and services: leads, clients, projects, service catalogue, timesheets, proposals, invoices.
+- Manufacturing: raw materials, suppliers, bills of materials, production runs, quality checks, finished goods.
+- E-commerce: orders, fulfilment, shipments, returns, refunds, channel performance.
+- General business: branches, approvals, documents, calendar, assets, and custom fields.
 
-## Milestone 2 — Sales workflow completion
+## Stage 3 — AI across the product
 
-- Verify sales UI route and connect an actual sales page rather than a generic placeholder.
-- Validate sale inputs and product/customer references.
-- Ensure sale updates and reversals keep stock and totals consistent.
-- Add history/filtering and payment status only with verified data behavior.
+- [x] Provide a data-grounded rule-based advisor and contextual Action Center guidance.
+- [ ] Add AI actions to sales, inventory, expenses, marketing, reports, tasks, and customer records.
+- [ ] Add explainable recommendations with the source figures shown alongside each suggestion.
+- [ ] Add draft generation for follow-up messages, campaign copy, reports, and business plans.
+- [ ] Add user confirmation before any AI-proposed change is written to business records.
+- [ ] Add AI provider abstraction, privacy controls, usage limits, and cost visibility only after the product workflows are stable.
 
-**Exit criteria:** complete end-to-end sales workflow and regression tests.
+## Stage 4 — Complete reports and management tools
 
-## Milestone 3 — Identity and organization foundation
+- [x] Initial financial and marketing report with CSV export.
+- [ ] Add date-range filters, branch and team filters, comparisons, drill-downs, and scheduled report layouts.
+- [ ] Add cash flow, receivables/payables, profit and loss, inventory valuation, customer cohort, campaign and staff productivity reports.
+- [ ] Add PDF/print-ready report and invoice exports.
 
-- Implement authentication and user profiles.
-- Add organizations and memberships.
-- Support multiple organizations per user and workspace switching.
-- Add organization-specific Owner/Admin/Manager/Employee roles.
-- Enforce backend authorization and tenant isolation.
-- Add organization settings (industry, currency, timezone, branding, enabled modules).
+## Stage 5 — Product quality and release readiness
 
-**Exit criteria:** cross-tenant read/write tests pass; client-supplied organization IDs are never trusted without membership checks.
+- [ ] Desktop-first wide workspace layouts and purpose-built compact mobile layouts.
+- [ ] Accessibility, keyboard support, loading, empty, validation, error, and confirmation states.
+- [ ] Consistent permissions and audit-friendly activity history across all modules.
+- [ ] Import/export, sample workspace, onboarding checklist, and safe reset controls.
+- [ ] Unit, integration, workflow, and browser regression tests for all major actions.
+- [ ] Performance, security, privacy, backup, restore, and release checks.
 
-## Milestone 4 — PostgreSQL and business API
+## Stage 6 — External connections (last)
 
-- Define tenant-scoped Drizzle tables and migrations.
-- Implement validated API contracts and business endpoints.
-- Move persistence behind repository/service abstractions.
-- Migrate existing local prototype data only through an explicit, tested migration/export path.
-- Add transaction boundaries for sales and inventory.
+Only after Stages 1–5 are accepted:
+- Authentication, hosted database, multi-user sync, and cross-device persistence.
+- Payment gateways, accounting, GST/e-invoice providers.
+- CRM, WhatsApp, email, SMS, calendars, OTA and advertising platforms.
+- Hosted AI model provider and other external APIs.
 
-**Exit criteria:** business records persist across devices and users with tested tenant isolation and transaction integrity.
+## Current implementation notes
 
-## Milestone 5 — Team, reports, and Action Center
-
-- Complete team membership and permissions.
-- Build reports only from actual authorized records.
-- Add date filters and transparent calculations.
-- Add alerts tied to verifiable business conditions.
-- Keep missing data visible rather than filling gaps with invented values.
-
-## Milestone 6 — AI Business Advisor and industry modules
-
-- Provide only authorized organization context to the Advisor.
-- Separate stored facts, calculations, and recommendations.
-- Start with transparent rules where practical.
-- Add industry-specific workflows independently (retail, hospitality, travel, agencies, manufacturing, e-commerce, services).
-- Evaluate paid AI/third-party integrations only after cost, privacy, and access review.
-
-## Milestone 7 — Billing and launch readiness
-
-- Add independent organization subscription, invoice, plan, and usage boundaries.
-- Ensure suspension in one organization cannot affect another.
-- Test backups, restore, security, performance, accessibility, mobile responsiveness, monitoring, and rollback.
-
-## Delivery discipline
-
-Keep changes reversible. Do not rebuild the app from scratch or migrate routers/storage as incidental cleanup. Record changed files and actual test outputs. A feature is not complete until its end-to-end tests pass.
+- The product UI and workflows are being developed on `phase-2/data-foundation`.
+- Local workspace persistence remains the active product data layer during this build.
+- The PostgreSQL tenant schema/API foundation is separate groundwork; it is not yet connected to the frontend.
+- Do not merge or publish unfinished work to the production branch merely to make intermediate screens visible.
+- A module is complete only after its main user actions work end-to-end and are covered by tests.
