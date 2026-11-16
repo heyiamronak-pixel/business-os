@@ -203,12 +203,12 @@ export const moduleLabels: Record<string, string> = {
   invoices: 'Invoices',
   'raw-materials': 'Raw Materials',
   production: 'Production',
-  suppliers: 'Suppliers',
   orders: 'Orders',
   returns: 'Returns',
 };
 
 export const moduleDescriptions: Record<string, string> = {
+  purchases: 'Supplier purchases and stock receipts',
   pos: 'Checkout and payment capture',
   bookings: 'Reservations and availability',
   vehicles: 'Fleet and vehicle records',
