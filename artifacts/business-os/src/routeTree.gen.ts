@@ -174,7 +174,9 @@ export interface FileRoutesByTo {
   '/reports': typeof ReportsRoute
   '/onboarding': typeof OnboardingRoute
   '/products': typeof ProductsRoute
+  '/purchases': typeof PurchasesRoute
   '/sales': typeof SalesRoute
+  '/suppliers': typeof SuppliersRoute
   '/sell': typeof SellRoute
   '/settings': typeof SettingsRoute
   '/targets': typeof TargetsRoute
@@ -241,8 +243,10 @@ export interface FileRouteTypes {
     | '/more'
     | '/onboarding'
     | '/products'
+    | '/purchases'
     | '/reports'
     | '/sales'
+    | '/suppliers'
     | '/sell'
     | '/settings'
     | '/targets'
@@ -261,7 +265,9 @@ export interface FileRouteTypes {
     | '/more'
     | '/onboarding'
     | '/products'
+    | '/purchases'
     | '/sales'
+    | '/suppliers'
     | '/sell'
     | '/settings'
     | '/targets'
