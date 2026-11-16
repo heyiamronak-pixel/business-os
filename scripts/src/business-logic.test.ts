@@ -2,11 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   applySaleToInventory,
+  calculateMetrics,
   createSaleItems,
   saleTotals,
   revertSaleFromInventory,
 } from '../../artifacts/business-os/src/services/business-logic.ts';
-import type { Product, SaleItem } from '../../artifacts/business-os/src/domain/types.ts';
+import type { BusinessState, Product, SaleItem } from '../../artifacts/business-os/src/domain/types.ts';
 
 const product: Product = {
   id: 'p1',
@@ -99,4 +100,61 @@ test('deleting a sale restores its stock quantities', () => {
     createdAt: '2026-01-02T00:00:00.000Z',
   }]);
   assert.equal(restored[0].stock, 5);
+});
+
+test('dashboard metrics exclude pending sales and scope target achievement to target dates', () => {
+  const sale = (id: string, createdAt: string, total: number, costTotal: number, paymentStatus: 'paid' | 'pending' | 'refunded') => ({
+    id,
+    customerId: '',
+    items: [],
+    subtotal: total,
+    discount: 0,
+    total,
+    costTotal,
+    grossProfit: total - costTotal,
+    paymentStatus,
+    createdAt,
+  });
+  const state: BusinessState = {
+    workspace: null,
+    products: [],
+    inventoryMovements: [],
+    customers: [],
+    sales: [
+      sale('inside-paid', '2026-11-05T10:00:00.000Z', 500, 50, 'paid'),
+      sale('inside-pending', '2026-11-10T10:00:00.000Z', 400, 40, 'pending'),
+      sale('outside-paid', '2026-10-20T10:00:00.000Z', 900, 90, 'paid'),
+    ],
+    expenses: [{
+      id: 'e1',
+      category: 'Rent',
+      amount: 100,
+      date: '2026-11-01',
+      description: '',
+      paymentMethod: 'Bank',
+      createdAt: '2026-11-01T00:00:00.000Z',
+      updatedAt: '2026-11-01T00:00:00.000Z',
+    }],
+    revenueTargets: [{
+      id: 't1',
+      period: 'monthly',
+      label: 'November target',
+      amount: 1000,
+      startDate: '2026-11-01',
+      endDate: '2026-11-30',
+      createdAt: '2026-11-01T00:00:00.000Z',
+      updatedAt: '2026-11-01T00:00:00.000Z',
+    }],
+    tasks: [],
+    teamMembers: [],
+    campaigns: [],
+  };
+
+  const metrics = calculateMetrics(state, new Date(2026, 10, 16, 12, 0, 0));
+  assert.equal(metrics.revenue, 1400);
+  assert.equal(metrics.profit, 1160);
+  assert.equal(metrics.revenueTarget, 1000);
+  assert.equal(metrics.revenueAchieved, 500);
+  assert.equal(metrics.targetRemaining, 500);
+  assert.equal(metrics.targetAchievement, 50);
 });
