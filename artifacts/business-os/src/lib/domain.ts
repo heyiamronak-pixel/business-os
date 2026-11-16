@@ -524,7 +524,7 @@ export const INDUSTRIES: IndustryDef[] = [
     id: "construction",
     label: "Construction",
     description: "Contractors and builders",
-    recommended: ["customers", "sales", "tasks", "team", "expenses", "targets", "reports"],
+    recommended: ["customers", "sales", "suppliers", "purchases", "tasks", "team", "expenses", "targets", "reports"],
     extra: ["jobs", "sites", "materials", "invoices"],
   },
   {
