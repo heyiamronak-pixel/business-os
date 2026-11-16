@@ -373,7 +373,7 @@ export function OnboardingScreen() {
 }
 
 function swatches(preset: ThemePreset): string[] {
-  if (preset === "professional") return ["#1B3A4B", "#E8EEF1", "#1C1917"];
-  if (preset === "contrast") return ["#111111", "#FAFAF8", "#444444"];
-  return ["#0F5C54", "#F4F1EA", "#1C1917"];
+  if (preset === "professional") return ["#2B526B", "#F0F4F8", "#17263A"];
+  if (preset === "contrast") return ["#17263A", "#FAFBFD", "#344357"];
+  return ["#176B73", "#F4F7FB", "#17263A"];
 }
