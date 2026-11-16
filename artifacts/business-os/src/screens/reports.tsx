@@ -28,6 +28,11 @@ export function ReportsScreen() {
   if (!business) return null;
   const range = getRange(period);
   const sales = db.sales.filter((s) => s.businessId === business.id && new Date(s.createdAt) >= range.from && new Date(s.createdAt) <= range.to);
+  const purchases = db.purchases.filter((purchase) => purchase.businessId === business.id && new Date(purchase.createdAt) >= range.from && new Date(purchase.createdAt) <= range.to);
+  const purchaseValue = purchases.reduce((sum, purchase) => sum + purchase.total, 0);
+  const supplierPaid = purchases.reduce((sum, purchase) => sum + purchase.paidAmount, 0);
+  const supplierOutstanding = purchases.reduce((sum, purchase) => sum + purchase.balance, 0);
+  const openPurchases = purchases.filter((purchase) => purchase.balance > 0).length;
   const expenses = db.expenses.filter((e) => e.businessId === business.id && new Date(e.date) >= range.from && new Date(e.date) <= range.to);
   const campaigns = db.campaigns.filter((c) => c.businessId === business.id && new Date(c.date) >= range.from && new Date(c.date) <= range.to);
   const finance = financeSnapshot(db, business.id, range);
@@ -54,6 +59,10 @@ export function ReportsScreen() {
       ["Marketing leads", marketing.leads],
       ["Marketing revenue", marketing.revenue],
       ["ROAS", marketing.roas ?? "Not available"],
+      ["Purchase value", purchaseValue],
+      ["Paid to suppliers", supplierPaid],
+      ["Supplier payables", supplierOutstanding],
+      ["Open purchases", openPurchases],
       [],
       ["Top products", "Units sold", "Revenue", "Profit"],
       ...topProducts.map((p) => [p.name, p.qty, p.revenue, p.profit]),
@@ -75,7 +84,7 @@ export function ReportsScreen() {
           <Button key={p} size="sm" variant={period === p ? "default" : "secondary"} onClick={() => setPeriod(p)}>{p === "month" ? "This month" : p === "quarter" ? "This quarter" : "This year"}</Button>
         ))}
       </div>
-      {sales.length === 0 && expenses.length === 0 ? (
+      {sales.length === 0 && expenses.length === 0 && purchases.length === 0 && campaigns.length === 0 ? (
         <EmptyState title="Reports will appear as you record activity" body="Add sales, expenses and campaign results. This report will calculate performance only from the data saved in this workspace." />
       ) : null}
       <section className="mb-5">
@@ -109,6 +118,18 @@ export function ReportsScreen() {
           <Card><Stat label="Cost per lead" value={marketing.cpl == null ? "—" : money(marketing.cpl, currency)} /></Card>
           <Card><Stat label="Customer acquisition cost" value={marketing.cac == null ? "—" : money(marketing.cac, currency)} /></Card>
           <Card><Stat label="ROAS" value={marketing.roas == null ? "—" : `${marketing.roas.toFixed(2)}x`} /></Card>
+        </div>
+      </section>
+      <section className="mb-5">
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="text-sm font-semibold">Purchases & supplier balances</h2>
+          <Badge tone={supplierOutstanding > 0 ? "warn" : "good"}>{openPurchases} open purchases</Badge>
+        </div>
+        <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+          <Card><Stat label="Purchase value" value={money(purchaseValue, currency)} /></Card>
+          <Card><Stat label="Paid to suppliers" value={money(supplierPaid, currency)} /></Card>
+          <Card><Stat label="Outstanding payables" value={money(supplierOutstanding, currency)} tone={supplierOutstanding > 0 ? "bad" : "good"} /></Card>
+          <Card><Stat label="Purchase records" value={String(purchases.length)} /></Card>
         </div>
       </section>
       <section>
