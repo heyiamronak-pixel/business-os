@@ -58,7 +58,7 @@ export function ReportsScreen() {
       ["Top products", "Units sold", "Revenue", "Profit"],
       ...topProducts.map((p) => [p.name, p.qty, p.revenue, p.profit]),
     ];
-    const csv = rows.map((row) => row.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\\n");
+    const csv = rows.map((row) => row.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
     const link = document.createElement("a");
     link.href = url;
