@@ -23,6 +23,7 @@ import type {
 import {
   applyPurchaseToInventory,
   applySaleToInventory,
+  buildSaleReversalMovements,
   inventoryMovementDelta,
   calculateMetrics,
   createPurchaseItems,
@@ -31,6 +32,7 @@ import {
   purchasePaymentSummary,
   saleTotals,
   revertSaleFromInventory,
+  validateProductRecord,
 } from '@/services/business-logic';
 import { createLocalBusinessRepository } from '@/services/business-repository';
 import { themeSuggestions } from '@/services/theme-utils';
@@ -160,6 +162,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
   };
 
   const saveProduct = (product: ProductInput) => {
+    validateProductRecord(product as ProductInput & { id?: string }, state.products);
     setState((current) => {
       const next = withDates(product);
       const exists = current.products.some((item) => item.id === next.id);
@@ -173,6 +176,12 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
   };
 
   const deleteProduct = (id: string) => {
+    const hasSales = state.sales.some(sale => sale.items.some(item => item.productId === id));
+    const hasPurchases = state.purchases.some(purchase => purchase.items.some(item => item.productId === id));
+    const hasMovements = state.inventoryMovements.some(movement => movement.productId === id);
+    if (hasSales || hasPurchases || hasMovements) {
+      throw new Error('This product has transaction history and cannot be deleted. Keep it in the catalogue so past sales, purchases and stock movements remain traceable.');
+    }
     setState((current) => ({
       ...current,
       products: current.products.filter((product) => product.id !== id),
@@ -436,11 +445,15 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
       const sale = current.sales.find((item) => item.id === id);
       if (!sale) return current;
       const restoredProducts = revertSaleFromInventory(current.products, [sale]);
+      const reversalAt = new Date().toISOString();
+      const reversalMovements = buildSaleReversalMovements(sale, () => makeId('movement'), reversalAt);
       return {
         ...current,
         products: restoredProducts,
         sales: current.sales.filter((item) => item.id !== id),
-        inventoryMovements: current.inventoryMovements.filter((movement) => movement.note !== `sale:${id}`),
+        // Keep the original stock-out movements and append compensating stock-in
+        // movements so a deleted sale still has a traceable inventory reversal.
+        inventoryMovements: [...reversalMovements, ...current.inventoryMovements],
       };
     });
   };

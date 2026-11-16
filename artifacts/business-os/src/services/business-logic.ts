@@ -91,6 +91,41 @@ export function calculateMetrics(state: BusinessState, today = new Date()): Busi
   };
 }
 
+export function validateProductRecord(
+  product: Pick<Product, 'id' | 'name' | 'sku' | 'barcode' | 'costPrice' | 'sellingPrice' | 'stock' | 'minimumStock'>,
+  products: Product[],
+) {
+  if (!product.name.trim()) throw new Error('Enter a product name.');
+  if (![product.costPrice, product.sellingPrice].every(value => Number.isFinite(value) && value >= 0)) {
+    throw new Error('Cost and selling prices must be valid non-negative numbers.');
+  }
+  if (![product.stock, product.minimumStock].every(value => Number.isFinite(value) && value >= 0)) {
+    throw new Error('Stock and minimum stock must be valid non-negative numbers.');
+  }
+  const sku = product.sku.trim().toLowerCase();
+  const barcode = product.barcode.trim().toLowerCase();
+  if (sku && products.some(item => item.id !== product.id && item.sku.trim().toLowerCase() === sku)) {
+    throw new Error('This SKU is already used by another product.');
+  }
+  if (barcode && products.some(item => item.id !== product.id && item.barcode.trim().toLowerCase() === barcode)) {
+    throw new Error('This barcode is already used by another product.');
+  }
+}
+
+export function buildSaleReversalMovements(
+  sale: Sale,
+  idFactory: (item: SaleItem) => string,
+  createdAt: string,
+): InventoryMovement[] {
+  return sale.items.map(item => ({
+    id: idFactory(item),
+    productId: item.productId,
+    type: 'stock-in',
+    quantity: item.quantity,
+    note: 'sale-void:' + sale.id,
+    createdAt,
+  }));
+}
 export function createSaleItems(
   products: Product[],
   cart: Array<{ productId: string; quantity: number }>,
