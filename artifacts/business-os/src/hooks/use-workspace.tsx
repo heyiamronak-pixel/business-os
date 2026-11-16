@@ -51,6 +51,7 @@ type BusinessContextValue = {
   deleteRevenueTarget: (id: string) => void;
   saveTask: (task: TaskInput) => void;
   deleteTask: (id: string) => void;
+  setTaskStatus: (id: string, status: Task['status']) => void;
   recordInventoryMovement: (
     productId: string,
     type: InventoryMovementType,
@@ -219,6 +220,13 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
     }));
   };
 
+  const setTaskStatus = (id: string, status: Task['status']) => {
+    setState((current) => ({
+      ...current,
+      tasks: current.tasks.map((task) => task.id === id ? { ...task, status, updatedAt: new Date().toISOString() } : task),
+    }));
+  };
+
   const recordInventoryMovement = (
     productId: string,
     type: InventoryMovementType,
@@ -336,6 +344,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
       deleteRevenueTarget,
       saveTask,
       deleteTask,
+      setTaskStatus,
       recordInventoryMovement,
       createSale,
       updateSale,
