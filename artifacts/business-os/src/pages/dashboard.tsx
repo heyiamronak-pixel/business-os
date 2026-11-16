@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { ArrowRight, AlertTriangle, Bot, ChartNoAxesCombined, CircleDollarSign, ClipboardCheck, ContactRound, Megaphone, PackageSearch, Receipt, ShoppingBag, Target, UsersRound, Wallet } from 'lucide-react';
+import { ArrowRight, AlertTriangle, Bot, ChartNoAxesCombined, CircleDollarSign, ClipboardCheck, ContactRound, Megaphone, PackageSearch, Receipt, ShoppingBag, ShoppingCart, Target, Truck, UsersRound, Wallet } from 'lucide-react';
 import { Link } from 'wouter';
 import { useBusiness } from '@/hooks/use-workspace';
 import { isoToday, money, PageFrame, SectionCard } from '@/components/record-ui';
