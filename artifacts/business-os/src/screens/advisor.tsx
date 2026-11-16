@@ -1,70 +1,140 @@
 import * as React from "react";
+import { ArrowUpRight, Bot, MessageCircle, Sparkles, Trash2 } from "lucide-react";
 import { AppPage, PageHeader } from "@/components/app-shell";
-import { Button, Card } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, Stat } from "@/components/ui";
 import { ADVISOR_PROMPTS, advise, buildContext, type AdvisorReply } from "@/lib/engines";
+import { money } from "@/lib/format";
 import { useAppStore, useBusiness } from "@/lib/store";
 
 export function AdvisorScreen() {
   const business = useBusiness();
-  const db = useAppStore((s) => s.db);
+  const db = useAppStore((state) => state.db);
   const [question, setQuestion] = React.useState("");
   const [thread, setThread] = React.useState<AdvisorReply[]>([]);
+  const [showAllPrompts, setShowAllPrompts] = React.useState(false);
 
   if (!business) return null;
   const ctx = buildContext(db, business);
+  const prompts = showAllPrompts ? ADVISOR_PROMPTS : ADVISOR_PROMPTS.slice(0, 6);
 
-  function ask(q: string) {
-    const text = q.trim();
+  function ask(value: string) {
+    const text = value.trim();
     if (!text) return;
     const reply = advise(text, ctx);
-    setThread((t) => [...t, reply]);
+    setThread((current) => [...current, reply]);
     setQuestion("");
   }
 
   return (
     <AppPage>
-      <PageHeader title="Advisor" subtitle="Answers from your business context — facts, then math, then advice" />
-      <p className="mb-3 text-sm leading-relaxed text-muted-foreground">
-        The advisor only sees structured metrics for {business.name}. It does not have raw database access. A hosted model can replace the local engine later without changing this contract.
-      </p>
-      <div className="mb-4 flex flex-wrap gap-2">
-        {ADVISOR_PROMPTS.map((p) => (
+      <PageHeader
+        title="Business Advisor"
+        subtitle="Ask questions about your live workspace records"
+        action={thread.length ? (
+          <Button size="sm" variant="ghost" onClick={() => setThread([])}>
+            <Trash2 className="size-4" /> Clear
+          </Button>
+        ) : undefined}
+      />
+
+      <Card className="mb-4 space-y-3">
+        <div className="flex items-start gap-3">
+          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+            <Bot className="size-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="font-semibold">Your business, explained</p>
+              <Badge tone="good">Live workspace context</Badge>
+            </div>
+            <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+              Ask in English or Hinglish about sales, profit, collections, stock, customers, marketing, purchases and daily priorities.
+            </p>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="rounded-lg bg-muted/50 p-3"><Stat label="Revenue this month" value={money(ctx.kpis.revenue, business.currency)} /></div>
+          <div className="rounded-lg bg-muted/50 p-3"><Stat label="Cash collected" value={money(ctx.kpis.cashIn, business.currency)} /></div>
+          <div className="rounded-lg bg-muted/50 p-3"><Stat label="Customer balance" value={money(ctx.kpis.outstanding, business.currency)} /></div>
+          <div className="rounded-lg bg-muted/50 p-3"><Stat label="Stock alerts" value={String(ctx.stock.out.length + ctx.stock.low.length)} /></div>
+        </div>
+        <p className="text-[11px] leading-relaxed text-muted-foreground">
+          Answers are calculated from this workspace's saved records and show their supporting facts. A hosted generative AI model is not connected yet, so the assistant will say when the data is insufficient instead of inventing an answer.
+        </p>
+      </Card>
+
+      <div className="mb-4">
+        <div className="mb-2 flex items-center gap-2">
+          <Sparkles className="size-4 text-primary" />
+          <p className="text-xs font-semibold uppercase tracking-wide text-subtle">Suggested questions</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {prompts.map((prompt) => (
+            <button
+              key={prompt}
+              type="button"
+              onClick={() => ask(prompt)}
+              className="rounded-full border border-border bg-card px-3 py-2 text-left text-xs font-medium transition-colors hover:bg-muted"
+            >
+              {prompt}
+            </button>
+          ))}
+        </div>
+        {ADVISOR_PROMPTS.length > 6 ? (
           <button
-            key={p}
             type="button"
-            onClick={() => ask(p)}
-            className="rounded-full border border-border bg-card px-3 py-2 text-left text-xs font-medium"
+            onClick={() => setShowAllPrompts((value) => !value)}
+            className="mt-2 text-xs font-medium text-primary"
           >
-            {p}
+            {showAllPrompts ? "Show fewer questions" : "Show more questions"}
           </button>
-        ))}
+        ) : null}
       </div>
-      <div className="space-y-3">
-        {thread.map((r, i) => (
-          <Card key={i} className="space-y-3">
-            <p className="text-sm font-semibold">{r.question}</p>
-            {r.facts.length ? (
-              <Block title="Facts from your data" items={r.facts} />
-            ) : null}
-            {r.calculations.length ? <Block title="Calculations" items={r.calculations} /> : null}
-            {r.recommendations.length ? <Block title="Recommendations" items={r.recommendations} /> : null}
-          </Card>
-        ))}
-      </div>
+
+      {thread.length === 0 ? (
+        <EmptyState
+          title="Start with a business question"
+          body="Try “How much customer payment is pending?”, “Which products need restocking?” or “Mera marketing performance kaisa hai?”"
+          action={<Button variant="secondary" onClick={() => ask("Give me a business health summary")}> <MessageCircle className="size-4" /> Analyse my business</Button>}
+        />
+      ) : (
+        <div className="space-y-3" aria-live="polite">
+          {thread.map((reply, index) => (
+            <Card key={`${index}-${reply.question}`} className="space-y-3">
+              <div className="flex items-start gap-2">
+                <span className="grid size-7 shrink-0 place-items-center rounded-full bg-muted text-xs font-semibold">You</span>
+                <p className="pt-1 text-sm font-semibold">{reply.question}</p>
+              </div>
+              <div className="border-l-2 border-primary/30 pl-3">
+                <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-primary">
+                  <Bot className="size-4" /> Business Advisor
+                </p>
+                {reply.facts.length ? <Block title="What your data says" items={reply.facts} /> : null}
+                {reply.calculations.length ? <Block title="Calculations" items={reply.calculations} /> : null}
+                {reply.recommendations.length ? <Block title="Recommended next steps" items={reply.recommendations} /> : null}
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
       <form
-        className="mt-4 flex gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
+        className="sticky bottom-2 z-20 mt-4 flex gap-2 rounded-2xl border border-border bg-background/95 p-2 shadow-lg backdrop-blur"
+        onSubmit={(event) => {
+          event.preventDefault();
           ask(question);
         }}
       >
         <input
           value={question}
-          onChange={(e) => setQuestion(e.target.value)}
-          placeholder="Ask about this business"
-          className="h-11 flex-1 rounded-[var(--radius-md)] border border-border bg-card px-3 text-base outline-none focus:ring-2 focus:ring-ring/40"
+          onChange={(event) => setQuestion(event.target.value)}
+          placeholder="Ask in English or Hinglish…"
+          aria-label="Ask Business Advisor"
+          className="h-11 min-w-0 flex-1 rounded-xl border border-border bg-card px-3 text-base outline-none focus:ring-2 focus:ring-ring/40"
         />
-        <Button type="submit">Ask</Button>
+        <Button type="submit" disabled={!question.trim()} aria-label="Send question">
+          Ask <ArrowUpRight className="size-4" />
+        </Button>
       </form>
     </AppPage>
   );
@@ -72,11 +142,11 @@ export function AdvisorScreen() {
 
 function Block({ title, items }: { title: string; items: string[] }) {
   return (
-    <div>
-      <p className="text-xs font-medium uppercase tracking-wide text-subtle">{title}</p>
-      <ul className="mt-1 space-y-1">
-        {items.map((item) => (
-          <li key={item} className="text-sm leading-relaxed text-foreground">
+    <div className="mb-3 last:mb-0">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-subtle">{title}</p>
+      <ul className="mt-1 space-y-1.5">
+        {items.map((item, index) => (
+          <li key={index} className="text-sm leading-relaxed text-foreground">
             {item}
           </li>
         ))}
