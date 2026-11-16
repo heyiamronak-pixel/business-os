@@ -215,6 +215,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/actions'
+    | '/attendance'
     | '/advisor'
     | '/customers'
     | '/expenses'
@@ -224,6 +225,7 @@ export interface FileRouteTypes {
     | '/more'
     | '/onboarding'
     | '/products'
+    | '/reports'
     | '/sales'
     | '/sell'
     | '/settings'
