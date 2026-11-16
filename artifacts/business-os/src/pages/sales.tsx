@@ -104,6 +104,7 @@ export default function Sales() {
     const product = state.products.find((item) => item.id === line.productId);
     return sum + (product ? product.sellingPrice * Math.max(0, line.quantity) : 0);
   }, 0), [lines, state.products]);
+  const totalPreview = Math.max(0, preview - Math.max(0, Number(discount) || 0));
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
