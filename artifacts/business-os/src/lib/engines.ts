@@ -281,6 +281,15 @@ export interface BusinessContext {
   marketing?: MarketingTotals;
   topProducts: ProductProfit[];
   topCustomers: CustomerStats[];
+  followUpCustomers: CustomerStats[];
+  procurement: {
+    supplierCount: number;
+    purchaseCount: number;
+    total: number;
+    paid: number;
+    outstanding: number;
+    openCount: number;
+  };
   expenseBreakdown: { category: string; amount: number }[];
   series: DailyPoint[];
   customerCount: number;
@@ -338,6 +347,21 @@ export function buildContext(db: WorkspaceDB, business: Business, now = new Date
     marketing: campaigns.length ? marketingTotals(campaigns) : undefined,
     topProducts: productProfits(monthSales).slice(0, 5),
     topCustomers: stats.slice(0, 5),
+    followUpCustomers: stats
+      .filter((customer) => customer.segment === "follow_up" || customer.segment === "inactive" || customer.outstanding > 0)
+      .sort((a, b) => b.outstanding - a.outstanding || b.spend - a.spend),
+    procurement: (() => {
+      const suppliers = db.suppliers.filter((supplier) => supplier.businessId === business.id);
+      const purchases = db.purchases.filter((purchase) => purchase.businessId === business.id);
+      return {
+        supplierCount: suppliers.length,
+        purchaseCount: purchases.length,
+        total: roundMoney(purchases.reduce((sum, purchase) => sum + purchase.total, 0)),
+        paid: roundMoney(purchases.reduce((sum, purchase) => sum + purchase.paidAmount, 0)),
+        outstanding: roundMoney(purchases.reduce((sum, purchase) => sum + purchase.balance, 0)),
+        openCount: purchases.filter((purchase) => purchase.balance > 0).length,
+      };
+    })(),
     expenseBreakdown: Array.from(expenseBreakdownMap.entries())
       .map(([category, amount]) => ({ category, amount }))
       .sort((a, b) => b.amount - a.amount),
@@ -557,7 +581,7 @@ export function deriveActions(ctx: BusinessContext): ActionItem[] {
       cta: "Review",
     });
   }
-  for (const c of ctx.topCustomers.filter((x) => x.segment === "follow_up").slice(0, 5)) {
+  for (const c of ctx.followUpCustomers.slice(0, 5)) {
     actions.push({
       id: `follow-${c.customer.id}`,
       severity: "low",
@@ -698,27 +722,160 @@ const ADVISOR_PROMPTS = [
 
 export { ADVISOR_PROMPTS };
 
+function salesSummary(ctx: BusinessContext, question: string): AdvisorReply {
+  const facts = [
+    `Booked revenue: ${fmt(ctx.kpis.revenue, ctx)} across ${ctx.kpis.orderCount} sales.`,
+    `Cash collected: ${fmt(ctx.kpis.cashIn, ctx)}; customer balances outstanding: ${fmt(ctx.kpis.outstanding, ctx)}.`,
+    `Average order value: ${fmt(ctx.kpis.aov, ctx)} across ${ctx.kpis.orderCount} orders.`,
+    `Units sold: ${ctx.kpis.unitsSold}.`,
+  ];
+  const calculations = ctx.previous ? [
+    `Revenue versus previous month: ${delta(ctx.kpis.revenue, ctx.previous.revenue, ctx)}.`,
+    `Order count: ${ctx.kpis.orderCount} now versus ${ctx.previous.orderCount} previously.`,
+  ] : [`No previous month comparison is available yet.`];
+  const recommendations: string[] = [];
+  if (ctx.kpis.outstanding > 0) recommendations.push(`Follow up on ${fmt(ctx.kpis.outstanding, ctx)} in unpaid customer balances.`);
+  if (ctx.kpis.orderCount > 0 && ctx.kpis.aov > 0) recommendations.push(`Use ${fmt(ctx.kpis.aov, ctx)} as the current average order benchmark; test bundles or add-ons to improve it.`);
+  if (!ctx.kpis.orderCount) recommendations.push("Record sales against products and customers to build a reliable sales trend.");
+  return { question, facts, calculations, recommendations };
+}
+
+function collectionAdvice(ctx: BusinessContext, question: string): AdvisorReply {
+  const facts = [
+    `Customer receivables: ${fmt(ctx.payments.amount, ctx)} across ${ctx.payments.count} unpaid or partially paid sales.`,
+    `Cash received this month: ${fmt(ctx.kpis.cashIn, ctx)} from ${fmt(ctx.kpis.revenue, ctx)} in booked sales.`,
+  ];
+  const calculations = [
+    `Collection ratio this month: ${ctx.kpis.revenue > 0 ? ((ctx.kpis.cashIn / ctx.kpis.revenue) * 100).toFixed(1) : "0.0"}% of booked revenue.`,
+  ];
+  if (ctx.procurement.outstanding > 0) {
+    facts.push(`Supplier payables: ${fmt(ctx.procurement.outstanding, ctx)} across ${ctx.procurement.openCount} open purchases.`);
+  }
+  const recommendations = ctx.payments.count
+    ? ["Open Sales and contact customers with the oldest outstanding balances first.", "Record each collection against the correct sale so the balance and reports stay accurate."]
+    : ["No unpaid customer sales are currently recorded."];
+  return { question, facts, calculations, recommendations };
+}
+
+function inventoryAdvice(ctx: BusinessContext, question: string): AdvisorReply {
+  const facts = [
+    `${ctx.productCount} active products are in the catalogue.`,
+    `${ctx.stock.out.length} products are out of stock and ${ctx.stock.low.length} are at or below minimum stock.`,
+  ];
+  const calculations: string[] = [];
+  const recommendations: string[] = [];
+  if (ctx.stock.out.length) {
+    facts.push(`Out of stock: ${ctx.stock.out.slice(0, 5).map((product) => product.name).join(", ")}.`);
+    recommendations.push("Prioritise out-of-stock items that have recent sales before ordering slower products.");
+  }
+  if (ctx.stock.low.length) {
+    facts.push(`Low stock: ${ctx.stock.low.slice(0, 5).map((product) => `${product.name} (${product.stock} left; minimum ${product.minStock})`).join("; ")}.`);
+    recommendations.push("Use Purchases to record confirmed supplier orders; stock will update when goods are received.");
+  }
+  if (!recommendations.length) recommendations.push("No stock alerts are active. Review stock levels after each goods receipt and sale.");
+  return { question, facts, calculations, recommendations };
+}
+
+function marketingAdvice(ctx: BusinessContext, question: string): AdvisorReply {
+  if (!ctx.marketing) {
+    return {
+      question,
+      facts: ["No marketing campaign metrics are recorded for the current month."],
+      calculations: [],
+      recommendations: ["Add campaign spend, impressions, clicks, leads, customers and attributed revenue in Marketing before judging performance."],
+    };
+  }
+  const m = ctx.marketing;
+  return {
+    question,
+    facts: [
+      `Spend ${fmt(m.spend, ctx)}; attributed revenue ${fmt(m.revenue, ctx)}.`,
+      `${m.impressions} impressions, ${m.clicks} clicks, ${m.leads} leads and ${m.customers} attributed customers.`,
+    ],
+    calculations: [
+      `CTR: ${m.ctr === null ? "not available" : m.ctr.toFixed(2) + "%"}; CPL: ${m.cpl === null ? "not available" : fmt(m.cpl, ctx)}; CAC: ${m.cac === null ? "not available" : fmt(m.cac, ctx)}.`,
+      `ROAS: ${m.roas === null ? "not available" : m.roas.toFixed(2) + "x"}.`,
+    ],
+    recommendations: m.leads === 0
+      ? ["Check tracking and campaign lead capture before increasing spend."]
+      : m.roas !== null && m.roas < 1
+        ? ["Break results down by campaign and channel; reduce spend only after checking lead quality and the attribution window."]
+        : ["Compare cost per lead and lead-to-customer conversion by channel, then move budget toward the source with the best qualified outcomes."],
+  };
+}
+
+function procurementAdvice(ctx: BusinessContext, question: string): AdvisorReply {
+  const p = ctx.procurement;
+  if (!p.purchaseCount) {
+    return {
+      question,
+      facts: [`${p.supplierCount} suppliers are saved, but no purchases have been recorded yet.`],
+      calculations: [],
+      recommendations: ["Record goods receipts in Purchases to increase stock and track supplier payments. Do not add received stock manually as well, or it may be counted twice."],
+    };
+  }
+  return {
+    question,
+    facts: [
+      `${p.purchaseCount} purchase records worth ${fmt(p.total, ctx)}.`,
+      `Paid to suppliers: ${fmt(p.paid, ctx)}; outstanding: ${fmt(p.outstanding, ctx)} across ${p.openCount} open purchases.`,
+      `${p.supplierCount} suppliers on file.`,
+    ],
+    calculations: [
+      `Supplier payment ratio: ${p.total > 0 ? ((p.paid / p.total) * 100).toFixed(1) : "0.0"}%.`,
+    ],
+    recommendations: p.outstanding > 0
+      ? ["Review the open purchase records and agree payment dates with suppliers before making a payment."]
+      : ["All recorded purchases are settled. Keep recording each goods receipt against its supplier for a complete stock and payable trail."],
+  };
+}
+
 export function advise(question: string, ctx: BusinessContext): AdvisorReply {
-  const q = question.toLowerCase();
-  if (q.includes("profit falling") || q.includes("profit fall") || (q.includes("why") && q.includes("profit"))) {
+  const q = question.toLowerCase().normalize("NFKC").replace(/\\s+/g, " ").trim();
+  if (!q) return {
+    question,
+    facts: [],
+    calculations: [],
+    recommendations: ["Ask about sales, profit, collections, stock, customers, marketing, purchases or today's priorities."],
+  };
+
+  // Rule-based intent routing remains deterministic until a hosted AI provider
+  // is connected. Include common Hindi/Hinglish terms because operators rarely
+  // phrase every business question in formal English.
+  if (/(purchase|supplier|vendor|payable|maal mang|khareed|kharid|supplier ko|vendor ko)/.test(q)) {
+    return procurementAdvice(ctx, question);
+  }
+  if (/(collection|collect|outstanding|unpaid|receivable|payment due|udhaar|paise lene|payment pending)/.test(q)) {
+    return collectionAdvice(ctx, question);
+  }
+  if (/(stock|inventory|reorder|restock|out of stock|low stock|maal kitna|stock kitna)/.test(q)) {
+    return inventoryAdvice(ctx, question);
+  }
+  if (/(marketing|campaign|ads|ad spend|roas|cpl|cac|lead|advertising|facebook|google ad)/.test(q)) {
+    return marketingAdvice(ctx, question);
+  }
+  if (/(sales|sale|revenue|bikri|kitni sale|kitna revenue|average order|aov)/.test(q)) {
+    return salesSummary(ctx, question);
+  }
+  if (q.includes("profit falling") || q.includes("profit fall") || (q.includes("why") && q.includes("profit")) || q.includes("munafa kyu")) {
     return profitWhy(ctx, question);
   }
-  if (q.includes("which product") || q.includes("most profit") || q.includes("best product")) {
+  if (q.includes("which product") || q.includes("most profit") || q.includes("best product") || q.includes("sabse profitable")) {
     return productBest(ctx, question);
   }
-  if (q.includes("losing money") || q.includes("where am i losing")) {
+  if (q.includes("losing money") || q.includes("where am i losing") || q.includes("loss kaha")) {
     return losingMoney(ctx, question);
   }
-  if (q.includes("follow-up") || q.includes("follow up") || q.includes("which customers")) {
+  if (q.includes("follow-up") || q.includes("follow up") || q.includes("which customers") || q.includes("customer kisko call")) {
     return customersNeed(ctx, question);
   }
-  if (q.includes("focus") || q.includes("today")) {
+  if (q.includes("focus") || q.includes("today") || q.includes("aaj kya")) {
     return focusToday(ctx, question);
   }
-  if (q.includes("hit") && q.includes("target") || q.includes("will i hit") || q.includes("revenue target")) {
+  if ((q.includes("hit") && q.includes("target")) || q.includes("will i hit") || q.includes("revenue target") || q.includes("target achieve")) {
     return targetOutlook(ctx, question);
   }
-  if (q.includes("cost") && (q.includes("increase") || q.includes("rising") || q.includes("causing"))) {
+  if (q.includes("cost") && (q.includes("increase") || q.includes("rising") || q.includes("causing")) || q.includes("kharcha")) {
     return costDrivers(ctx, question);
   }
   return analyze(ctx, question);
@@ -845,7 +1002,7 @@ function losingMoney(ctx: BusinessContext, question: string): AdvisorReply {
 }
 
 function customersNeed(ctx: BusinessContext, question: string): AdvisorReply {
-  const follow = ctx.topCustomers.filter((c) => c.segment === "follow_up" || c.outstanding > 0 || c.segment === "inactive");
+  const follow = ctx.followUpCustomers;
   if (!follow.length) {
     return {
       question,
