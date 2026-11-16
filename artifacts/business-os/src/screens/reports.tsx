@@ -37,7 +37,7 @@ export function ReportsScreen() {
 
   function exportCsv() {
     const rows = [
-      ["Business Sutra Report", business.name],
+      ["Business Sutra Report", business?.name ?? "Unknown business"],
       ["Period", range.label],
       [],
       ["Metric", "Value"],
