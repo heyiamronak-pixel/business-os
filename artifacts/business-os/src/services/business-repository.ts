@@ -19,6 +19,8 @@ const emptyState = (): BusinessState => ({
   tasks: [],
   teamMembers: [],
   campaigns: [],
+  suppliers: [],
+  purchases: [],
 });
 
 export function createLocalBusinessRepository(
@@ -59,6 +61,8 @@ export function createLocalBusinessRepository(
           tasks: Array.isArray(saved.tasks) ? saved.tasks : [],
           teamMembers: Array.isArray(saved.teamMembers) ? saved.teamMembers : [],
           campaigns: Array.isArray(saved.campaigns) ? saved.campaigns : [],
+          suppliers: Array.isArray(saved.suppliers) ? saved.suppliers : [],
+          purchases: Array.isArray(saved.purchases) ? saved.purchases : [],
           workspace: saved.workspace && typeof saved.workspace === 'object' ? saved.workspace : null,
         };
       } catch {
