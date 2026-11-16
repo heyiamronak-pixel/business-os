@@ -34,16 +34,15 @@ export function inventoryMovementDelta(type: InventoryMovementType, quantity: nu
 }
 export function paidRevenueWithinRange(sales: Sale[], startDate: string, endDate: string): number {
   return sales
-    .filter(sale => sale.paymentStatus === 'paid' && sale.createdAt.slice(0, 10) >= startDate && sale.createdAt.slice(0, 10) <= endDate)
-    .reduce((sum, sale) => sum + sale.total, 0);
+    .filter(sale => sale.createdAt.slice(0, 10) >= startDate && sale.createdAt.slice(0, 10) <= endDate)
+    .reduce((sum, sale) => sum + salePaymentAmounts(sale).paidAmount, 0);
 }
 export function calculateMetrics(state: BusinessState, today = new Date()): BusinessMetrics {
   const revenue = state.sales
-    .filter((sale) => sale.paymentStatus === 'paid')
-    .reduce((sum, sale) => sum + sale.total, 0);
+    .reduce((sum, sale) => sum + salePaymentAmounts(sale).paidAmount, 0);
   const expenses = state.expenses.reduce((sum, expense) => sum + expense.amount, 0);
   const profit = revenue - state.sales
-    .filter((sale) => sale.paymentStatus === 'paid')
+    .filter((sale) => sale.paymentStatus !== 'refunded' && salePaymentAmounts(sale).paidAmount > 0)
     .reduce((sum, sale) => sum + sale.costTotal, 0) - expenses;
   const currentTarget = state.revenueTargets.find((target) => {
     const current = localDateKey(today);
@@ -158,6 +157,36 @@ export function createSaleItems(
   });
 }
 
+export function salePaymentSummary(total: number, paidAmount: number): { paidAmount: number; balance: number; paymentStatus: PaymentStatus } {
+  if (!Number.isFinite(total) || total < 0 || !Number.isFinite(paidAmount) || paidAmount < 0 || paidAmount > total) {
+    throw new Error('Enter an amount received between zero and the sale total.');
+  }
+  if (total === 0) return { paidAmount: 0, balance: 0, paymentStatus: 'paid' };
+  return {
+    paidAmount,
+    balance: total - paidAmount,
+    paymentStatus: paidAmount >= total ? 'paid' : paidAmount > 0 ? 'partial' : 'pending',
+  };
+}
+
+export function salePaymentAmounts(sale: Pick<Sale, 'total' | 'paymentStatus' | 'paidAmount' | 'balance'>): { paidAmount: number; balance: number } {
+  if (sale.paymentStatus === 'refunded') return { paidAmount: 0, balance: 0 };
+  const total = Math.max(0, sale.total);
+  let paidAmount = sale.paidAmount;
+  if (!Number.isFinite(paidAmount)) {
+    if (sale.paymentStatus === 'paid') paidAmount = total;
+    else if (Number.isFinite(sale.balance)) paidAmount = total - Number(sale.balance);
+    else paidAmount = 0;
+  }
+  const received = Math.min(total, Math.max(0, Number(paidAmount)));
+  return { paidAmount: received, balance: Math.max(0, total - received) };
+}
+
+export function addSalePayment(sale: Sale, amount: number): { paidAmount: number; balance: number; paymentStatus: PaymentStatus } {
+  if (!Number.isFinite(amount) || amount <= 0) throw new Error('Enter a payment amount greater than zero.');
+  const current = salePaymentAmounts(sale);
+  return salePaymentSummary(sale.total, current.paidAmount + amount);
+}
 export function saleTotals(items: SaleItem[], discount: number) {
   const subtotal = items.reduce((sum, item) => sum + item.total, 0);
   const safeDiscount = Math.min(Math.max(discount, 0), subtotal);

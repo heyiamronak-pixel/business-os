@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Plus, ShoppingCart, Trash2 } from 'lucide-react';
 import { useBusiness } from '@/hooks/use-workspace';
 import { EmptyState, inputClass, money, PageFrame, PageIntro, SectionCard } from '@/components/record-ui';
-import type { PaymentStatus } from '@/domain/types';
+import { salePaymentAmounts } from '@/services/business-logic';
 
 type CartLine = { productId: string; quantity: number };
 
@@ -33,6 +33,7 @@ function openSaleReceipt(sale: import('@/domain/types').Sale, customer: import('
     '</td><td class="number">' + escapeHtml(money(item.total, workspace?.currency)) + '</td></tr>'
   ).join('');
 
+  const paymentAmounts = salePaymentAmounts(sale);
   const html = `<!doctype html>
 <html lang="en">
 <head>
@@ -71,6 +72,8 @@ function openSaleReceipt(sale: import('@/domain/types').Sale, customer: import('
 <div class="totals">
   <div><span>Subtotal</span><strong>${escapeHtml(money(sale.subtotal, workspace?.currency))}</strong></div>
   <div><span>Discount</span><strong>${escapeHtml(money(sale.discount, workspace?.currency))}</strong></div>
+  <div><span>Amount received</span><strong>${escapeHtml(money(paymentAmounts.paidAmount, workspace?.currency))}</strong></div>
+  <div><span>Balance due</span><strong>${escapeHtml(money(paymentAmounts.balance, workspace?.currency))}</strong></div>
   <div class="grand"><span>Total</span><strong>${escapeHtml(money(sale.total, workspace?.currency))}</strong></div>
 </div>
 <footer><p>Thank you for your business.</p><p>This is a sales receipt generated from the records in this workspace. It does not calculate GST or replace a compliant tax invoice.</p></footer>
@@ -87,11 +90,14 @@ function openSaleReceipt(sale: import('@/domain/types').Sale, customer: import('
 const newLine = (): CartLine => ({ productId: '', quantity: 1 });
 
 export default function Sales() {
-  const { state, workspace, createSale, updateSale, deleteSale } = useBusiness();
+  const { state, workspace, createSale, recordSalePayment, deleteSale } = useBusiness();
   const [customerId, setCustomerId] = useState('');
   const [lines, setLines] = useState<CartLine[]>([newLine()]);
   const [discount, setDiscount] = useState(0);
-  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('paid');
+  const [paymentMode, setPaymentMode] = useState<'paid' | 'partial' | 'pending'>('paid');
+  const [amountReceived, setAmountReceived] = useState(0);
+  const [collectionSaleId, setCollectionSaleId] = useState('');
+  const [collectionAmount, setCollectionAmount] = useState(0);
   const [error, setError] = useState('');
 
   const preview = useMemo(() => lines.reduce((sum, line) => {
@@ -111,12 +117,18 @@ export default function Sales() {
       const totalRequested = validLines.filter((item) => item.productId === line.productId).reduce((sum, item) => sum + item.quantity, 0);
       if (totalRequested > product.stock) { setError(`${product.name} has only ${product.stock} in stock.`); return; }
     }
+    const paidAmount = paymentMode === 'paid' ? totalPreview : paymentMode === 'pending' ? 0 : Number(amountReceived);
+    if (paymentMode === 'partial' && (!Number.isFinite(paidAmount) || paidAmount <= 0 || paidAmount >= totalPreview)) {
+      setError('For a partial payment, enter an amount greater than zero and less than the sale total.');
+      return;
+    }
     try {
-      createSale({ customerId, items: validLines, discount: Number(discount), paymentStatus });
+      createSale({ customerId, items: validLines, discount: Number(discount), paidAmount });
       setLines([newLine()]);
       setCustomerId('');
       setDiscount(0);
-      setPaymentStatus('paid');
+      setPaymentMode('paid');
+      setAmountReceived(0);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not create sale.');
     }
@@ -144,9 +156,10 @@ export default function Sales() {
           <button type="button" onClick={() => setLines((current) => [...current, newLine()])} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-dashed border-[hsl(var(--border))] text-xs font-semibold"><Plus className="size-4" /> Add another product</button>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="grid gap-2 text-xs font-semibold">Discount<input type="number" min="0" max={preview} step="0.01" value={discount} onChange={(event) => setDiscount(Number(event.target.value))} className={inputClass} /></label>
-            <label className="grid gap-2 text-xs font-semibold">Payment status<select value={paymentStatus} onChange={(event) => setPaymentStatus(event.target.value as PaymentStatus)} className={inputClass}><option value="paid">Paid</option><option value="pending">Pending</option><option value="refunded">Refunded</option></select></label>
+            <label className="grid gap-2 text-xs font-semibold">Payment collection<select value={paymentMode} onChange={(event) => setPaymentMode(event.target.value as 'paid' | 'partial' | 'pending')} className={inputClass}><option value="paid">Paid in full</option><option value="partial">Partial payment</option><option value="pending">Payment pending</option></select></label>
+            {paymentMode === 'partial' && <label className="grid gap-2 text-xs font-semibold">Amount received<input type="number" min="0.01" max={Math.max(0,totalPreview - 0.01)} step="0.01" value={amountReceived} onChange={event => setAmountReceived(Number(event.target.value))} className={inputClass}/></label>}
           </div>
-          <div className="flex items-center justify-between rounded-xl bg-[hsl(var(--muted)/0.55)] p-3"><span className="text-xs font-semibold">Estimated total</span><strong className="text-lg">{money(Math.max(0, preview - Math.max(0, Number(discount))), workspace?.currency)}</strong></div>
+          <div className="rounded-xl bg-[hsl(var(--muted)/0.55)] p-3"><div className="flex items-center justify-between"><span className="text-xs font-semibold">Estimated total</span><strong className="text-lg">{money(totalPreview, workspace?.currency)}</strong></div><div className="mt-2 flex items-center justify-between text-xs text-[hsl(var(--muted-foreground))]"><span>Amount received</span><span>{money(paymentMode === 'paid' ? totalPreview : paymentMode === 'partial' ? Math.max(0,amountReceived) : 0, workspace?.currency)}</span></div><div className="mt-1 flex items-center justify-between text-xs text-[hsl(var(--muted-foreground))]"><span>Balance due</span><span>{money(Math.max(0,totalPreview - (paymentMode === 'paid' ? totalPreview : paymentMode === 'partial' ? Math.max(0,amountReceived) : 0)), workspace?.currency)}</span></div></div>
           {error && <p role="alert" className="text-xs font-semibold text-[hsl(var(--destructive))]">{error}</p>}
           <button type="submit" className="min-h-11 rounded-xl bg-[hsl(var(--primary))] px-4 text-sm font-semibold text-[hsl(var(--primary-foreground))]">Save sale</button>
         </form>}
@@ -157,7 +170,7 @@ export default function Sales() {
           const customer = state.customers.find((item) => item.id === sale.customerId);
           return <div key={sale.id} className="rounded-xl border border-[hsl(var(--border))] p-3">
             <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="text-sm font-semibold">{customer?.name ?? 'Walk-in customer'}</p><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{new Date(sale.createdAt).toLocaleString()} · {sale.items.reduce((sum, item) => sum + item.quantity, 0)} items</p></div><strong className="shrink-0 text-sm">{money(sale.total, workspace?.currency)}</strong></div>
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-2"><span className="rounded-full bg-[hsl(var(--muted))] px-2.5 py-1 text-[10px] font-bold capitalize">{sale.paymentStatus}</span><div className="flex flex-wrap gap-2"><button type="button" onClick={() => { if (!openSaleReceipt(sale, customer, workspace)) setError('Allow pop-ups to print the sales receipt.'); }} className="min-h-9 rounded-lg border border-[hsl(var(--border))] px-3 text-xs font-semibold">Print receipt</button>{sale.paymentStatus === 'pending' && <button type="button" onClick={() => updateSale(sale.id, { customerId: sale.customerId, discount: sale.discount, paymentStatus: 'paid' })} className="min-h-9 rounded-lg border border-[hsl(var(--border))] px-3 text-xs font-semibold">Mark as paid</button>}<button type="button" onClick={() => { if (window.confirm('Delete this sale and restore its stock quantities?')) deleteSale(sale.id); }} className="min-h-9 rounded-lg border border-[hsl(var(--destructive)/0.3)] px-3 text-xs font-semibold text-[hsl(var(--destructive))]">Delete & restore stock</button></div></div>
+            {(() => { const amounts = salePaymentAmounts(sale); return <><div className="mt-3 flex flex-wrap items-center justify-between gap-2"><span className="rounded-full bg-[hsl(var(--muted))] px-2.5 py-1 text-[10px] font-bold capitalize">{sale.paymentStatus}</span><span className="text-[11px] text-[hsl(var(--muted-foreground))]">Received {money(amounts.paidAmount, workspace?.currency)} · Balance {money(amounts.balance, workspace?.currency)}</span><div className="flex flex-wrap gap-2"><button type="button" onClick={() => { if (!openSaleReceipt(sale, customer, workspace)) setError('Allow pop-ups to print the sales receipt.'); }} className="min-h-9 rounded-lg border border-[hsl(var(--border))] px-3 text-xs font-semibold">Print receipt</button>{amounts.balance > 0 && sale.paymentStatus !== 'refunded' && <button type="button" onClick={() => { setCollectionSaleId(sale.id); setCollectionAmount(0); setError(''); }} className="min-h-9 rounded-lg border border-[hsl(var(--border))] px-3 text-xs font-semibold">Record payment</button>}<button type="button" onClick={() => { if (window.confirm('Delete this sale and restore its stock quantities?')) deleteSale(sale.id); }} className="min-h-9 rounded-lg border border-[hsl(var(--destructive)/0.3)] px-3 text-xs font-semibold text-[hsl(var(--destructive))]">Delete & restore stock</button></div></div>{collectionSaleId === sale.id && <form onSubmit={event => { event.preventDefault(); setError(''); try { recordSalePayment(sale.id, collectionAmount); setCollectionSaleId(''); setCollectionAmount(0); } catch (caught) { setError(caught instanceof Error ? caught.message : 'Could not record payment.'); } }} className="mt-3 flex flex-wrap items-end gap-2 rounded-lg bg-[hsl(var(--muted)/0.5)] p-3"><label className="grid min-w-[180px] flex-1 gap-1 text-[11px] font-semibold">Payment received now<input type="number" min="0.01" max={amounts.balance} step="0.01" value={collectionAmount} onChange={event => setCollectionAmount(Number(event.target.value))} className={inputClass}/></label><button type="submit" className="min-h-10 rounded-lg bg-[hsl(var(--primary))] px-3 text-xs font-semibold text-[hsl(var(--primary-foreground))]">Save payment</button><button type="button" onClick={() => setCollectionSaleId('')} className="min-h-10 rounded-lg border border-[hsl(var(--border))] px-3 text-xs font-semibold">Cancel</button></form>}</>; })()}
           </div>;
         })}</div>}
       </SectionCard>

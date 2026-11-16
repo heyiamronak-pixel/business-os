@@ -1,6 +1,6 @@
 export type ThemeMode = 'light' | 'dark' | 'auto';
 export type ThemeId = 'brand' | 'professional' | 'modern';
-export type PaymentStatus = 'paid' | 'pending' | 'refunded';
+export type PaymentStatus = 'paid' | 'partial' | 'pending' | 'refunded';
 export type InventoryMovementType = 'stock-in' | 'stock-out' | 'adjustment';
 export type TaskStatus = 'Todo' | 'In Progress' | 'Completed';
 export type TaskPriority = 'Low' | 'Medium' | 'High';
@@ -83,6 +83,8 @@ export type Sale = {
   costTotal: number;
   grossProfit: number;
   paymentStatus: PaymentStatus;
+  paidAmount?: number;
+  balance?: number;
   createdAt: string;
 };
 

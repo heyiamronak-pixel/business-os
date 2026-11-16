@@ -21,6 +21,7 @@ import type {
   WorkspaceSetup,
 } from '@/domain/types';
 import {
+  addSalePayment,
   applyPurchaseToInventory,
   applySaleToInventory,
   buildSaleReversalMovements,
@@ -30,6 +31,7 @@ import {
   createSaleItems,
   makeId,
   purchasePaymentSummary,
+  salePaymentSummary,
   saleTotals,
   revertSaleFromInventory,
   validateProductRecord,
@@ -84,8 +86,9 @@ type BusinessContextValue = {
     customerId: string;
     items: Array<{ productId: string; quantity: number }>;
     discount: number;
-    paymentStatus: PaymentStatus;
+    paidAmount: number;
   }) => void;
+  recordSalePayment: (id: string, amount: number) => void;
   updateSale: (
     id: string,
     input: Pick<Sale, 'customerId' | 'discount' | 'paymentStatus'>,
@@ -389,23 +392,24 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
     customerId,
     items,
     discount,
-    paymentStatus,
+    paidAmount,
   }: {
     customerId: string;
     items: Array<{ productId: string; quantity: number }>;
     discount: number;
-    paymentStatus: PaymentStatus;
+    paidAmount: number;
   }) => {
     setState((current) => {
       const saleItems = createSaleItems(current.products, items);
       if (!saleItems.length) throw new Error('Add at least one product to the sale.');
       const totals = saleTotals(saleItems, discount);
+      const payment = salePaymentSummary(totals.total, paidAmount);
       const sale: Sale = {
         id: makeId('sale'),
         customerId,
         items: saleItems,
         ...totals,
-        paymentStatus,
+        ...payment,
         createdAt: new Date().toISOString(),
       };
       const inventory = applySaleToInventory(
@@ -422,6 +426,18 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
         current.inventoryMovements,
       );
       return { ...current, ...inventory, sales: [sale, ...current.sales] };
+    });
+  };
+
+  const recordSalePayment = (id: string, amount: number) => {
+    setState((current) => {
+      const sale = current.sales.find(item => item.id === id);
+      if (!sale || sale.paymentStatus === 'refunded') return current;
+      const payment = addSalePayment(sale, amount);
+      return {
+        ...current,
+        sales: current.sales.map(item => item.id === id ? { ...item, ...payment } : item),
+      };
     });
   };
 
@@ -489,6 +505,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
       updatePurchasePayment,
       recordInventoryMovement,
       createSale,
+      recordSalePayment,
       updateSale,
       deleteSale,
       themeOptions: themeSuggestions(state.workspace?.brandColor ?? '#1f2937'),
