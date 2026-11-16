@@ -430,15 +430,14 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
   };
 
   const recordSalePayment = (id: string, amount: number) => {
-    setState((current) => {
-      const sale = current.sales.find(item => item.id === id);
-      if (!sale || sale.paymentStatus === 'refunded') return current;
-      const payment = addSalePayment(sale, amount);
-      return {
-        ...current,
-        sales: current.sales.map(item => item.id === id ? { ...item, ...payment } : item),
-      };
-    });
+    const sale = state.sales.find(item => item.id === id);
+    if (!sale) throw new Error('Sale record was not found.');
+    if (sale.paymentStatus === 'refunded') throw new Error('A refunded sale cannot accept another payment.');
+    const payment = addSalePayment(sale, amount);
+    setState((current) => ({
+      ...current,
+      sales: current.sales.map(item => item.id === id ? { ...item, ...payment } : item),
+    }));
   };
 
   const updateSale = (
