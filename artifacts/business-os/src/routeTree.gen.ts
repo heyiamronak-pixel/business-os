@@ -22,11 +22,13 @@ import { Route as MoreRouteImport } from './routes/more'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as ProductsRouteImport } from './routes/products'
+import { Route as PurchasesRouteImport } from './routes/purchases'
 import { Route as SalesRouteImport } from './routes/sales'
 import { Route as SellRouteImport } from './routes/sell'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as TargetsRouteImport } from './routes/targets'
 import { Route as TasksRouteImport } from './routes/tasks'
+import { Route as SuppliersRouteImport } from './routes/suppliers'
 import { Route as TeamRouteImport } from './routes/team'
 
 const IndexRoute = IndexRouteImport.update({
@@ -79,6 +81,11 @@ const MoreRoute = MoreRouteImport.update({
   path: '/more',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PurchasesRoute = PurchasesRouteImport.update({
+  id: '/purchases',
+  path: '/purchases',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ReportsRoute = ReportsRouteImport.update({
   id: '/reports',
   path: '/reports',
@@ -119,6 +126,11 @@ const TasksRoute = TasksRouteImport.update({
   path: '/tasks',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SuppliersRoute = SuppliersRouteImport.update({
+  id: '/suppliers',
+  path: '/suppliers',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TeamRoute = TeamRouteImport.update({
   id: '/team',
   path: '/team',
@@ -139,7 +151,9 @@ export interface FileRoutesByFullPath {
   '/reports': typeof ReportsRoute
   '/onboarding': typeof OnboardingRoute
   '/products': typeof ProductsRoute
+  '/purchases': typeof PurchasesRoute
   '/sales': typeof SalesRoute
+  '/suppliers': typeof SuppliersRoute
   '/sell': typeof SellRoute
   '/settings': typeof SettingsRoute
   '/targets': typeof TargetsRoute
@@ -205,7 +219,9 @@ export interface FileRouteTypes {
     | '/reports'
     | '/onboarding'
     | '/products'
+    | '/purchases'
     | '/sales'
+    | '/suppliers'
     | '/sell'
     | '/settings'
     | '/targets'
@@ -267,11 +283,13 @@ export interface RootRouteChildren {
   ReportsRoute: typeof ReportsRoute
   OnboardingRoute: typeof OnboardingRoute
   ProductsRoute: typeof ProductsRoute
+  PurchasesRoute: typeof PurchasesRoute
   SalesRoute: typeof SalesRoute
   SellRoute: typeof SellRoute
   SettingsRoute: typeof SettingsRoute
   TargetsRoute: typeof TargetsRoute
   TasksRoute: typeof TasksRoute
+  SuppliersRoute: typeof SuppliersRoute
   TeamRoute: typeof TeamRoute
 }
 
@@ -368,11 +386,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProductsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/purchases': {
+      id: '/purchases'
+      path: '/purchases'
+      fullPath: '/purchases'
+      preLoaderRoute: typeof PurchasesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/sales': {
       id: '/sales'
       path: '/sales'
       fullPath: '/sales'
       preLoaderRoute: typeof SalesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/suppliers': {
+      id: '/suppliers'
+      path: '/suppliers'
+      fullPath: '/suppliers'
+      preLoaderRoute: typeof SuppliersRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sell': {
@@ -427,11 +459,13 @@ const rootRouteChildren: RootRouteChildren = {
   ReportsRoute: ReportsRoute,
   OnboardingRoute: OnboardingRoute,
   ProductsRoute: ProductsRoute,
+  PurchasesRoute: PurchasesRoute,
   SalesRoute: SalesRoute,
   SellRoute: SellRoute,
   SettingsRoute: SettingsRoute,
   TargetsRoute: TargetsRoute,
   TasksRoute: TasksRoute,
+  SuppliersRoute: SuppliersRoute,
   TeamRoute: TeamRoute,
 }
 export const routeTree = rootRouteImport
