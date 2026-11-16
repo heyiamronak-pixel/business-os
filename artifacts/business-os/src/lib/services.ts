@@ -661,8 +661,11 @@ export function completeSale(
 export function recordPayment(db: WorkspaceDB, saleId: string, amount: number): WorkspaceDB {
   const sale = db.sales.find((s) => s.id === saleId);
   if (!sale) throw new ServiceError("Sale not found.");
-  if (amount <= 0) throw new ServiceError("Enter a payment amount.");
-  const paid = roundMoney(Math.min(sale.total, sale.paidAmount + amount));
+  if (!Number.isFinite(amount) || amount <= 0) throw new ServiceError("Enter a payment amount greater than zero.");
+  const currentPaid = Number.isFinite(sale.paidAmount) ? Math.min(sale.total, Math.max(0, sale.paidAmount)) : 0;
+  const currentOutstanding = roundMoney(Math.max(0, sale.total - currentPaid));
+  if (amount > currentOutstanding) throw new ServiceError("Payment cannot be greater than the outstanding balance.");
+  const paid = roundMoney(currentPaid + amount);
   const outstanding = roundMoney(Math.max(0, sale.total - paid));
   const paymentStatus = outstanding <= 0 ? "paid" : "partial";
   return {
