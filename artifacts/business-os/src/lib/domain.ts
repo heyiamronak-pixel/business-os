@@ -345,6 +345,7 @@ export type AppHref =
   | "/actions"
   | "/advisor"
   | "/inbox"
+  | "/reports"
   | "/onboarding";
 
 export interface ModuleDef {
@@ -366,7 +367,7 @@ export const MODULE_CATALOG: Record<ModuleId, ModuleDef> = {
   tasks: { id: "tasks", label: "Tasks", description: "Work that needs doing", path: "/tasks", implemented: true },
   team: { id: "team", label: "Team", description: "People and roles", path: "/team", implemented: true },
   marketing: { id: "marketing", label: "Marketing", description: "Spend, leads, and ROAS", path: "/marketing", implemented: true },
-  reports: { id: "reports", label: "Reports", description: "Health, insights, cockpit", path: "/", implemented: true },
+  reports: { id: "reports", label: "Reports", description: "Financial, sales and marketing analytics", path: "/reports", implemented: true },
   suppliers: { id: "suppliers", label: "Suppliers", description: "Vendor records", path: "/more", implemented: false },
   bookings: { id: "bookings", label: "Bookings", description: "Reservations and trips", path: "/more", implemented: false },
   trips: { id: "trips", label: "Trips", description: "Itineraries", path: "/more", implemented: false },
