@@ -198,7 +198,9 @@ export interface FileRoutesById {
   '/reports': typeof ReportsRoute
   '/onboarding': typeof OnboardingRoute
   '/products': typeof ProductsRoute
+  '/purchases': typeof PurchasesRoute
   '/sales': typeof SalesRoute
+  '/suppliers': typeof SuppliersRoute
   '/sell': typeof SellRoute
   '/settings': typeof SettingsRoute
   '/targets': typeof TargetsRoute
