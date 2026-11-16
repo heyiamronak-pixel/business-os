@@ -3,6 +3,7 @@ import { ArrowRight, AlertTriangle, Bot, ChartNoAxesCombined, CircleDollarSign, 
 import { Link } from 'wouter';
 import { useBusiness } from '@/hooks/use-workspace';
 import { isoToday, money, PageFrame, SectionCard } from '@/components/record-ui';
+import { salePaymentAmounts } from '@/services/business-logic';
 
 function monthKey(date: Date) {
   return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0');
@@ -16,9 +17,9 @@ export default function Dashboard() {
   const currency = workspace?.currency;
   const today = new Date();
   const todayKey = isoToday();
-  const paidSales = state.sales.filter(s => s.paymentStatus === 'paid');
-  const paidRevenue = paidSales.reduce((sum, s) => sum + s.total, 0);
-  const pendingPayments = state.sales.filter(s => s.paymentStatus === 'pending').reduce((sum, s) => sum + s.total, 0);
+  const paidSales = state.sales.filter(s => salePaymentAmounts(s).paidAmount > 0);
+  const paidRevenue = state.sales.reduce((sum, sale) => sum + salePaymentAmounts(sale).paidAmount, 0);
+  const pendingPayments = state.sales.reduce((sum, sale) => sum + salePaymentAmounts(sale).balance, 0);
   const supplierPayables = state.purchases.reduce((sum, purchase) => sum + purchase.balance, 0);
   const lowStock = state.products.filter(p => p.stock <= p.minimumStock);
   const overdue = state.tasks.filter(t => t.status !== 'Completed' && t.dueDate && t.dueDate < todayKey);
@@ -30,9 +31,9 @@ export default function Dashboard() {
       return { key: monthKey(d), label: d.toLocaleDateString(undefined, { month: 'short' }), revenue: 0, expenses: 0 };
     });
     const index = new Map(buckets.map((b, i) => [b.key, i]));
-    state.sales.filter(s => s.paymentStatus === 'paid').forEach(s => {
+    state.sales.forEach(s => {
       const i = index.get(monthKey(new Date(s.createdAt)));
-      if (i !== undefined) buckets[i].revenue += s.total;
+      if (i !== undefined) buckets[i].revenue += salePaymentAmounts(s).paidAmount;
     });
     state.expenses.forEach(e => {
       const i = index.get(monthKey(new Date(e.date || e.createdAt)));
