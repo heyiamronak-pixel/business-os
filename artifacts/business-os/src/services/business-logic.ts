@@ -92,7 +92,7 @@ export function calculateMetrics(state: BusinessState, today = new Date()): Busi
 }
 
 export function validateProductRecord(
-  product: Pick<Product, 'id' | 'name' | 'sku' | 'barcode' | 'costPrice' | 'sellingPrice' | 'stock' | 'minimumStock'>,
+  product: Pick<Product, 'name' | 'sku' | 'barcode' | 'costPrice' | 'sellingPrice' | 'stock' | 'minimumStock'> & { id?: string },
   products: Product[],
 ) {
   if (!product.name.trim()) throw new Error('Enter a product name.');

@@ -8,7 +8,7 @@ const blank: Omit<Expense, 'id' | 'createdAt' | 'updatedAt'> = { category: '', a
 
 export default function Expenses() {
   const { state, workspace, saveExpense, deleteExpense } = useBusiness();
-  const [form, setForm] = useState(blank); const [editingId, setEditingId] = useState(''); const [open, setOpen] = useState(false); const [search, setSearch] = useState('');
+  const [form, setForm] = useState(blank); const [editingId, setEditingId] = useState(''); const [open, setOpen] = useState(false); const [search, setSearch] = useState(''); const [error, setError] = useState('');
   const filtered = useMemo(() => state.expenses.filter((expense) => `${expense.category} ${expense.description} ${expense.paymentMethod}`.toLowerCase().includes(search.toLowerCase())), [search, state.expenses]);
   const filteredTotal = filtered.reduce((sum, expense) => sum + expense.amount, 0);
   const submit = (event: React.FormEvent) => {

@@ -162,7 +162,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
   };
 
   const saveProduct = (product: ProductInput) => {
-    validateProductRecord(product as ProductInput & { id?: string }, state.products);
+    validateProductRecord(product, state.products);
     setState((current) => {
       const next = withDates(product);
       const exists = current.products.some((item) => item.id === next.id);
@@ -202,10 +202,12 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
   };
 
   const deleteCustomer = (id: string) => {
+    if (state.sales.some(sale => sale.customerId === id)) {
+      throw new Error('This customer has sales history and cannot be deleted. Keep the customer record so past transactions remain traceable.');
+    }
     setState((current) => ({
       ...current,
       customers: current.customers.filter((customer) => customer.id !== id),
-      sales: current.sales.map((sale) => (sale.customerId === id ? { ...sale, customerId: '' } : sale)),
     }));
   };
 

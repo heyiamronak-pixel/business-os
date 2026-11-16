@@ -4,11 +4,13 @@ import {
   applyPurchaseToInventory,
   applySaleToInventory,
   calculateMetrics,
+  buildSaleReversalMovements,
   paidRevenueWithinRange,
   createPurchaseItems,
   createSaleItems,
   inventoryMovementDelta,
   saleTotals,
+  validateProductRecord,
   purchasePaymentSummary,
   revertSaleFromInventory,
 } from '../../artifacts/business-os/src/services/business-logic.ts';
@@ -226,4 +228,26 @@ test('target revenue calculation includes only paid sales within target dates', 
     { id: 'after', createdAt: '2026-12-01T00:00:00.000Z', paymentStatus: 'paid', total: 700 },
   ] as BusinessState['sales'];
   assert.equal(paidRevenueWithinRange(sales, '2026-11-01', '2026-11-30'), 250);
+});
+
+test('product records reject duplicate SKU/barcode and invalid numeric values', () => {
+  const productWithCode = { ...product, sku: 'ABC-1', barcode: '123456' };
+  assert.throws(() => validateProductRecord({ ...product, sku: ' abc-1 ' }, [productWithCode]), /SKU is already used/);
+  assert.throws(() => validateProductRecord({ ...product, barcode: '123456' }, [productWithCode]), /barcode is already used/);
+  assert.throws(() => validateProductRecord({ ...product, sellingPrice: -1 }, []), /non-negative/);
+  assert.doesNotThrow(() => validateProductRecord({ ...product, id: 'p1', sku: 'ABC-1', barcode: '123456' }, [productWithCode]));
+});
+
+test('deleting a sale creates traceable stock-in reversal movements', () => {
+  const items = createSaleItems([product], [{ productId: 'p1', quantity: 2 }]);
+  const sale = {
+    id: 'sale-1', customerId: '', items, subtotal: 200, discount: 0, total: 200,
+    costTotal: 80, grossProfit: 120, paymentStatus: 'paid' as const,
+    createdAt: '2026-11-16T09:00:00.000Z',
+  };
+  const movements = buildSaleReversalMovements(sale, () => 'reverse-1', '2026-11-16T10:00:00.000Z');
+  assert.equal(movements.length, 1);
+  assert.equal(movements[0].type, 'stock-in');
+  assert.equal(movements[0].quantity, 2);
+  assert.equal(movements[0].note, 'sale-void:sale-1');
 });
