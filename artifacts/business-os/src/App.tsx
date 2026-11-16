@@ -23,6 +23,8 @@ import Reports from '@/pages/reports';
 import Team from '@/pages/team';
 import Marketing from '@/pages/marketing';
 import Actions from '@/pages/actions';
+import Suppliers from '@/pages/suppliers';
+import Purchases from '@/pages/purchases';
 import NotFound from '@/pages/not-found';
 import {
   Route,
@@ -46,6 +48,8 @@ function Router() {
             <Route path="/sales" component={Sales} />
             <Route path="/products" component={Products} />
             <Route path="/inventory" component={Inventory} />
+            <Route path="/suppliers" component={Suppliers} />
+            <Route path="/purchases" component={Purchases} />
             <Route path="/customers" component={Customers} />
             <Route path="/expenses" component={Expenses} />
             <Route path="/revenue-targets" component={RevenueTargets} />
