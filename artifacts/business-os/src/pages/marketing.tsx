@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { BarChart3, Edit3, Megaphone, MousePointerClick, Plus, Download } from 'lucide-react';
+import { Edit3, Megaphone, Download } from 'lucide-react';
 import { useBusiness } from '@/hooks/use-workspace';
 import { AddButton, DeleteButton, EmptyState, inputClass, isoToday, money, PageFrame, PageIntro, SearchField, SectionCard } from '@/components/record-ui';
 import type { CampaignStatus, MarketingCampaign } from '@/domain/types';
