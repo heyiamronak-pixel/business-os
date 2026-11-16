@@ -18,7 +18,8 @@ CREATE TABLE products (
  CONSTRAINT products_stock_nonnegative CHECK(stock >= 0),
  CONSTRAINT products_min_stock_nonnegative CHECK(minimum_stock >= 0)
 );
-CREATE UNIQUE INDEX products_business_sku_uq ON products(business_id,sku) WHERE sku <> '';\nCREATE INDEX products_business_name_idx ON products(business_id,name);
+CREATE UNIQUE INDEX products_business_sku_uq ON products(business_id,sku) WHERE sku <> '';
+CREATE INDEX products_business_name_idx ON products(business_id,name);
 
 CREATE TABLE customers (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -38,7 +39,8 @@ CREATE TABLE sales (
  subtotal numeric(14,2) NOT NULL, discount numeric(14,2) NOT NULL DEFAULT 0,
  total numeric(14,2) NOT NULL, cost_total numeric(14,2) NOT NULL DEFAULT 0,
  gross_profit numeric(14,2) NOT NULL DEFAULT 0,
- CONSTRAINT sales_id_business_uq UNIQUE(id,business_id),\n CONSTRAINT sales_customer_tenant_fk FOREIGN KEY(customer_id,business_id) REFERENCES customers(id,business_id) ON DELETE RESTRICT,
+ CONSTRAINT sales_id_business_uq UNIQUE(id,business_id),
+ CONSTRAINT sales_customer_tenant_fk FOREIGN KEY(customer_id,business_id) REFERENCES customers(id,business_id) ON DELETE RESTRICT,
  payment_status text NOT NULL CHECK(payment_status IN ('paid','pending','refunded')),
  created_at timestamptz NOT NULL DEFAULT now(),
  CONSTRAINT sales_amounts_nonnegative CHECK(subtotal >= 0 AND discount >= 0 AND total >= 0 AND cost_total >= 0)
