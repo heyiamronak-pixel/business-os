@@ -1,10 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  applyPurchaseToInventory,
   applySaleToInventory,
   calculateMetrics,
+  createPurchaseItems,
   createSaleItems,
   saleTotals,
+  purchasePaymentSummary,
   revertSaleFromInventory,
 } from '../../artifacts/business-os/src/services/business-logic.ts';
 import type { BusinessState, Product, SaleItem } from '../../artifacts/business-os/src/domain/types.ts';
@@ -157,4 +160,47 @@ test('dashboard metrics exclude pending sales and scope target achievement to ta
   assert.equal(metrics.revenueAchieved, 500);
   assert.equal(metrics.targetRemaining, 500);
   assert.equal(metrics.targetAchievement, 50);
+});
+
+test('purchase items validate products and preserve a purchase cost snapshot', () => {
+  const items = createPurchaseItems([product], [{ productId: 'p1', quantity: 3, unitCost: 35 }]);
+  assert.deepEqual(items, [{
+    productId: 'p1',
+    name: 'Test item',
+    quantity: 3,
+    unitCost: 35,
+    total: 105,
+  }]);
+  assert.throws(() => createPurchaseItems([product], [{ productId: 'missing', quantity: 1, unitCost: 10 }]), /no longer exists/);
+  assert.throws(() => createPurchaseItems([product], [{ productId: 'p1', quantity: 0, unitCost: 10 }]), /whole quantity/);
+});
+
+test('purchase receipt increases stock and writes stock-in movements', () => {
+  const items = createPurchaseItems([product], [
+    { productId: 'p1', quantity: 2, unitCost: 35 },
+    { productId: 'p1', quantity: 1, unitCost: 38 },
+  ]);
+  const result = applyPurchaseToInventory(
+    [product],
+    items,
+    (item) => ({
+      id: 'purchase-movement-' + item.quantity,
+      productId: item.productId,
+      type: 'stock-in',
+      quantity: item.quantity,
+      note: 'purchase:p1',
+      createdAt: '2026-11-16T00:00:00.000Z',
+    }),
+    [],
+  );
+  assert.equal(result.products[0].stock, 8);
+  assert.equal(result.inventoryMovements.length, 2);
+  assert.ok(result.inventoryMovements.every(movement => movement.type === 'stock-in'));
+});
+
+test('purchase payment summary classifies pending, partial and paid balances', () => {
+  assert.deepEqual(purchasePaymentSummary(100, 0), { paidAmount: 0, balance: 100, paymentStatus: 'Pending' });
+  assert.deepEqual(purchasePaymentSummary(100, 40), { paidAmount: 40, balance: 60, paymentStatus: 'Partial' });
+  assert.deepEqual(purchasePaymentSummary(100, 100), { paidAmount: 100, balance: 0, paymentStatus: 'Paid' });
+  assert.throws(() => purchasePaymentSummary(100, 101), /between zero/);
 });
