@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { AlertTriangle, ArrowRight, Bot, CheckCircle2, ClipboardList, PackageSearch, Receipt, Target, Wallet } from 'lucide-react';
 import { Link } from 'wouter';
 import { useBusiness } from '@/hooks/use-workspace';
-import { money, PageFrame, PageIntro, SectionCard } from '@/components/record-ui';
+import { isoToday, money, PageFrame, PageIntro, SectionCard } from '@/components/record-ui';
 
 type ActionItem = { id:string; title:string; detail:string; suggestion:string; href:string; cta:string; severity:'High'|'Medium'|'Low'; icon:typeof AlertTriangle };
 
@@ -11,7 +11,7 @@ export default function Actions() {
   const [expanded,setExpanded] = useState<string[]>([]);
   const items=useMemo<ActionItem[]>(()=>{
     const list:ActionItem[]=[];
-    const today=new Date().toISOString().slice(0,10);
+    const today=isoToday();
     const pending=state.sales.filter(s=>s.paymentStatus==='pending');
     const pendingAmount=pending.reduce((sum,s)=>sum+s.total,0);
     const out=state.products.filter(p=>p.stock<=0);
