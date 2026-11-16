@@ -115,7 +115,7 @@ export function toHinglish(value: string): string {
     .replace(/Spend\s+(.+?); attributed revenue\s+(.+?)\./i, (_match: string, spend: string, revenue: string) => `Ad spend ${spend} hai; attributed revenue ${revenue} hai.`)
     .replace(/(\d+) impressions, (\d+) clicks, (\d+) leads and (\d+) attributed customers\./i, (_match: string, impressions: string, clicks: string, leads: string, customers: string) => `${impressions} impressions, ${clicks} clicks, ${leads} leads aur ${customers} attributed customers.`)
     .replace(/CTR:\s*(.+?); CPL:\s*(.+?); CAC:\s*(.+?)\./i, (_match: string, ctr: string, cpl: string, cac: string) => `CTR: ${ctr}; CPL: ${cpl}; CAC: ${cac}.`)
-    .replace(/ROAS:\s*([\\d.]+x)\\./i, (_match: string, roas: string) => `ROAS ${roas} hai.`)
+    .replace(/ROAS:\s*([\d.]+x)\./i, (_match: string, roas: string) => "ROAS " + roas + " hai.")
     .replace(/(\d+) purchase records worth (.+?)\./i, (_match: string, count: string, total: string) => `${count} purchase records ki total value ${total} hai.`)
     .replace(/Paid to suppliers:\s*(.+?); outstanding:\s*(.+?)\s+across\s+(\d+) open purchases\./i, (_match: string, paid: string, pending: string, count: string) => `Suppliers ko paid amount ${paid} hai; ${count} open purchases mein ${pending} pending hai.`)
     .replace(/Supplier payment ratio:\s*(.+?)\./i, (_match: string, ratio: string) => `Supplier payment ratio ${ratio} hai.`);
