@@ -14,20 +14,28 @@ export function makeId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function localDateKey(date: Date) {
+  return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
+}
+
 export function calculateMetrics(state: BusinessState, today = new Date()): BusinessMetrics {
   const revenue = state.sales
-    .filter((sale) => sale.paymentStatus !== 'refunded')
+    .filter((sale) => sale.paymentStatus === 'paid')
     .reduce((sum, sale) => sum + sale.total, 0);
   const expenses = state.expenses.reduce((sum, expense) => sum + expense.amount, 0);
   const profit = revenue - state.sales
-    .filter((sale) => sale.paymentStatus !== 'refunded')
+    .filter((sale) => sale.paymentStatus === 'paid')
     .reduce((sum, sale) => sum + sale.costTotal, 0) - expenses;
   const currentTarget = state.revenueTargets.find((target) => {
-    const current = today.toISOString().slice(0, 10);
+    const current = localDateKey(today);
     return target.startDate <= current && target.endDate >= current;
   });
   const revenueTarget = currentTarget?.amount ?? 0;
-  const revenueAchieved = revenue;
+  const revenueAchieved = currentTarget
+    ? state.sales
+        .filter((sale) => sale.paymentStatus === 'paid' && sale.createdAt.slice(0, 10) >= currentTarget.startDate && sale.createdAt.slice(0, 10) <= currentTarget.endDate)
+        .reduce((sum, sale) => sum + sale.total, 0)
+    : 0;
   const targetRemaining = Math.max(revenueTarget - revenueAchieved, 0);
   const daysRemaining = currentTarget
     ? Math.max(
@@ -43,7 +51,7 @@ export function calculateMetrics(state: BusinessState, today = new Date()): Busi
   ).length;
   const outOfStockCount = state.products.filter((product) => product.stock <= 0).length;
   const overdueTaskCount = state.tasks.filter(
-    (task) => task.status !== 'Completed' && task.dueDate < today.toISOString().slice(0, 10),
+    (task) => task.status !== 'Completed' && task.dueDate < localDateKey(today),
   ).length;
 
   return {
