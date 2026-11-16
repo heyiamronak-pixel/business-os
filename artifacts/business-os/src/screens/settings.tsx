@@ -192,7 +192,7 @@ export function SettingsScreen() {
         <h2 className="text-sm font-semibold">Available modules</h2>
         <p className="text-xs text-muted-foreground">Enable additional workflows for this business. They will appear in the More menu.</p>
         {Object.values(MODULE_CATALOG)
-          .filter((module) => !business.moduleOrder.includes(module.id))
+          .filter((module) => module.implemented && !business.moduleOrder.includes(module.id))
           .map((module) => (
             <div key={module.id} className="flex items-center gap-3 py-1">
               <div className="min-w-0 flex-1">
