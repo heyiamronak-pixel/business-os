@@ -14,6 +14,9 @@ import type {
   Task,
   TeamMember,
   MarketingCampaign,
+  Supplier,
+  Purchase,
+  PurchasePaymentStatus,
   ThemeId,
   ThemeMode,
   WorkspaceSetup,
@@ -38,6 +41,7 @@ type TargetInput = Omit<RevenueTarget, 'id' | 'createdAt' | 'updatedAt'> & { id?
 type TaskInput = Omit<Task, 'id' | 'createdAt' | 'updatedAt'> & { id?: string };
 type TeamMemberInput = Omit<TeamMember, 'id' | 'createdAt' | 'updatedAt'> & { id?: string };
 type CampaignInput = Omit<MarketingCampaign, 'id' | 'createdAt' | 'updatedAt'> & { id?: string };
+type SupplierInput = Omit<Supplier, 'id' | 'createdAt' | 'updatedAt'> & { id?: string };
 
 type BusinessContextValue = {
   state: BusinessState;
@@ -61,6 +65,10 @@ type BusinessContextValue = {
   deleteTeamMember: (id: string) => void;
   saveCampaign: (campaign: CampaignInput) => void;
   deleteCampaign: (id: string) => void;
+  saveSupplier: (supplier: SupplierInput) => void;
+  deleteSupplier: (id: string) => void;
+  createPurchase: (input: { supplierId: string; items: Array<{ productId: string; quantity: number; unitCost: number }>; paidAmount: number; note: string }) => void;
+  updatePurchasePayment: (id: string, paidAmount: number) => void;
   recordInventoryMovement: (
     productId: string,
     type: InventoryMovementType,
@@ -286,6 +294,63 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
     setState((current) => ({ ...current, campaigns: current.campaigns.filter((campaign) => campaign.id !== id) }));
   };
 
+  const saveSupplier = (supplier: SupplierInput) => {
+    if (!supplier.name.trim()) throw new Error('Enter a supplier name.');
+    if (supplier.email && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(supplier.email)) throw new Error('Enter a valid email address.');
+    setState((current) => {
+      const next = withDates({ ...supplier, name: supplier.name.trim(), contactName: supplier.contactName.trim(), email: supplier.email.trim(), phone: supplier.phone.trim(), address: supplier.address.trim(), taxId: supplier.taxId.trim(), notes: supplier.notes.trim() });
+      const exists = current.suppliers.some((item) => item.id === next.id);
+      return { ...current, suppliers: exists ? current.suppliers.map((item) => item.id === next.id ? { ...item, ...next } : item) : [next, ...current.suppliers] };
+    });
+  };
+
+  const deleteSupplier = (id: string) => {
+    if (state.purchases.some((purchase) => purchase.supplierId === id)) throw new Error('This supplier has purchase history. Mark the supplier inactive instead of deleting the record.');
+    setState((current) => ({ ...current, suppliers: current.suppliers.filter((supplier) => supplier.id !== id) }));
+  };
+
+  const createPurchase = ({ supplierId, items, paidAmount, note }: { supplierId: string; items: Array<{ productId: string; quantity: number; unitCost: number }>; paidAmount: number; note: string }) => {
+    if (!supplierId) throw new Error('Select a supplier.');
+    if (!items.length) throw new Error('Add at least one product to the purchase.');
+    if (!Number.isFinite(paidAmount) || paidAmount < 0) throw new Error('Enter a valid paid amount.');
+    setState((current) => {
+      const supplier = current.suppliers.find((item) => item.id === supplierId);
+      if (!supplier || supplier.status !== 'Active') throw new Error('Select an active supplier.');
+      const purchaseItems = items.map((item) => {
+        const product = current.products.find((entry) => entry.id === item.productId);
+        if (!product) throw new Error('A selected product no longer exists.');
+        if (!Number.isInteger(item.quantity) || item.quantity <= 0) throw new Error('Enter a whole quantity greater than zero.');
+        if (!Number.isFinite(item.unitCost) || item.unitCost < 0) throw new Error('Enter a valid unit purchase cost.');
+        return { productId: product.id, name: product.name, quantity: item.quantity, unitCost: item.unitCost, total: item.quantity * item.unitCost };
+      });
+      const total = purchaseItems.reduce((sum, item) => sum + item.total, 0);
+      if (paidAmount > total) throw new Error('Paid amount cannot exceed the purchase total.');
+      const now = new Date().toISOString();
+      const id = makeId('purchase');
+      const paymentStatus: PurchasePaymentStatus = paidAmount >= total && total > 0 ? 'Paid' : paidAmount > 0 ? 'Partial' : 'Pending';
+      const purchase: Purchase = { id, supplierId, supplierName: supplier.name, items: purchaseItems, subtotal: total, total, paidAmount, balance: total - paidAmount, paymentStatus, note: note.trim(), createdAt: now, updatedAt: now };
+      const stockByProduct = new Map<string, number>();
+      purchaseItems.forEach((item) => stockByProduct.set(item.productId, (stockByProduct.get(item.productId) ?? 0) + item.quantity));
+      const products = current.products.map((product) => {
+        const quantity = stockByProduct.get(product.id) ?? 0;
+        return quantity ? { ...product, stock: product.stock + quantity, updatedAt: now } : product;
+      });
+      const movements: InventoryMovement[] = purchaseItems.map((item) => ({ id: makeId('movement'), productId: item.productId, type: 'stock-in', quantity: item.quantity, note: 'purchase:' + id, createdAt: now }));
+      return { ...current, products, purchases: [purchase, ...current.purchases], inventoryMovements: [...movements, ...current.inventoryMovements] };
+    });
+  };
+
+  const updatePurchasePayment = (id: string, paidAmount: number) => {
+    if (!Number.isFinite(paidAmount) || paidAmount < 0) throw new Error('Enter a valid paid amount.');
+    setState((current) => {
+      const purchase = current.purchases.find((item) => item.id === id);
+      if (!purchase) return current;
+      if (paidAmount > purchase.total) throw new Error('Paid amount cannot exceed the purchase total.');
+      const paymentStatus: PurchasePaymentStatus = paidAmount >= purchase.total && purchase.total > 0 ? 'Paid' : paidAmount > 0 ? 'Partial' : 'Pending';
+      return { ...current, purchases: current.purchases.map((item) => item.id === id ? { ...item, paidAmount, balance: item.total - paidAmount, paymentStatus, updatedAt: new Date().toISOString() } : item) };
+    });
+  };
+
   const recordInventoryMovement = (
     productId: string,
     type: InventoryMovementType,
@@ -409,6 +474,10 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
       deleteTeamMember,
       saveCampaign,
       deleteCampaign,
+      saveSupplier,
+      deleteSupplier,
+      createPurchase,
+      updatePurchasePayment,
       recordInventoryMovement,
       createSale,
       updateSale,
