@@ -22,10 +22,13 @@ import type {
   WorkspaceSetup,
 } from '@/domain/types';
 import {
+  applyPurchaseToInventory,
   applySaleToInventory,
   calculateMetrics,
+  createPurchaseItems,
   createSaleItems,
   makeId,
+  purchasePaymentSummary,
   saleTotals,
   revertSaleFromInventory,
 } from '@/services/business-logic';
@@ -311,32 +314,22 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
 
   const createPurchase = ({ supplierId, items, paidAmount, note }: { supplierId: string; items: Array<{ productId: string; quantity: number; unitCost: number }>; paidAmount: number; note: string }) => {
     if (!supplierId) throw new Error('Select a supplier.');
-    if (!items.length) throw new Error('Add at least one product to the purchase.');
-    if (!Number.isFinite(paidAmount) || paidAmount < 0) throw new Error('Enter a valid paid amount.');
     setState((current) => {
       const supplier = current.suppliers.find((item) => item.id === supplierId);
       if (!supplier || supplier.status !== 'Active') throw new Error('Select an active supplier.');
-      const purchaseItems = items.map((item) => {
-        const product = current.products.find((entry) => entry.id === item.productId);
-        if (!product) throw new Error('A selected product no longer exists.');
-        if (!Number.isInteger(item.quantity) || item.quantity <= 0) throw new Error('Enter a whole quantity greater than zero.');
-        if (!Number.isFinite(item.unitCost) || item.unitCost < 0) throw new Error('Enter a valid unit purchase cost.');
-        return { productId: product.id, name: product.name, quantity: item.quantity, unitCost: item.unitCost, total: item.quantity * item.unitCost };
-      });
+      const purchaseItems = createPurchaseItems(current.products, items);
       const total = purchaseItems.reduce((sum, item) => sum + item.total, 0);
-      if (paidAmount > total) throw new Error('Paid amount cannot exceed the purchase total.');
+      const payment = purchasePaymentSummary(total, paidAmount);
       const now = new Date().toISOString();
       const id = makeId('purchase');
-      const paymentStatus: PurchasePaymentStatus = paidAmount >= total && total > 0 ? 'Paid' : paidAmount > 0 ? 'Partial' : 'Pending';
-      const purchase: Purchase = { id, supplierId, supplierName: supplier.name, items: purchaseItems, subtotal: total, total, paidAmount, balance: total - paidAmount, paymentStatus, note: note.trim(), createdAt: now, updatedAt: now };
-      const stockByProduct = new Map<string, number>();
-      purchaseItems.forEach((item) => stockByProduct.set(item.productId, (stockByProduct.get(item.productId) ?? 0) + item.quantity));
-      const products = current.products.map((product) => {
-        const quantity = stockByProduct.get(product.id) ?? 0;
-        return quantity ? { ...product, stock: product.stock + quantity, updatedAt: now } : product;
-      });
-      const movements: InventoryMovement[] = purchaseItems.map((item) => ({ id: makeId('movement'), productId: item.productId, type: 'stock-in', quantity: item.quantity, note: 'purchase:' + id, createdAt: now }));
-      return { ...current, products, purchases: [purchase, ...current.purchases], inventoryMovements: [...movements, ...current.inventoryMovements] };
+      const purchase: Purchase = { id, supplierId, supplierName: supplier.name, items: purchaseItems, subtotal: total, total, ...payment, note: note.trim(), createdAt: now, updatedAt: now };
+      const inventory = applyPurchaseToInventory(
+        current.products,
+        purchaseItems,
+        (item) => ({ id: makeId('movement'), productId: item.productId, type: 'stock-in', quantity: item.quantity, note: 'purchase:' + id, createdAt: now }),
+        current.inventoryMovements,
+      );
+      return { ...current, ...inventory, purchases: [purchase, ...current.purchases] };
     });
   };
 
@@ -345,9 +338,8 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
     setState((current) => {
       const purchase = current.purchases.find((item) => item.id === id);
       if (!purchase) return current;
-      if (paidAmount > purchase.total) throw new Error('Paid amount cannot exceed the purchase total.');
-      const paymentStatus: PurchasePaymentStatus = paidAmount >= purchase.total && purchase.total > 0 ? 'Paid' : paidAmount > 0 ? 'Partial' : 'Pending';
-      return { ...current, purchases: current.purchases.map((item) => item.id === id ? { ...item, paidAmount, balance: item.total - paidAmount, paymentStatus, updatedAt: new Date().toISOString() } : item) };
+      const payment = purchasePaymentSummary(purchase.total, paidAmount);
+      return { ...current, purchases: current.purchases.map((item) => item.id === id ? { ...item, ...payment, updatedAt: new Date().toISOString() } : item) };
     });
   };
 
