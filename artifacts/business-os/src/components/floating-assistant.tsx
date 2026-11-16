@@ -2,6 +2,7 @@ import * as React from "react";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { ArrowRight, Bot, HelpCircle, MessageCircle, Send, Sparkles, X } from "lucide-react";
 import { advise, buildContext, ADVISOR_PROMPTS } from "@/lib/engines";
+import { assistantLabel, detectAssistantLanguage, toHinglish, type AssistantLanguage } from "@/lib/assistant-language";
 import { useAppStore, useBusiness } from "@/lib/store";
 
 type AssistantMode = "help" | "business";
@@ -15,6 +16,7 @@ type Message = {
   href?: string;
   cta?: string;
   notice?: string;
+  language?: AssistantLanguage;
 };
 
 type Position = { x: number; y: number };
@@ -27,134 +29,134 @@ const EDGE_GAP = 12;
 const pageGuides: Record<string, { title: string; intro: string; steps: string[]; href: string; cta: string }> = {
   "/": {
     title: "Business overview",
-    intro: "Yahan se apne business ki overall health dekho. Dashboard aapke saved records se sales, collections, stock aur tasks ka snapshot banata hai.",
-    steps: ["Date range ya available summary controls se period check karo.", "Kisi alert ya metric par click karke related module kholo.", "Data sahi rakhne ke liye transactions ko original module mein update karo."],
+    intro: "Use the overview to review business health. The dashboard summarises sales, collections, stock and tasks from your saved records.",
+    steps: ["Use the available date and summary controls to review the reporting period.", "Open the relevant module from any alert or metric.", "Keep records accurate by updating transactions in their original module."],
     href: "/reports",
     cta: "Open reports",
   },
   "/sell": {
     title: "Make a sale",
-    intro: "Sell screen quick checkout ke liye hai. Sale save hone par stock aur payment balance update hota hai.",
-    steps: ["Customer select karo, ya walk-in sale choose karo.", "Products aur quantities add karo; discount aur received amount verify karo.", "Confirm karne se pehle total check karo, phir sale save karo."],
+    intro: "Use the Sell screen for quick checkout. Saving a sale updates stock and the customer payment balance.",
+    steps: ["Select a customer or choose a walk-in sale.", "Add products and quantities, then verify the discount and amount received.", "Check the total before confirming and saving the sale."],
     href: "/sales",
     cta: "View sales",
   },
   "/sales": {
     title: "Sales and collections",
-    intro: "Yahan recorded sales, customer balances aur payment status manage hote hain.",
-    steps: ["Search se customer, sale reference ya product dhoondo.", "Date aur payment status filters se records narrow karo.", "Part-payment collect karte waqt sirf actually received amount record karo."],
+    intro: "Manage recorded sales, customer balances and payment status here.",
+    steps: ["Search for a customer, sale reference or product.", "Narrow records using the date and payment status filters.", "When collecting a partial payment, record only the amount actually received."],
     href: "/sell",
     cta: "Create a sale",
   },
   "/products": {
     title: "Product catalogue",
-    intro: "Products mein item details, SKU, selling price, cost aur minimum stock maintain hota hai.",
-    steps: ["Add product choose karke name, SKU, price aur unit fill karo.", "Opening stock aur minimum stock carefully set karo.", "Existing sales/purchase history wale product ko delete karne ke bajay inactive/archive workflow use karo, where available."],
+    intro: "The Products area stores item details, SKU, selling price, cost and minimum stock.",
+    steps: ["Choose Add product and enter the name, SKU, price and unit.", "Set opening stock and minimum stock carefully.", "For products with sales or purchase history, use an inactive or archive option where available instead of deleting the record."],
     href: "/inventory",
     cta: "Open inventory",
   },
   "/inventory": {
     title: "Inventory control",
-    intro: "Inventory screen stock levels aur stock movements review karne ke liye hai.",
-    steps: ["Low-stock aur out-of-stock products identify karo.", "Received goods ko Purchases ke through record karo so supplier and stock history linked rahe.", "Manual adjustments tabhi use karo jab physical stock count verify ho."],
+    intro: "Use Inventory to review stock levels and stock movements.",
+    steps: ["Identify products with low or zero stock.", "Record received goods through Purchases so supplier and stock history stay connected.", "Use manual adjustments only after verifying the physical stock count."],
     href: "/purchases",
     cta: "Record a purchase",
   },
   "/suppliers": {
     title: "Supplier directory",
-    intro: "Supplier details, contact information aur purchase history yahan maintain hoti hai.",
-    steps: ["Add supplier par click karke supplier ka naam aur contact details save karo.", "Inactive suppliers ko naye purchases ke liye select mat karo.", "Supplier balance dekhne ke liye linked purchase records review karo."],
+    intro: "Maintain supplier details, contact information and purchase history here.",
+    steps: ["Choose Add supplier and save the supplier name and contact details.", "Do not select inactive suppliers for new purchases.", "Review linked purchase records to see the supplier balance."],
     href: "/purchases",
     cta: "Open purchases",
   },
   "/purchases": {
     title: "Purchases and supplier payments",
-    intro: "Purchase record karne par received quantity inventory mein add hoti hai aur supplier payable track hota hai.",
-    steps: ["Supplier select karo aur har product ki received quantity aur unit cost add karo.", "Jo amount abhi pay hua hai wahi payment field mein enter karo.", "Baad ki payment usi purchase ke against record karo; stock ko dobara manually add mat karo."],
+    intro: "Recording a purchase adds the received quantity to inventory and tracks the supplier payable.",
+    steps: ["Select a supplier and add the received quantity and unit cost for each product.", "Enter only the amount paid now in the payment field.", "Record later payments against the same purchase. Do not add the stock manually again."],
     href: "/suppliers",
     cta: "View suppliers",
   },
   "/customers": {
     title: "Customer records",
-    intro: "Customer profiles ke saath purchase history, outstanding balance aur follow-up context maintain hota hai.",
-    steps: ["Customer create karte waqt correct phone/email add karo.", "Sales ko customer ke saath link karo so history accurate rahe.", "Customer balance collect hone par related sale mein payment record karo."],
+    intro: "Customer profiles keep purchase history, outstanding balances and follow-up context.",
+    steps: ["Add the correct phone number and email when creating a customer.", "Link sales to the customer to keep their history accurate.", "When a customer pays, record the payment against the relevant sale."],
     href: "/sales",
     cta: "View sales",
   },
   "/expenses": {
     title: "Expense tracking",
-    intro: "Business expenses ko category aur date ke saath record karo so reports meaningful rahen.",
-    steps: ["Expense amount, date, category aur vendor details fill karo.", "Duplicate entry se bachne ke liye save karne se pehle date aur amount verify karo.", "Reports mein same period select karke expense impact compare karo."],
+    intro: "Record business expenses with a category and date so reports remain useful.",
+    steps: ["Enter the expense amount, date, category and vendor details.", "Verify the date and amount before saving to avoid duplicate entries.", "Select the same period in Reports to compare the expense impact."],
     href: "/reports",
     cta: "Open reports",
   },
   "/targets": {
     title: "Revenue targets",
-    intro: "Targets mein period aur goal set karke actual revenue ke against progress monitor hoti hai.",
-    steps: ["Monthly, quarterly ya annual period choose karo.", "Achievable target amount aur relevant dates set karo.", "Progress ko Reports aur Dashboard ke actual figures ke saath compare karo."],
+    intro: "Set a period and goal in Targets to monitor progress against actual revenue.",
+    steps: ["Choose a monthly, quarterly or annual period.", "Set a realistic target amount and the relevant dates.", "Compare progress with the actual figures in Reports and the Dashboard."],
     href: "/reports",
     cta: "Open reports",
   },
   "/tasks": {
     title: "Tasks and follow-ups",
-    intro: "Tasks ka use team ke daily actions, owners aur due dates track karne ke liye karo.",
-    steps: ["Task title, priority aur due date add karo.", "Available assignee select karo aur status update karte raho.", "Overdue tasks ko reschedule ya complete karo; unhe silently ignore mat karo."],
+    intro: "Use Tasks to track daily team actions, assignees and due dates.",
+    steps: ["Add a task title, priority and due date.", "Select an available assignee and keep the status updated.", "Reschedule or complete overdue tasks instead of leaving them unattended."],
     href: "/actions",
     cta: "Review action centre",
   },
   "/team": {
     title: "Team directory",
-    intro: "Team screen abhi team member profiles aur role labels maintain karti hai.",
-    steps: ["Employee ka name, email, phone, department aur role save karo.", "Status ko Active ya Inactive rakho.", "Important: abhi yahan se employee ko OTP login invitation send nahi hota. Secure employee sign-in aur permissions auth/backend stage mein enable honge."],
+    intro: "The Team screen currently maintains employee profiles and role labels.",
+    steps: ["Save the employee name, email, phone, department and role.", "Set the status to Active or Inactive.", "Important: this screen does not yet send OTP login invitations. Secure employee sign-in and permissions will be enabled in the authentication and backend stage."],
     href: "/settings",
     cta: "Review settings",
   },
   "/attendance": {
     title: "Attendance",
-    intro: "Attendance ka current flow prototype/local workspace mode mein hai.",
-    steps: ["Attendance entries ko review karo.", "Shared multi-user attendance ya verified employee identity assume mat karo.", "Secure employee login ke baad attendance ko authenticated accounts se link kiya jayega."],
+    intro: "The current Attendance flow is a prototype in local workspace mode.",
+    steps: ["Review attendance entries.", "Do not assume attendance is shared across users or tied to a verified employee identity.", "Attendance will be linked to authenticated accounts after secure employee login is enabled."],
     href: "/team",
     cta: "Open team",
   },
   "/marketing": {
     title: "Marketing performance",
-    intro: "Marketing records mein campaign spend, clicks, impressions, leads, customers aur attributed revenue maintain karo.",
-    steps: ["Har campaign ke numbers source reports se verify karke enter karo.", "Spend aur lead counts ke saath CPL, conversion aur ROAS review karo.", "Missing data ko zero performance samajhne se pehle tracking verify karo."],
+    intro: "Marketing records store campaign spend, clicks, impressions, leads, customers and attributed revenue.",
+    steps: ["Verify each campaign figure against its source report before entering it.", "Review CPL, conversion and ROAS alongside spend and lead counts.", "Verify tracking before treating missing data as zero performance."],
     href: "/reports",
     cta: "Open reports",
   },
   "/reports": {
     title: "Business reports",
-    intro: "Reports recorded business activity ko date range ke hisaab se summarize karte hain.",
-    steps: ["Reporting period select karo.", "Revenue, collections, expenses, inventory aur supplier payables ko compare karo.", "CSV export se current report ko spreadsheet mein review karo."],
+    intro: "Reports summarise recorded business activity for the selected date range.",
+    steps: ["Select the reporting period.", "Compare revenue, collections, expenses, inventory and supplier payables.", "Export the current report to CSV for review in a spreadsheet."],
     href: "/actions",
     cta: "View action centre",
   },
   "/actions": {
     title: "Action centre",
-    intro: "Action Centre business data se nikle operational alerts aur next steps dikhata hai.",
-    steps: ["High-priority items pehle review karo.", "Har recommendation ke supporting records ko related module mein verify karo.", "Action complete hone par source module mein actual record update karo."],
+    intro: "Action Centre highlights operational alerts and next steps based on business data.",
+    steps: ["Review high-priority items first.", "Verify the supporting records for each recommendation in the relevant module.", "After completing an action, update the actual record in its source module."],
     href: "/advisor",
     cta: "Ask business advisor",
   },
   "/advisor": {
     title: "Business advisor",
-    intro: "Advisor saved workspace data se sales, collections, stock, marketing aur operations ke questions answer karta hai.",
-    steps: ["Specific question pucho, jaise pending customer payment kitna hai.", "Supporting facts aur calculations check karo.", "Data missing ho to pehle correct module mein records update karo."],
+    intro: "Advisor answers questions about sales, collections, stock, marketing and operations using saved workspace data.",
+    steps: ["Ask a specific question, such as how much customer payment is pending.", "Check the supporting facts and calculations.", "When data is missing, update the records in the correct module first."],
     href: "/",
     cta: "Back to overview",
   },
   "/settings": {
     title: "Workspace settings",
-    intro: "Settings mein business profile, preferences aur available configuration options manage hote hain.",
-    steps: ["Business name, industry, country, currency aur timezone verify karo.", "Theme/preferences save karne se pehle preview check karo.", "Authentication provider keys ya database passwords chat ya source code mein paste mat karo."],
+    intro: "Manage the business profile, preferences and available configuration options in Settings.",
+    steps: ["Verify the business name, industry, country, currency and timezone.", "Preview theme and preferences before saving.", "Never paste authentication provider keys or database passwords into chat or source code."],
     href: "/team",
     cta: "Open team",
   },
   "/more": {
     title: "All modules",
-    intro: "More screen se remaining Business Sutra modules access kar sakte ho.",
-    steps: ["Module cards se required area kholo.", "Har module mein available search/filter controls use karo.", "Agar kisi action ka button abhi available nahi hai, usse complete workflow assume mat karo."],
+    intro: "Use the More screen to access the remaining Business Sutra modules.",
+    steps: ["Open the required area from its module card.", "Use the available search and filter controls in each module.", "Do not assume a workflow is complete if its action button is not available yet."],
     href: "/",
     cta: "Back to overview",
   },
@@ -165,8 +167,8 @@ function getGuide(question: string, pathname: string) {
   if (/(custom filter|filter builder|saved view|advanced filter)/.test(q)) {
     return {
       title: "Custom filters",
-      intro: "Universal custom filter builder abhi build queue mein hai. Kuch modules mein date, status aur search filters available hain, lekin shared AND/OR rules aur saved views har jagah active nahi hain.",
-      steps: ["Abhi ke liye current module ke search aur filters use karo.", "Universal filters mein date, status, owner, branch, amount range, sorting, grouping aur saved views include kiye jayenge.", "Saved filters ko personal ya team-shared rakhne ka option design mein rahega."],
+      intro: "The universal custom filter builder is still being developed. Some modules have date, status and search filters, but shared AND/OR rules and saved views are not active everywhere yet.",
+      steps: ["For now, use the search and filters available in the current module.", "Universal filters will include date, status, owner, branch, amount range, sorting, grouping and saved views.", "You will be able to keep saved filters personal or share them with your team."],
       href: pathname,
       cta: "Stay on this screen",
     };
@@ -174,8 +176,8 @@ function getGuide(question: string, pathname: string) {
   if (/(invite|login|sign in|otp|employee account|employee id|team member.*access)/.test(q)) {
     return {
       title: "Employee access",
-      intro: "Secure employee login aur invitations abhi active nahi hain. Current Team module sirf local employee directory hai.",
-      steps: ["Abhi employee profile ka naam, phone, email aur role Team module mein save kar sakte ho.", "OTP login ke liye verified phone/email, invitation acceptance aur server-side permissions implement honge.", "Employee ko sirf assigned business, branch aur allowed actions ka access milega."],
+      intro: "Secure employee login and invitations are not active yet. The current Team module is only a local employee directory.",
+      steps: ["For now, you can save an employee name, phone, email and role in the Team module.", "OTP login will require a verified phone or email, invitation acceptance and server-side permissions.", "Employees will only have access to their assigned business, branch and permitted actions."],
       href: "/team",
       cta: "Open team directory",
     };
@@ -218,14 +220,16 @@ function makeId() {
   return `assistant-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function formatReply(reply: ReturnType<typeof advise>): Message {
+function formatReply(reply: ReturnType<typeof advise>, language: AssistantLanguage): Message {
+  const localise = language === "hinglish" ? toHinglish : (value: string) => value;
   return {
     id: makeId(),
     role: "assistant",
-    text: "Yeh tumhare current workspace records par based answer hai.",
-    facts: reply.facts,
-    calculations: reply.calculations,
-    recommendations: reply.recommendations,
+    language,
+    text: localise("This answer is based on your current workspace data."),
+    facts: reply.facts.map(localise),
+    calculations: reply.calculations.map(localise),
+    recommendations: reply.recommendations.map(localise),
   };
 }
 
@@ -285,23 +289,26 @@ export function FloatingAssistant() {
   function ask(value = question) {
     const trimmed = value.trim();
     if (!trimmed || !context || busy) return;
-    const userMessage: Message = { id: makeId(), role: "user", text: trimmed };
+    const language = detectAssistantLanguage(trimmed);
+    const userMessage: Message = { id: makeId(), role: "user", text: trimmed, language };
     setQuestion("");
     setBusy(true);
 
     if (mode === "help") {
       const guide = getGuide(trimmed, pathname);
+      const localise = language === "hinglish" ? toHinglish : (value: string) => value;
       setMessages((current) => [...current, userMessage, {
         id: makeId(),
         role: "assistant",
-        text: `${guide.title} — ${guide.intro}`,
-        facts: guide.steps,
+        language,
+        text: `${localise(guide.title)} — ${localise(guide.intro)}`,
+        facts: guide.steps.map(localise),
         href: guide.href,
-        cta: guide.cta,
-        notice: "App guide preview. Secure employee invitations, universal filters and advanced AI actions are being built in later product stages.",
+        cta: language === "hinglish" ? localise(guide.cta) : guide.cta,
+        notice: localise("App guide preview. Secure employee invitations, universal filters and advanced AI actions are being built in later product stages."),
       }]);
     } else {
-      setMessages((current) => [...current, userMessage, formatReply(advise(trimmed, context))]);
+      setMessages((current) => [...current, userMessage, formatReply(advise(trimmed, context), language)]);
     }
     setBusy(false);
   }
@@ -394,7 +401,7 @@ export function FloatingAssistant() {
                   <p className="whitespace-pre-wrap text-xs leading-5">{message.text}</p>
                   {message.facts?.length ? <ul className="mt-2 space-y-1.5 text-xs leading-5 text-muted-foreground">{message.facts.map((fact, index) => <li key={index} className="flex gap-2"><span className="mt-2 size-1 shrink-0 rounded-full bg-primary" />{fact}</li>)}</ul> : null}
                   {message.calculations?.length ? <div className="mt-2 rounded-lg bg-muted/60 p-2"><p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Calculations</p><ul className="mt-1 space-y-1 text-xs leading-5">{message.calculations.map((item, index) => <li key={index}>{item}</li>)}</ul></div> : null}
-                  {message.recommendations?.length ? <div className="mt-2 rounded-lg bg-primary/5 p-2"><p className="text-[10px] font-bold uppercase tracking-wide text-primary">Next steps</p><ul className="mt-1 space-y-1 text-xs leading-5">{message.recommendations.map((item, index) => <li key={index}>• {item}</li>)}</ul></div> : null}
+                  {message.recommendations?.length ? <div className="mt-2 rounded-lg bg-primary/5 p-2"><p className="text-[10px] font-bold uppercase tracking-wide text-primary">{assistantLabel("Next steps", message.language ?? "english")}</p><ul className="mt-1 space-y-1 text-xs leading-5">{message.recommendations.map((item, index) => <li key={index}>• {item}</li>)}</ul></div> : null}
                   {message.href ? <button type="button" onClick={() => { setOpen(false); navigate({ to: message.href as never }); }} className="mt-3 inline-flex min-h-9 items-center gap-2 rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground">{message.cta ?? "Open module"} <ArrowRight className="size-3.5" /></button> : null}
                   {message.notice ? <p className="mt-2 border-t border-border pt-2 text-[10px] leading-4 text-muted-foreground">{message.notice}</p> : null}
                 </article>
