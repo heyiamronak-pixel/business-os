@@ -3,6 +3,7 @@ import type {
   BusinessState,
   InventoryMovement,
   InventoryMovementType,
+  PaymentStatus,
   Product,
   PurchaseItem,
   PurchasePaymentStatus,
@@ -32,6 +33,12 @@ export function inventoryMovementDelta(type: InventoryMovementType, quantity: nu
   if (type === 'stock-out') return -quantity;
   return quantity;
 }
+export function collectedSaleCost(sale: Sale): number {
+  if (sale.paymentStatus === 'refunded' || sale.total <= 0) return 0;
+  const { paidAmount } = salePaymentAmounts(sale);
+  return sale.costTotal * (paidAmount / sale.total);
+}
+
 export function paidRevenueWithinRange(sales: Sale[], startDate: string, endDate: string): number {
   return sales
     .filter(sale => sale.createdAt.slice(0, 10) >= startDate && sale.createdAt.slice(0, 10) <= endDate)
@@ -41,9 +48,7 @@ export function calculateMetrics(state: BusinessState, today = new Date()): Busi
   const revenue = state.sales
     .reduce((sum, sale) => sum + salePaymentAmounts(sale).paidAmount, 0);
   const expenses = state.expenses.reduce((sum, expense) => sum + expense.amount, 0);
-  const profit = revenue - state.sales
-    .filter((sale) => sale.paymentStatus !== 'refunded' && salePaymentAmounts(sale).paidAmount > 0)
-    .reduce((sum, sale) => sum + sale.costTotal, 0) - expenses;
+  const profit = revenue - state.sales.reduce((sum, sale) => sum + collectedSaleCost(sale), 0) - expenses;
   const currentTarget = state.revenueTargets.find((target) => {
     const current = localDateKey(today);
     return target.startDate <= current && target.endDate >= current;
