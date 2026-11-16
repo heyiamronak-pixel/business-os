@@ -232,8 +232,8 @@ test('target revenue calculation includes only paid sales within target dates', 
 
 test('product records reject duplicate SKU/barcode and invalid numeric values', () => {
   const productWithCode = { ...product, sku: 'ABC-1', barcode: '123456' };
-  assert.throws(() => validateProductRecord({ ...product, sku: ' abc-1 ' }, [productWithCode]), /SKU is already used/);
-  assert.throws(() => validateProductRecord({ ...product, barcode: '123456' }, [productWithCode]), /barcode is already used/);
+  assert.throws(() => validateProductRecord({ ...product, id: 'p2', sku: ' abc-1 ' }, [productWithCode]), /SKU is already used/);
+  assert.throws(() => validateProductRecord({ ...product, id: 'p2', barcode: '123456' }, [productWithCode]), /barcode is already used/);
   assert.throws(() => validateProductRecord({ ...product, sellingPrice: -1 }, []), /non-negative/);
   assert.doesNotThrow(() => validateProductRecord({ ...product, id: 'p1', sku: 'ABC-1', barcode: '123456' }, [productWithCode]));
 });
