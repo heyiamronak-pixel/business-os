@@ -3,6 +3,7 @@ import { Bot, Lightbulb, RefreshCw, Send, Sparkles, AlertTriangle, CheckCircle2,
 import { Link } from 'wouter';
 import { useBusiness } from '@/hooks/use-workspace';
 import { inputClass, isoToday, money, PageFrame, PageIntro, SectionCard } from '@/components/record-ui';
+import { collectedSaleCost, salePaymentAmounts } from '@/services/business-logic';
 import type { BusinessState } from '@/domain/types';
 
 type Finding = { title: string; detail: string; action: string; tone: 'positive' | 'warning' | 'neutral'; href: string };
@@ -11,18 +12,18 @@ type Message = { role: 'user' | 'assistant'; content: string };
 function buildFindings(state: BusinessState): Finding[] {
   const findings: Finding[] = [];
   const today = isoToday();
-  const paidSales = state.sales.filter(s => s.paymentStatus === 'paid');
-  const pending = state.sales.filter(s => s.paymentStatus === 'pending');
-  const paidRevenue = paidSales.reduce((sum, s) => sum + s.total, 0);
+  const paidSales = state.sales.filter(s => salePaymentAmounts(s).paidAmount > 0);
+  const pending = state.sales.filter(s => salePaymentAmounts(s).balance > 0);
+  const paidRevenue = state.sales.reduce((sum, sale) => sum + salePaymentAmounts(sale).paidAmount, 0);
   const expenses = state.expenses.reduce((sum, e) => sum + e.amount, 0);
-  const cost = paidSales.reduce((sum, s) => sum + s.costTotal, 0);
+  const cost = state.sales.reduce((sum, sale) => sum + collectedSaleCost(sale), 0);
   const lowStock = state.products.filter(p => p.stock > 0 && p.stock <= p.minimumStock);
   const outOfStock = state.products.filter(p => p.stock <= 0);
   const overdue = state.tasks.filter(t => t.status !== 'Completed' && t.dueDate && t.dueDate < today);
   const target = state.revenueTargets.find(t => t.startDate <= today && t.endDate >= today);
 
   if (pending.length) {
-    const amount = pending.reduce((sum, s) => sum + s.total, 0);
+    const amount = pending.reduce((sum, sale) => sum + salePaymentAmounts(sale).balance, 0);
     findings.push({ title: 'Collect pending payments', detail: pending.length + ' sale(s) have ' + money(amount, state.workspace?.currency) + ' pending.', action: 'Open Sales, contact customers, and update payment status only after collection is confirmed.', tone: 'warning', href: '/sales' });
   }
   if (outOfStock.length || lowStock.length) {
@@ -51,10 +52,10 @@ function buildFindings(state: BusinessState): Finding[] {
 function answerQuestion(question: string, state: BusinessState): string {
   const q = question.toLowerCase();
   const currency = state.workspace?.currency;
-  const paid = state.sales.filter(s => s.paymentStatus === 'paid');
-  const pending = state.sales.filter(s => s.paymentStatus === 'pending');
-  const revenue = paid.reduce((sum, s) => sum + s.total, 0);
-  const cost = paid.reduce((sum, s) => sum + s.costTotal, 0);
+  const paid = state.sales.filter(s => salePaymentAmounts(s).paidAmount > 0);
+  const pending = state.sales.filter(s => salePaymentAmounts(s).balance > 0);
+  const revenue = state.sales.reduce((sum, sale) => sum + salePaymentAmounts(sale).paidAmount, 0);
+  const cost = state.sales.reduce((sum, sale) => sum + collectedSaleCost(sale), 0);
   const expenses = state.expenses.reduce((sum, e) => sum + e.amount, 0);
   const contribution = revenue - cost - expenses;
   const low = state.products.filter(p => p.stock > 0 && p.stock <= p.minimumStock);
@@ -85,7 +86,7 @@ function answerQuestion(question: string, state: BusinessState): string {
     const categories = new Map<string, number>();
     state.expenses.forEach(e => categories.set(e.category, (categories.get(e.category) || 0) + e.amount));
     const top = [...categories.entries()].sort((a, b) => b[1] - a[1])[0];
-    return 'Financial snapshot (all recorded periods):\nPaid revenue is ' + money(revenue, currency) + ', recorded product cost is ' + money(cost, currency) + ', expenses are ' + money(expenses, currency) + ', and contribution after these costs is ' + money(contribution, currency) + '. ' + (top ? 'Largest recorded expense category: ' + top[0] + ' at ' + money(top[1], currency) + '. ' : '') + 'Next step: compare the same date range, check pending collections separately (' + money(pending.reduce((sum, s) => sum + s.total, 0), currency) + '), and verify taxes, payroll and other costs are captured before treating this as net profit.';
+    return 'Financial snapshot (all recorded periods):\nPaid revenue is ' + money(revenue, currency) + ', recorded product cost is ' + money(cost, currency) + ', expenses are ' + money(expenses, currency) + ', and contribution after these costs is ' + money(contribution, currency) + '. ' + (top ? 'Largest recorded expense category: ' + top[0] + ' at ' + money(top[1], currency) + '. ' : '') + 'Next step: compare the same date range, check pending collections separately (' + money(pending.reduce((sum, sale) => sum + salePaymentAmounts(sale).balance, 0), currency) + '), and verify taxes, payroll and other costs are captured before treating this as net profit.';
   }
   if (/target|revenue|sales|grow|growth/.test(q)) {
     if (!activeTarget) return 'Revenue planning:\nNo target is active today. You have ' + paid.length + ' paid sale(s) totalling ' + money(revenue, currency) + '. Create a target with dates and an amount, then track paid revenue and pending collections separately.';
