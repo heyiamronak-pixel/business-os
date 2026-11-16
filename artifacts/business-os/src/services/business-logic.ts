@@ -3,6 +3,8 @@ import type {
   BusinessState,
   InventoryMovement,
   Product,
+  PurchaseItem,
+  PurchasePaymentStatus,
   Sale,
   SaleItem,
 } from '@/domain/types';
@@ -147,4 +149,66 @@ export function revertSaleFromInventory(products: Product[], sale: Sale[]) {
       .reduce((sum, item) => sum + item.quantity, 0);
     return quantity ? { ...product, stock: product.stock + quantity, updatedAt: new Date().toISOString() } : product;
   });
+}
+export function createPurchaseItems(
+  products: Product[],
+  cart: Array<{ productId: string; quantity: number; unitCost: number }>,
+): PurchaseItem[] {
+  if (!cart.length) throw new Error('Add at least one product to the purchase.');
+  return cart.map((line) => {
+    if (!line.productId || !Number.isInteger(line.quantity) || line.quantity <= 0) {
+      throw new Error('Select a valid product and a whole quantity greater than zero.');
+    }
+    if (!Number.isFinite(line.unitCost) || line.unitCost < 0) {
+      throw new Error('Enter a valid unit purchase cost.');
+    }
+    const product = products.find((item) => item.id === line.productId);
+    if (!product) throw new Error('One of the selected products no longer exists.');
+    return {
+      productId: product.id,
+      name: product.name,
+      quantity: line.quantity,
+      unitCost: line.unitCost,
+      total: line.quantity * line.unitCost,
+    };
+  });
+}
+
+export function purchasePaymentSummary(total: number, paidAmount: number): {
+  paidAmount: number;
+  balance: number;
+  paymentStatus: PurchasePaymentStatus;
+} {
+  if (!Number.isFinite(total) || total < 0 || !Number.isFinite(paidAmount) || paidAmount < 0 || paidAmount > total) {
+    throw new Error('Enter a valid payment amount between zero and the purchase total.');
+  }
+  return {
+    paidAmount,
+    balance: total - paidAmount,
+    paymentStatus: paidAmount >= total && total > 0 ? 'Paid' : paidAmount > 0 ? 'Partial' : 'Pending',
+  };
+}
+
+export function applyPurchaseToInventory(
+  products: Product[],
+  items: PurchaseItem[],
+  movementFactory: (item: PurchaseItem) => InventoryMovement,
+  movements: InventoryMovement[],
+) {
+  const quantitiesByProduct = new Map<string, number>();
+  for (const item of items) {
+    quantitiesByProduct.set(
+      item.productId,
+      (quantitiesByProduct.get(item.productId) ?? 0) + item.quantity,
+    );
+  }
+  const now = new Date().toISOString();
+  const updatedProducts = products.map((product) => {
+    const quantity = quantitiesByProduct.get(product.id) ?? 0;
+    return quantity ? { ...product, stock: product.stock + quantity, updatedAt: now } : product;
+  });
+  return {
+    products: updatedProducts,
+    inventoryMovements: [...items.map(movementFactory), ...movements],
+  };
 }
