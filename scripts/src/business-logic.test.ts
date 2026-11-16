@@ -6,6 +6,10 @@ import {
   calculateMetrics,
   buildSaleReversalMovements,
   paidRevenueWithinRange,
+  salePaymentSummary,
+  salePaymentAmounts,
+  addSalePayment,
+  collectedSaleCost,
   createPurchaseItems,
   createSaleItems,
   inventoryMovementDelta,
@@ -250,4 +254,30 @@ test('deleting a sale creates traceable stock-in reversal movements', () => {
   assert.equal(movements[0].type, 'stock-in');
   assert.equal(movements[0].quantity, 2);
   assert.equal(movements[0].note, 'sale-void:sale-1');
+});
+
+test('sale collections support full, partial and pending payments', () => {
+  assert.deepEqual(salePaymentSummary(500, 500), { paidAmount: 500, balance: 0, paymentStatus: 'paid' });
+  assert.deepEqual(salePaymentSummary(500, 125), { paidAmount: 125, balance: 375, paymentStatus: 'partial' });
+  assert.deepEqual(salePaymentSummary(500, 0), { paidAmount: 0, balance: 500, paymentStatus: 'pending' });
+  assert.throws(() => salePaymentSummary(500, 501), /between zero/);
+});
+
+test('legacy paid and pending sales derive safe received and balance amounts', () => {
+  const base = { id: 'legacy', customerId: '', items: [], subtotal: 500, discount: 0, total: 500, costTotal: 200, grossProfit: 300, createdAt: '2026-11-16T10:00:00.000Z' };
+  assert.deepEqual(salePaymentAmounts({ ...base, paymentStatus: 'paid' }), { paidAmount: 500, balance: 0 });
+  assert.deepEqual(salePaymentAmounts({ ...base, paymentStatus: 'pending' }), { paidAmount: 0, balance: 500 });
+});
+
+test('additional customer payments reduce the balance and update sale status', () => {
+  const sale = { id: 's-partial', customerId: '', items: [], subtotal: 500, discount: 0, total: 500, costTotal: 200, grossProfit: 300, paymentStatus: 'partial' as const, paidAmount: 125, balance: 375, createdAt: '2026-11-16T10:00:00.000Z' };
+  assert.deepEqual(addSalePayment(sale, 100), { paidAmount: 225, balance: 275, paymentStatus: 'partial' });
+  assert.deepEqual(addSalePayment(sale, 375), { paidAmount: 500, balance: 0, paymentStatus: 'paid' });
+  assert.throws(() => addSalePayment(sale, 376), /between zero/);
+  assert.throws(() => addSalePayment(sale, 0), /greater than zero/);
+});
+
+test('collected sale cost is recognised proportionally to cash received', () => {
+  const sale = { id: 's-cost', customerId: '', items: [], subtotal: 500, discount: 0, total: 500, costTotal: 200, grossProfit: 300, paymentStatus: 'partial' as const, paidAmount: 125, balance: 375, createdAt: '2026-11-16T10:00:00.000Z' };
+  assert.equal(collectedSaleCost(sale), 50);
 });
