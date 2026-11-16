@@ -25,6 +25,31 @@ export function CockpitScreen() {
     <AppPage>
       <PageHeader title={greeting()} subtitle={business.name} />
 
+      <section className="relative mb-7 overflow-hidden rounded-[26px] bg-gradient-to-br from-[#122B42] via-[#155B66] to-[#168078] px-5 py-6 text-white shadow-[0_18px_42px_rgba(18,70,82,0.18)] sm:px-7 sm:py-7">
+        <div className="pointer-events-none absolute -right-12 -top-20 size-64 rounded-full border border-white/10" />
+        <div className="pointer-events-none absolute -right-2 -top-8 size-44 rounded-full border border-white/[0.07]" />
+        <div className="relative max-w-2xl">
+          <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.09] px-3 py-1.5 text-[9px] font-bold uppercase tracking-[0.18em] text-[#BFE8E1]">
+            <span className="size-1.5 rounded-full bg-[#76D9C5]" />
+            Business intelligence · Live workspace
+          </div>
+          <h2 className="max-w-xl text-[1.65rem] font-semibold leading-[1.12] tracking-[-0.05em] sm:text-[2rem]">
+            See the full picture.<br className="hidden sm:block" /> Move your business forward.
+          </h2>
+          <p className="mt-3 max-w-lg text-[12px] leading-5 text-white/75 sm:text-[13px]">
+            Sales, cash flow, team activity and operations — connected in one clear view for {business.name}.
+          </p>
+          <div className="mt-5 flex flex-wrap gap-2">
+            <Link to="/sell" className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-white px-4 text-xs font-semibold text-[#173B4D] shadow-sm transition-transform hover:-translate-y-0.5">
+              Record a sale <ArrowRight className="size-3.5" />
+            </Link>
+            <Link to="/reports" className="inline-flex min-h-10 items-center rounded-xl border border-white/20 bg-white/[0.08] px-4 text-xs font-semibold text-white transition-colors hover:bg-white/[0.14]">
+              View reports
+            </Link>
+          </div>
+        </div>
+      </section>
+
       {insights[0] ? (
         <Card className="mb-4 border-primary/20 bg-primary/6">
           <p className="text-xs font-medium uppercase tracking-wide text-primary">Why it happened</p>
@@ -33,10 +58,10 @@ export function CockpitScreen() {
         </Card>
       ) : null}
 
-      <section className="mb-5">
-        <h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-subtle">Business health</h2>
+      <section className="mb-7">
+        <div className="mb-3 flex items-center justify-between gap-3"><h2 className="text-sm font-semibold tracking-[-0.02em]">Business health</h2><span className="text-[10px] font-medium text-muted-foreground">{ctx.period.label}</span></div>
         {hasFinance ? (
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
             <Card>
               <Stat label="Revenue" value={m(ctx.kpis.revenue)} hint={ctx.period.label} />
             </Card>
@@ -53,7 +78,7 @@ export function CockpitScreen() {
             <Card>
               <Stat label="Margin" value={pct(ctx.kpis.margin, 1)} />
             </Card>
-            <Card className="col-span-2">
+            <Card className="col-span-2 xl:col-span-2">
               <Stat
                 label="Cash collected"
                 value={m(ctx.kpis.cashIn)}
@@ -76,8 +101,8 @@ export function CockpitScreen() {
 
       {spark.some((p) => p.revenue > 0) ? (
         <section className="mb-5">
-          <h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-subtle">Last 14 days</h2>
-          <Card className="h-20">
+          <h2 className="mb-3 text-sm font-semibold tracking-[-0.02em] text-foreground">Last 14 days</h2>
+          <Card className="panel-shadow h-24 border-0 bg-card p-4">
             <div className="flex h-full items-end gap-1">
               {spark.map((p) => (
                 <div
@@ -143,7 +168,7 @@ export function CockpitScreen() {
 
       <section className="mb-5">
         <h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-subtle">Operations</h2>
-        <Card className="divide-y divide-border p-0">
+        <Card className="panel-shadow divide-y divide-border/80 p-0">
           <OpRow label="Tasks due today" value={ctx.tasks.dueToday.length} href="/tasks" warn={ctx.tasks.dueToday.length > 0} />
           <OpRow label="Overdue tasks" value={ctx.tasks.overdue.length} href="/tasks" warn={ctx.tasks.overdue.length > 0} />
           <OpRow label="Low inventory" value={ctx.stock.low.length + ctx.stock.out.length} href="/inventory" warn={ctx.stock.out.length > 0} />
