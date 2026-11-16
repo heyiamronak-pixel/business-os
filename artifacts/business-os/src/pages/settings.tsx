@@ -56,6 +56,8 @@ export default function Settings() {
         tasks: data.tasks as BusinessState['tasks'],
         teamMembers: Array.isArray(data.teamMembers) ? data.teamMembers : [],
         campaigns: Array.isArray(data.campaigns) ? data.campaigns : [],
+        suppliers: Array.isArray(data.suppliers) ? data.suppliers : [],
+        purchases: Array.isArray(data.purchases) ? data.purchases : [],
       };
       setPreview(safeData);
     } catch (caught) {
@@ -104,7 +106,7 @@ export default function Settings() {
           <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[hsl(var(--muted))] text-[hsl(var(--foreground))]"><Download className="size-5" /></span>
           <div className="min-w-0 flex-1">
             <h3 className="text-sm font-semibold">Data backup</h3>
-            <p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">Download a JSON backup containing your workspace profile, products, inventory, customers, sales, expenses, targets, tasks, team directory and marketing campaigns.</p>
+            <p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">Download a JSON backup containing your workspace profile, products, inventory, customers, sales, expenses, targets, tasks, team directory, marketing campaigns, suppliers and purchases.</p>
             <button type="button" onClick={exportBackup} className="mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 text-sm font-semibold transition-colors hover:bg-[hsl(var(--muted))]"><Download className="size-4" /> Download backup</button>
           </div>
         </div>
@@ -122,7 +124,7 @@ export default function Settings() {
             {preview&&<div className="mt-4 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)] p-4">
               <div className="flex items-center gap-2"><ShieldCheck className="size-4 text-emerald-700"/><p className="text-xs font-semibold">Backup validated · Preview</p></div>
               <p className="mt-2 text-sm font-semibold">{preview.workspace?.businessName??'Workspace without a name'}</p>
-              <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">{[{label:'Products',count:preview.products.length},{label:'Customers',count:preview.customers.length},{label:'Sales',count:preview.sales.length},{label:'Expenses',count:preview.expenses.length},{label:'Tasks',count:preview.tasks.length},{label:'Team',count:preview.teamMembers.length},{label:'Campaigns',count:preview.campaigns.length},{label:'Stock movements',count:preview.inventoryMovements.length}].map(item=><div key={item.label} className="rounded-lg bg-[hsl(var(--card))] p-2"><p className="text-[hsl(var(--muted-foreground))]">{item.label}</p><p className="mt-1 font-semibold">{item.count}</p></div>)}</div>
+              <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">{[{label:'Products',count:preview.products.length},{label:'Customers',count:preview.customers.length},{label:'Sales',count:preview.sales.length},{label:'Expenses',count:preview.expenses.length},{label:'Tasks',count:preview.tasks.length},{label:'Team',count:preview.teamMembers.length},{label:'Campaigns',count:preview.campaigns.length},{label:'Suppliers',count:preview.suppliers.length},{label:'Purchases',count:preview.purchases.length},{label:'Stock movements',count:preview.inventoryMovements.length}].map(item=><div key={item.label} className="rounded-lg bg-[hsl(var(--card))] p-2"><p className="text-[hsl(var(--muted-foreground))]">{item.label}</p><p className="mt-1 font-semibold">{item.count}</p></div>)}</div>
               <p className="mt-3 text-[11px] leading-5 text-[hsl(var(--muted-foreground))]">Restoring replaces the current browser workspace with the selected backup. A backup of the current data will be downloaded first.</p>
               <label className="mt-3 flex items-start gap-2 text-xs leading-5"><input type="checkbox" checked={replaceConfirmed} onChange={e=>setReplaceConfirmed(e.target.checked)} className="mt-0.5"/><span>I understand the current workspace will be replaced by this backup.</span></label>
               <div className="mt-3 flex flex-wrap gap-2"><button type="button" disabled={!replaceConfirmed} onClick={confirmRestore} className="min-h-10 rounded-xl bg-[hsl(var(--primary))] px-4 text-xs font-semibold text-[hsl(var(--primary-foreground))] disabled:opacity-40">Download current backup & restore</button><button type="button" onClick={()=>{setPreview(null);setReplaceConfirmed(false);}} className="min-h-10 rounded-xl border border-[hsl(var(--border))] px-4 text-xs font-semibold">Cancel</button></div>
