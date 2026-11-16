@@ -392,7 +392,13 @@ export function FloatingAssistant() {
                 <p className="text-sm font-semibold">{assistantLabel(mode === "help" ? "What are you trying to do?" : "Ask about your business", activeLanguage)}</p>
                 <p className="mt-1 text-xs leading-5 text-muted-foreground">{mode === "help" ? (activeLanguage === "hinglish" ? "Main current screen ke hisaab se steps bataunga. Try: “Purchase kaise record karun?”" : "I can guide you through the current screen. Try: “How do I record a purchase?”") : (activeLanguage === "hinglish" ? "Sales, pending payments, stock, customers, purchases ya aaj ke focus ke baare mein poochho." : "Ask about sales, pending payments, stock, customers, purchases or today's priorities.")}</p>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {(mode === "help" ? ["How do I record a sale?", "How do I add a team member?", "Where can I see pending payments?"] : ADVISOR_PROMPTS.slice(0, 3)).map((prompt) => (
+                  {(mode === "help"
+                    ? activeLanguage === "hinglish"
+                      ? ["Sale kaise record karun?", "Team member kaise add karun?", "Pending payments kahan dekhu?"]
+                      : ["How do I record a sale?", "How do I add a team member?", "Where can I see pending payments?"]
+                    : activeLanguage === "hinglish"
+                      ? ["Aaj meri sales kaisi hain?", "Kitna customer payment pending hai?", "Mera stock kahan kam hai?"]
+                      : ADVISOR_PROMPTS.slice(0, 3)).map((prompt) => (
                     <button key={prompt} type="button" onClick={() => ask(prompt)} className="rounded-full border border-border bg-card px-3 py-2 text-left text-[11px] font-medium hover:border-primary/40 hover:text-primary">{prompt}</button>
                   ))}
                 </div>
