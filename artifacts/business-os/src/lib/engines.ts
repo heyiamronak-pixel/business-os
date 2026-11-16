@@ -871,7 +871,7 @@ export function advise(question: string, ctx: BusinessContext): AdvisorReply {
   if (/(purchase|supplier|vendor|payable|maal mang|khareed|kharid|supplier ko|vendor ko)/.test(q)) {
     return procurementAdvice(ctx, question);
   }
-  if (/(collection|collect|outstanding|unpaid|receivable|payment due|udhaar|paise lene|payment pending)/.test(q)) {
+  if (/(collection|collect|outstanding|unpaid|receivable|payment due|payment lena|lena baaki|udhaar|paise lene|payment pending)/.test(q)) {
     return collectionAdvice(ctx, question);
   }
   if (/(stock|inventory|reorder|restock|out of stock|low stock|maal kitna|stock kitna)/.test(q)) {
