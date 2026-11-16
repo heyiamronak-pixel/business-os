@@ -248,7 +248,7 @@ export function ReportsScreen() {
           ["year", "This year"],
           ["custom", "Custom dates"],
         ] as [Period, string][]).map(([value, label]) => (
-          <Button key={value} size="sm" variant={period === value ? "default" : "secondary"} onClick={() => setPeriod(value)}>{label}</Button>
+          <Button key={value} size="sm" variant={period === value ? "default" : "secondary"} onClick={() => { setPeriod(value); if (value === "custom") setFiltersOpen(true); }}>{label}</Button>
         ))}
         <Button size="sm" variant={filtersOpen ? "default" : "secondary"} onClick={() => setFiltersOpen((open) => !open)}>
           <Filter className="size-4" />
