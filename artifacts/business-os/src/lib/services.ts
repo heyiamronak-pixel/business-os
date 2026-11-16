@@ -361,7 +361,7 @@ export function upsertSupplier(
   const name = input.name.trim();
   if (!name) throw new ServiceError("Supplier name is required.");
   const email = input.email?.trim().toLowerCase() || undefined;
-  if (email && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+  if (email && !/^[^\s@]+@[^\s@]+\\.[^\s@]+$/.test(email)) {
     throw new ServiceError("Enter a valid supplier email address.");
   }
   const businessSuppliers = byBiz(db.suppliers, input.businessId);
@@ -457,8 +457,11 @@ export function createPurchase(
   });
   const subtotal = roundMoney(items.reduce((sum, item) => sum + item.total, 0));
   const total = subtotal;
+  if (!Number.isFinite(input.paidAmount)) {
+    throw new ServiceError("Enter a valid payment amount.");
+  }
   const paidAmount = roundMoney(input.paidAmount);
-  if (!Number.isFinite(paidAmount) || paidAmount < 0 || paidAmount > total) {
+  if (paidAmount < 0 || paidAmount > total) {
     throw new ServiceError("Amount paid must be between zero and the purchase total.");
   }
   const balance = roundMoney(total - paidAmount);
