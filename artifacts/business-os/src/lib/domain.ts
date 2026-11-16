@@ -370,6 +370,8 @@ export const CORE_IMPLEMENTED: ModuleId[] = [
   "targets",
   "tasks",
   "team",
+  "suppliers",
+  "purchases",
   "marketing",
   "reports",
 ];
@@ -380,6 +382,8 @@ export type AppHref =
   | "/products"
   | "/inventory"
   | "/customers"
+  | "/suppliers"
+  | "/purchases"
   | "/sales"
   | "/expenses"
   | "/targets"
@@ -415,7 +419,8 @@ export const MODULE_CATALOG: Record<ModuleId, ModuleDef> = {
   team: { id: "team", label: "Team", description: "People and roles", path: "/team", implemented: true },
   marketing: { id: "marketing", label: "Marketing", description: "Spend, leads, and ROAS", path: "/marketing", implemented: true },
   reports: { id: "reports", label: "Reports", description: "Financial, sales and marketing analytics", path: "/reports", implemented: true },
-  suppliers: { id: "suppliers", label: "Suppliers", description: "Vendor records", path: "/more", implemented: false },
+  suppliers: { id: "suppliers", label: "Suppliers", description: "Supplier contacts and purchase history", path: "/suppliers", implemented: true },
+  purchases: { id: "purchases", label: "Purchases", description: "Goods receipts, stock updates and supplier balances", path: "/purchases", implemented: true },
   bookings: { id: "bookings", label: "Bookings", description: "Reservations and trips", path: "/more", implemented: false },
   trips: { id: "trips", label: "Trips", description: "Itineraries", path: "/more", implemented: false },
   vehicles: { id: "vehicles", label: "Vehicles", description: "Fleet", path: "/more", implemented: false },
@@ -456,8 +461,8 @@ export const INDUSTRIES: IndustryDef[] = [
     id: "retail",
     label: "Retail",
     description: "Shops, boutiques, and product sellers",
-    recommended: ["products", "inventory", "pos", "customers", "expenses", "marketing", "targets", "tasks", "reports"],
-    extra: ["suppliers", "team"],
+    recommended: ["products", "inventory", "pos", "customers", "suppliers", "purchases", "expenses", "marketing", "targets", "tasks", "reports"],
+    extra: ["team"],
   },
   {
     id: "travel",
@@ -484,8 +489,8 @@ export const INDUSTRIES: IndustryDef[] = [
     id: "manufacturing",
     label: "Manufacturing",
     description: "Makers and production units",
-    recommended: ["products", "inventory", "sales", "customers", "expenses", "tasks", "targets", "reports"],
-    extra: ["materials", "suppliers", "production", "team"],
+    recommended: ["products", "inventory", "sales", "customers", "suppliers", "purchases", "expenses", "tasks", "targets", "reports"],
+    extra: ["materials", "production", "team"],
   },
   {
     id: "ecommerce",
@@ -498,7 +503,7 @@ export const INDUSTRIES: IndustryDef[] = [
     id: "restaurant",
     label: "Restaurant",
     description: "Cafes, kitchens, and QSR",
-    recommended: ["products", "inventory", "pos", "customers", "expenses", "tasks", "team", "targets", "reports"],
+    recommended: ["products", "inventory", "pos", "customers", "suppliers", "purchases", "expenses", "tasks", "team", "targets", "reports"],
     extra: ["menu", "reservations", "tables"],
   },
   {
@@ -526,7 +531,7 @@ export const INDUSTRIES: IndustryDef[] = [
     id: "other",
     label: "Other",
     description: "Start with the core operating system",
-    recommended: ["products", "inventory", "pos", "customers", "sales", "expenses", "targets", "tasks", "marketing", "reports"],
+    recommended: ["products", "inventory", "pos", "customers", "suppliers", "purchases", "sales", "expenses", "targets", "tasks", "marketing", "reports"],
     extra: ["team"],
   },
 ];
