@@ -16,35 +16,35 @@ export interface Palette {
 }
 
 const LIGHT_BASE: Omit<Palette, "primary" | "primaryFg"> = {
-  bg: "#F4F1EA",
-  bgElevated: "#FFFEFB",
-  bgSubtle: "#EDE8DC",
-  fg: "#1C1917",
-  fgMuted: "#57534E",
-  fgSubtle: "#78716C",
-  border: "color-mix(in oklab, #1C1917 12%, transparent)",
-  success: "#2F6F4E",
-  warning: "#8A5A12",
-  danger: "#9F2D2D",
+  bg: "#F4F7FB",
+  bgElevated: "#FFFFFF",
+  bgSubtle: "#EAF0F6",
+  fg: "#17263A",
+  fgMuted: "#53657B",
+  fgSubtle: "#8190A4",
+  border: "color-mix(in oklab, #24364D 10%, transparent)",
+  success: "#16835D",
+  warning: "#A66B1D",
+  danger: "#C24E5A",
 };
 
 const DARK_BASE: Omit<Palette, "primary" | "primaryFg"> = {
-  bg: "#12110F",
-  bgElevated: "#1C1B18",
-  bgSubtle: "#26241F",
-  fg: "#F4F1EA",
-  fgMuted: "#C4BDB3",
-  fgSubtle: "#8A847C",
-  border: "color-mix(in oklab, #F4F1EA 14%, transparent)",
-  success: "#7DCEA0",
-  warning: "#E0B15A",
-  danger: "#E07A7A",
+  bg: "#0C1421",
+  bgElevated: "#131F2D",
+  bgSubtle: "#1D2C3D",
+  fg: "#EDF4FA",
+  fgMuted: "#B6C4D4",
+  fgSubtle: "#8395AA",
+  border: "color-mix(in oklab, #DDE9F5 11%, transparent)",
+  success: "#65C99A",
+  warning: "#E5B35F",
+  danger: "#F18A92",
 };
 
 export const PRESET_ACCENTS: Record<Exclude<ThemePreset, "brand">, { light: string; dark: string }> = {
-  professional: { light: "#1B3A4B", dark: "#8FB4C7" },
-  modern: { light: "#0F5C54", dark: "#4DB6A8" },
-  contrast: { light: "#111111", dark: "#F3F3F3" },
+  professional: { light: "#2B526B", dark: "#93C4DC" },
+  modern: { light: "#176B73", dark: "#55C5BC" },
+  contrast: { light: "#17263A", dark: "#F2F6FA" },
 };
 
 export function luminance(hex: string): number {
@@ -80,7 +80,7 @@ export function rgbToHex(r: number, g: number, b: number): string {
 }
 
 export function contrastFg(hex: string): string {
-  return luminance(hex) > 0.45 ? "#1C1917" : "#F4F1EA";
+  return luminance(hex) > 0.45 ? "#17263A" : "#FFFFFF";
 }
 
 export function resolveAppearance(appearance: Appearance, prefersDark: boolean): "light" | "dark" {
