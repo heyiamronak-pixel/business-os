@@ -105,25 +105,25 @@ export function toHinglish(value: string): string {
 
   // Preserve exact figures while changing the sentence structure around them.
   result = result
-    .replace(/Booked revenue:\s*(.+?)\s+across\s+(\\d+) sales\\./i, (_match: string, amount: string, count: string) => `Booked revenue ${amount} hai (${count} sales mein).`)
-    .replace(/Cash collected:\s*(.+?); customer balances outstanding:\s*(.+?)\\./i, (_match: string, collected: string, pending: string) => `Cash collected ${collected} hai; customers se pending amount ${pending} hai.`)
-    .replace(/Average order value:\s*(.+?)\s+across\s+(\\d+) orders\\./i, (_match: string, amount: string, count: string) => `Average order value ${amount} hai (${count} orders ka average).`)
-    .replace(/Units sold:\s*(\\d+)\\./i, (_match: string, count: string) => `Total ${count} units sell hue.`)
-    .replace(/Customer receivables:\s*(.+?)\s+across\s+(\\d+) unpaid or partially paid sales\\./i, (_match: string, amount: string, count: string) => `Customers se pending payment ${amount} hai (${count} unpaid ya partial-payment sales mein).`)
-    .replace(/Cash received this month:\s*(.+?)\s+from\s+(.+?)\s+in booked sales\\./i, (_match: string, collected: string, booked: string) => `Is month receive hua cash ${collected} hai, total booked sales ${booked} mein se.`)
-    .replace(/Collection ratio this month:\s*(.+?) of booked revenue\\./i, (_match: string, ratio: string) => `Is month collection ratio ${ratio} hai (booked revenue ka).`)
-    .replace(/(\\d+) active products are in the catalogue\\./i, (_match: string, count: string) => `Catalogue mein ${count} active products hain.`)
-    .replace(/(\\d+) products are out of stock and (\\d+) are at or below minimum stock\\./i, (_match: string, zero: string, low: string) => `${zero} products ka stock khatam hai aur ${low} products minimum stock level par ya usse neeche hain.`)
-    .replace(/Out of stock:\s*(.+?)\\./i, (_match: string, items: string) => `Stock khatam hai: ${items}.`)
-    .replace(/Low stock:\s*(.+?)\\./i, (_match: string, items: string) => `Stock kam hai: ${items}.`)
-    .replace(/No unpaid customer sales are currently recorded\\./i, "Abhi koi unpaid customer sale record nahi hai.")
-    .replace(/Spend\s+(.+?); attributed revenue\s+(.+?)\\./i, (_match: string, spend: string, revenue: string) => `Ad spend ${spend} hai; attributed revenue ${revenue} hai.`)
-    .replace(/(\\d+) impressions, (\\d+) clicks, (\\d+) leads and (\\d+) attributed customers\\./i, (_match: string, impressions: string, clicks: string, leads: string, customers: string) => `${impressions} impressions, ${clicks} clicks, ${leads} leads aur ${customers} attributed customers.`)
-    .replace(/CTR:\s*(.+?); CPL:\s*(.+?); CAC:\s*(.+?)\\./i, (_match: string, ctr: string, cpl: string, cac: string) => `CTR: ${ctr}; CPL: ${cpl}; CAC: ${cac}.`)
-    .replace(/ROAS:\s*(.+?)\\./i, (_match: string, roas: string) => `ROAS ${roas hai.`)
-    .replace(/(\\d+) purchase records worth (.+?)\\./i, (_match: string, count: string, total: string) => `${count} purchase records ki total value ${total} hai.`)
-    .replace(/Paid to suppliers:\s*(.+?); outstanding:\s*(.+?)\s+across\s+(\\d+) open purchases\\./i, (_match: string, paid: string, pending: string, count: string) => `Suppliers ko paid amount ${paid} hai; ${count} open purchases mein ${pending} pending hai.`)
-    .replace(/Supplier payment ratio:\s*(.+?)\\./i, (_match: string, ratio: string) => `Supplier payment ratio ${ratio} hai.`);
+    .replace(/Booked revenue:\s*(.+?)\s+across\s+(\d+) sales\./i, (_match: string, amount: string, count: string) => `Booked revenue ${amount} hai (${count} sales mein).`)
+    .replace(/Cash collected:\s*(.+?); customer balances outstanding:\s*(.+?)\./i, (_match: string, collected: string, pending: string) => `Cash collected ${collected} hai; customers se pending amount ${pending} hai.`)
+    .replace(/Average order value:\s*(.+?)\s+across\s+(\d+) orders\./i, (_match: string, amount: string, count: string) => `Average order value ${amount} hai (${count} orders ka average).`)
+    .replace(/Units sold:\s*(\d+)\./i, (_match: string, count: string) => `Total ${count} units sell hue.`)
+    .replace(/Customer receivables:\s*(.+?)\s+across\s+(\d+) unpaid or partially paid sales\./i, (_match: string, amount: string, count: string) => `Customers se pending payment ${amount} hai (${count} unpaid ya partial-payment sales mein).`)
+    .replace(/Cash received this month:\s*(.+?)\s+from\s+(.+?)\s+in booked sales\./i, (_match: string, collected: string, booked: string) => `Is month receive hua cash ${collected} hai, total booked sales ${booked} mein se.`)
+    .replace(/Collection ratio this month:\s*(.+?) of booked revenue\./i, (_match: string, ratio: string) => `Is month collection ratio ${ratio} hai (booked revenue ka).`)
+    .replace(/(\d+) active products are in the catalogue\./i, (_match: string, count: string) => `Catalogue mein ${count} active products hain.`)
+    .replace(/(\d+) products are out of stock and (\d+) are at or below minimum stock\./i, (_match: string, zero: string, low: string) => `${zero} products ka stock khatam hai aur ${low} products minimum stock level par ya usse neeche hain.`)
+    .replace(/Out of stock:\s*(.+?)\./i, (_match: string, items: string) => `Stock khatam hai: ${items}.`)
+    .replace(/Low stock:\s*(.+?)\./i, (_match: string, items: string) => `Stock kam hai: ${items}.`)
+    .replace(/No unpaid customer sales are currently recorded\./i, "Abhi koi unpaid customer sale record nahi hai.")
+    .replace(/Spend\s+(.+?); attributed revenue\s+(.+?)\./i, (_match: string, spend: string, revenue: string) => `Ad spend ${spend} hai; attributed revenue ${revenue} hai.`)
+    .replace(/(\d+) impressions, (\d+) clicks, (\d+) leads and (\d+) attributed customers\./i, (_match: string, impressions: string, clicks: string, leads: string, customers: string) => `${impressions} impressions, ${clicks} clicks, ${leads} leads aur ${customers} attributed customers.`)
+    .replace(/CTR:\s*(.+?); CPL:\s*(.+?); CAC:\s*(.+?)\./i, (_match: string, ctr: string, cpl: string, cac: string) => `CTR: ${ctr}; CPL: ${cpl}; CAC: ${cac}.`)
+    .replace(/ROAS:\s*(.+?)\./i, (_match: string, roas: string) => `ROAS ${roas} hai.`)
+    .replace(/(\d+) purchase records worth (.+?)\./i, (_match: string, count: string, total: string) => `${count} purchase records ki total value ${total} hai.`)
+    .replace(/Paid to suppliers:\s*(.+?); outstanding:\s*(.+?)\s+across\s+(\d+) open purchases\./i, (_match: string, paid: string, pending: string, count: string) => `Suppliers ko paid amount ${paid} hai; ${count} open purchases mein ${pending} pending hai.`)
+    .replace(/Supplier payment ratio:\s*(.+?)\./i, (_match: string, ratio: string) => `Supplier payment ratio ${ratio} hai.`);
 
   for (const [pattern, replacement] of WORD_REPLACEMENTS) {
     result = result.replace(pattern, replacement);
