@@ -18,7 +18,7 @@ import { extractLogoColors, fileToDataUrl } from "@/lib/theme";
 import { deleteBranch, deleteBusiness, updateBusiness, upsertBranch } from "@/lib/services";
 import { isValidGstin } from "@/lib/invoice-utils";
 import { useAppStore, useBusiness } from "@/lib/store";
-import { SUBSCRIPTION_PLANS, getEffectivePlanId, getEffectiveSubscriptionPlan, getTrialStatus } from "@/lib/subscription";
+import { SUBSCRIPTION_PLANS, getEffectivePlanId, getEffectiveSubscriptionPlan, getSubscriptionPlan, getTrialStatus } from "@/lib/subscription";
 import { createId } from "@/lib/utils";
 
 export function SettingsScreen() {
