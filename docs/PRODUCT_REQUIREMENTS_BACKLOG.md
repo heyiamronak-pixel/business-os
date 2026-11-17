@@ -30,7 +30,8 @@ Business Sutra is a multi-industry business operating system—not only a dashbo
 - [ ] Complete the profile fields and validation for description, website, address, city, state, postal code and tax identity.
 - [ ] Verify the accessible palette roles (primary, secondary, accent, surface, background, text, muted text and border) are consistent across all controls, charts, alerts and navigation.
 - [ ] Enable/disable/reorder modules without silently restoring a module the user intentionally disabled.
-- [ ] Add branch records and branch-aware settings, stock, team, attendance, reports and permissions.
+- [x] Add local branch records, create/delete UI, default branch migration, team branch assignment and plan-cap enforcement.
+- [ ] Extend branch ownership into every transaction, stock record, attendance entry, report and server permission scope.
 - [ ] Complete multi-business switching and workspace-level export/delete/retention flows.
 
 ## 2. Owner dashboard / Business Cockpit
@@ -203,7 +204,8 @@ The app must recommend the relevant modules for the chosen industry and keep eac
 
 - [x] Local workspace persistence and JSON backup/restore foundations exist.
 - [ ] Complete CSV imports with preview, column mapping, validation, duplicate handling and rollback.
-- [ ] Add CSV export to all relevant modules.
+- [x] Add CSV export for products, inventory, customers, sales and expenses.
+- [ ] Extend CSV export to purchases, suppliers, tasks, leads and invoices; add validated CSV import workflows.
 - [ ] Add sample workspace as an explicitly opt-in demo, never mix demo records into real workspaces.
 - [ ] Add safe reset and restore flows with confirmation and backup.
 - [ ] Test persistence/migrations for old browser records, including new leads, tasks, invoice payments and subscription metadata.
@@ -215,7 +217,8 @@ Current plan definitions in code (display/configuration only; not paid billing):
 - Growth: ₹1,999/month or ₹19,990/year; maximum 5 users and 3 branches.
 - Trial status/countdown and plan selection history are local product UI; selecting a plan is not a payment or active paid subscription.
 - [x] Plan definitions, monthly/annual price display and local user-seat enforcement are in the integration work.
-- [ ] Add branch entities and enforce branch caps consistently.
+- [x] Add local branch entities and enforce branch caps when creating branches; the Starter/Growth cap is reflected in Settings.
+- [ ] Enforce branch entitlements on the server and across every transaction/attendance record.
 - [ ] Add usage display for users, branches, storage and advanced feature access.
 - [ ] Make plan entitlements testable and explain the feature limits before upgrading.
 - [ ] Payment gateway, renewals, invoices, tax and subscription webhooks are deferred.
