@@ -38,7 +38,7 @@ import { generateSku } from "@/lib/sku";
 import { normaliseLeadInput } from "@/lib/lead-utils";
 import { normaliseInvoiceCancellationReason } from "@/lib/invoice-utils";
 import { nextTaskDueDate } from "@/lib/task-utils";
-import { getSubscriptionPlan, hasAvailableUserSeat } from "@/lib/subscription";
+import { getEffectivePlanId, getSubscriptionPlan, hasAvailableBranchSlot, hasAvailableUserSeat } from "@/lib/subscription";
 
 export class ServiceError extends Error {
   constructor(message: string) {
@@ -986,9 +986,10 @@ export function upsertBranch(
     throw new ServiceError("A branch with this name or code already exists.");
   }
   if (!existing) {
-    const plan = getSubscriptionPlan(business.subscriptionPlan);
+    const effectivePlanId = getEffectivePlanId(business);
+    const plan = getSubscriptionPlan(effectivePlanId);
     const currentBranches = db.branches.filter((item) => item.businessId === input.businessId).length;
-    if (currentBranches >= plan.maxBranches) {
+    if (!hasAvailableBranchSlot(effectivePlanId, currentBranches)) {
       throw new ServiceError(plan.title + " includes up to " + plan.maxBranches + " branch" + (plan.maxBranches === 1 ? "" : "es") + ". Upgrade the plan to add another branch.");
     }
   }
@@ -1023,9 +1024,10 @@ export function upsertMember(
   const existing = input.id ? db.members.find((member) => member.id === input.id && member.businessId === input.businessId) : undefined;
   if (input.id && !existing) throw new ServiceError("Team member not found in this business.");
   if (!existing) {
-    const plan = getSubscriptionPlan(business.subscriptionPlan);
+    const effectivePlanId = getEffectivePlanId(business);
+    const plan = getSubscriptionPlan(effectivePlanId);
     const currentUsers = db.members.filter((member) => member.businessId === input.businessId).length;
-    if (!hasAvailableUserSeat(business.subscriptionPlan, currentUsers)) {
+    if (!hasAvailableUserSeat(effectivePlanId, currentUsers)) {
       throw new ServiceError(`${plan.title} includes up to ${plan.maxUsers} users. Upgrade the plan to add another team member.`);
     }
   }
