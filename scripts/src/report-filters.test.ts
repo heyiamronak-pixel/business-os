@@ -1,10 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  activeReportFilterCount,
+  emptyReportFilters,
   filterReportRecords,
   matchesReportFilters,
   type ReportFilterRecord,
-  type ReportFilterRule,
 } from "../../artifacts/business-os/src/lib/report-filters.ts";
 
 const records: ReportFilterRecord[] = [
@@ -17,6 +18,7 @@ const records: ReportFilterRecord[] = [
     category: "Sales",
     contact: "Aarav Sharma",
     details: "Blue shirt, cotton trousers",
+    productIds: ["shirt-1", "trouser-1"],
   },
   {
     id: "sale-2",
@@ -27,6 +29,7 @@ const records: ReportFilterRecord[] = [
     category: "Sales",
     contact: "Meera",
     details: "Shoes",
+    productIds: ["shoe-1"],
   },
   {
     id: "expense-1",
@@ -37,54 +40,96 @@ const records: ReportFilterRecord[] = [
     category: "Rent",
     contact: "Main store",
     details: "Monthly shop rent",
+    productIds: [],
+  },
+  {
+    id: "purchase-1",
+    recordType: "purchase",
+    amount: 4200,
+    status: "pending",
+    paymentMethod: "",
+    category: "Purchases",
+    contact: "North Star Textiles",
+    details: "Blue shirt stock",
+    productIds: ["shirt-1"],
   },
 ];
 
-const rule = (
-  id: string,
-  field: ReportFilterRule["field"],
-  operator: ReportFilterRule["operator"],
-  value: string,
-): ReportFilterRule => ({ id, field, operator, value });
-
-test("an empty custom filter leaves all report records visible", () => {
-  assert.equal(matchesReportFilters(records[0], []), true);
-  assert.equal(filterReportRecords(records, []).length, records.length);
+test("an empty report filter leaves every record visible", () => {
+  const filters = emptyReportFilters();
+  assert.equal(matchesReportFilters(records[0], filters), true);
+  assert.equal(filterReportRecords(records, filters).length, records.length);
+  assert.equal(activeReportFilterCount(filters), 0);
 });
 
-test("AND logic requires every active rule to match", () => {
-  const filters = [
-    rule("1", "recordType", "equals", "sale"),
-    rule("2", "status", "equals", "paid"),
-  ];
-  assert.deepEqual(filterReportRecords(records, filters, "all").map((record) => record.id), ["sale-1"]);
-});
-
-test("OR logic keeps records matching at least one rule", () => {
-  const filters = [
-    rule("1", "status", "equals", "unpaid"),
-    rule("2", "category", "equals", "Rent"),
-  ];
+test("product selection includes matching sales and purchases", () => {
+  const filters = { ...emptyReportFilters(), productIds: ["shirt-1"] };
   assert.deepEqual(
-    filterReportRecords(records, filters, "any").map((record) => record.id),
-    ["sale-2", "expense-1"],
+    filterReportRecords(records, filters).map((record) => record.id),
+    ["sale-1", "purchase-1"],
   );
 });
 
-test("amount rules support greater-than and less-than comparisons", () => {
-  const filters = [rule("1", "amount", "greater_than", "1000")];
-  assert.deepEqual(filterReportRecords(records, filters).map((record) => record.id), ["sale-1", "expense-1"]);
+test("multiple selected products are treated as OR within the product group", () => {
+  const filters = { ...emptyReportFilters(), productIds: ["shoe-1", "trouser-1"] };
+  assert.deepEqual(
+    filterReportRecords(records, filters).map((record) => record.id),
+    ["sale-1", "sale-2"],
+  );
 });
 
-test("text contains matching is case-insensitive", () => {
-  const filters = [rule("1", "contact", "contains", "AARAV")];
-  assert.deepEqual(filterReportRecords(records, filters).map((record) => record.id), ["sale-1"]);
+test("different filter groups are combined with AND", () => {
+  const filters = {
+    ...emptyReportFilters(),
+    recordTypes: ["sale"] as const,
+    statuses: ["paid"],
+  };
+  assert.deepEqual(
+    filterReportRecords(records, filters).map((record) => record.id),
+    ["sale-1"],
+  );
 });
 
-test("blank rules are ignored instead of accidentally hiding all records", () => {
-  const filters = [
-    rule("1", "recordType", "equals", ""),
-    rule("2", "category", "contains", " "),
-  ];
+test("amount range filters include both boundary values", () => {
+  const filters = { ...emptyReportFilters(), minAmount: "900", maxAmount: "2500" };
+  assert.deepEqual(
+    filterReportRecords(records, filters).map((record) => record.id),
+    ["sale-1", "sale-2", "expense-1"],
+  );
+});
+
+test("contact search is case-insensitive", () => {
+  const filters = { ...emptyReportFilters(), contactQuery: "NORTH STAR" };
+  assert.deepEqual(
+    filterReportRecords(records, filters).map((record) => record.id),
+    ["purchase-1"],
+  );
+});
+
+test("payment mode, category and record type can be combined", () => {
+  const filters = {
+    ...emptyReportFilters(),
+    recordTypes: ["sale"] as const,
+    paymentMethods: ["upi"],
+    categories: ["Sales"],
+  };
+  assert.deepEqual(
+    filterReportRecords(records, filters).map((record) => record.id),
+    ["sale-1"],
+  );
+});
+
+test("active filter count counts selected choices and filled ranges", () => {
+  const filters = {
+    ...emptyReportFilters(),
+    recordTypes: ["sale"] as const,
+    productIds: ["shirt-1", "shoe-1"],
+    minAmount: "1000",
+  };
+  assert.equal(activeReportFilterCount(filters), 4);
+});
+
+test("blank contact search and amount ranges do not hide records", () => {
+  const filters = { ...emptyReportFilters(), contactQuery: "  ", minAmount: "", maxAmount: "" };
   assert.equal(filterReportRecords(records, filters).length, records.length);
 });
