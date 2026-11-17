@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normaliseLeadInput } from "../../artifacts/business-os/src/lib/lead-utils.ts";
+import { normaliseLeadInput, isLeadFollowUpDue } from "../../artifacts/business-os/src/lib/lead-utils.ts";
 
 test("lead validation trims names, normalises email and money", () => {
   assert.deepEqual(normaliseLeadInput({ name: "  Acme  ", email: " SALES@ACME.COM ", value: 120.456, stage: "qualified" }), {
