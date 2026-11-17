@@ -10,6 +10,7 @@ import {
   type Expense,
   type ExpenseCategory,
   type IndustryId,
+  type InvoiceRecord,
   type ModuleId,
   type PaymentMethod,
   type Product,
@@ -318,6 +319,16 @@ export function adjustStock(
   };
 }
 
+export function cancelInvoice(db: WorkspaceDB, id: string, reason: string): WorkspaceDB {
+  const invoice = db.invoices.find((item) => item.id === id);
+  if (!invoice) throw new ServiceError("Invoice not found.");
+  if (invoice.status === "cancelled") throw new ServiceError("This invoice is already cancelled.");
+  const cancellationReason = reason.trim();
+  if (cancellationReason.length < 3) throw new ServiceError("Add a cancellation reason (at least 3 characters).");
+  const now = nowIso();
+  const updated: InvoiceRecord = { ...invoice, status: 'cancelled', cancelReason: cancellationReason, cancelledAt: now, updatedAt: now };
+  return { ...db, invoices: replace(db.invoices, id, updated) };
+}
 export function upsertCustomer(
   db: WorkspaceDB,
   input: {
