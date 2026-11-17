@@ -231,6 +231,8 @@ export function SettingsScreen() {
               <p className="text-sm font-semibold">{plan.title}</p><p className="mt-3 text-3xl font-semibold tracking-tight tabular-nums">₹{amount.toLocaleString("en-IN")}<span className="ml-1 text-xs font-normal text-muted-foreground">/{annualBilling?"year":"month"}</span></p><p className="mt-1 text-xs text-muted-foreground">Up to {plan.maxUsers} users · {plan.maxBranches} {plan.maxBranches === 1 ? "branch" : "branches"}</p>
               <ul className="mt-4 space-y-2">{plan.features.map((feature)=><li key={feature} className="flex gap-2 text-xs"><span className="text-primary">✓</span><span>{feature}</span></li>)}</ul>
               <Button className="mt-5 w-full" variant={selected?"secondary":"default"} onClick={()=>{
+  if (teamUsage > plan.maxUsers) { toast.error(plan.title + " allows " + plan.maxUsers + " users. Remove or reassign seats before selecting this plan."); return; }
+  if (branches.length > plan.maxBranches) { toast.error(plan.title + " allows " + plan.maxBranches + " branches. Archive extra branches before selecting this plan."); return; }
   const cycle: SubscriptionBillingCycle = annualBilling ? "annual" : "monthly";
   const history = [...(business.subscriptionHistory ?? []), {
     id: createId("sub"), fromPlan: business.subscriptionPlan, toPlan: plan.id,
