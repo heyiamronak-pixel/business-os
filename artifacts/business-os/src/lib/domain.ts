@@ -290,7 +290,21 @@ export interface TeamMember {
   role: Role;
   email?: string;
   phone?: string;
+  branchIds?: string[];
   createdAt: string;
+}
+
+export interface Branch {
+  id: string;
+  businessId: string;
+  name: string;
+  code: string;
+  address?: string;
+  timezone?: string;
+  isDefault: boolean;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export type TaskRecurrence = "none" | "daily" | "weekly" | "monthly";
@@ -375,6 +389,7 @@ export interface WorkspaceDB {
   expenseCategories: ExpenseCategory[];
   targets: Target[];
   members: TeamMember[];
+  branches: Branch[];
   tasks: TaskItem[];
   campaigns: Campaign[];
   activity: Activity[];
@@ -669,6 +684,7 @@ export function emptyDb(): WorkspaceDB {
     expenseCategories: [],
     targets: [],
     members: [],
+    branches: [],
     tasks: [],
     campaigns: [],
     activity: [],
