@@ -26,6 +26,7 @@ function migrate(raw: unknown): PersistedState {
     suppliers: Array.isArray(saved.suppliers) ? saved.suppliers : [],
     purchases: Array.isArray(saved.purchases) ? saved.purchases : [],
     invoices: Array.isArray(saved.invoices) ? saved.invoices : [],
+    leads: Array.isArray(saved.leads) ? saved.leads : [],
     businesses: Array.isArray(saved.businesses) ? saved.businesses.map((entry) => {
       const business = isObject(entry) ? entry : {};
       const enabled = Array.isArray(business.enabledModules) ? business.enabledModules as string[] : [];
