@@ -5,6 +5,7 @@ import {
   type Activity,
   type AppNotification,
   type Business,
+  type Branch,
   type Campaign,
   type Customer,
   type Lead,
@@ -118,12 +119,23 @@ export function createWorkspace(
     createdAt: now,
     updatedAt: now,
   };
+  const mainBranch: Branch = {
+    id: createId("br"),
+    businessId: business.id,
+    name: "Main Branch",
+    code: "MAIN",
+    isDefault: true,
+    isActive: true,
+    createdAt: now,
+    updatedAt: now,
+  };
   const owner: TeamMember = {
     id: createId("mem"),
     businessId: business.id,
     name: input.ownerName?.trim() || "Owner",
     role: "owner",
     email: input.email?.trim() || undefined,
+    branchIds: [mainBranch.id],
     createdAt: now,
   };
   const cats: ExpenseCategory[] = SYSTEM_EXPENSE_CATEGORIES.map((name) => ({
@@ -136,6 +148,7 @@ export function createWorkspace(
     db: {
       ...db,
       businesses: [...db.businesses, business],
+    branches: [...db.branches, mainBranch],
       members: [...db.members, owner],
       expenseCategories: [...db.expenseCategories, ...cats],
     },
@@ -172,6 +185,7 @@ export function deleteBusiness(db: WorkspaceDB, id: string): WorkspaceDB {
     activity: drop(db.activity),
     notifications: drop(db.notifications),
     invoices: drop(db.invoices),
+    branches: db.branches.filter((item) => item.businessId !== id),
   };
 }
 
@@ -956,9 +970,51 @@ export function addTaskComment(db: WorkspaceDB, id: string, body: string, author
 export function deleteTask(db: WorkspaceDB, id: string): WorkspaceDB {
   return { ...db, tasks: db.tasks.filter((t) => t.id !== id) };
 }
+export function upsertBranch(
+  db: WorkspaceDB,
+  input: { id?: string; businessId: string; name: string; code?: string; address?: string; timezone?: string; isActive?: boolean },
+): { db: WorkspaceDB; branch: Branch } {
+  const business = db.businesses.find((item) => item.id === input.businessId);
+  if (!business) throw new ServiceError("Business not found.");
+  const name = input.name.trim();
+  if (name.length < 2) throw new ServiceError("Enter a branch name.");
+  const existing = input.id ? db.branches.find((item) => item.id === input.id && item.businessId === input.businessId) : undefined;
+  if (input.id && !existing) throw new ServiceError("Branch not found in this business.");
+  const code = (input.code?.trim() || name.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").slice(0, 12)).toUpperCase();
+  if (!code || !/^[A-Z0-9-]{2,12}$/.test(code)) throw new ServiceError("Branch code must be 2–12 letters, numbers or hyphens.");
+  if (db.branches.some((item) => item.businessId === input.businessId && item.id !== input.id && (item.code.toUpperCase() === code || item.name.trim().toLowerCase() === name.toLowerCase()))) {
+    throw new ServiceError("A branch with this name or code already exists.");
+  }
+  if (!existing) {
+    const plan = getSubscriptionPlan(business.subscriptionPlan);
+    const currentBranches = db.branches.filter((item) => item.businessId === input.businessId).length;
+    if (currentBranches >= plan.maxBranches) {
+      throw new ServiceError(plan.title + " includes up to " + plan.maxBranches + " branch" + (plan.maxBranches === 1 ? "" : "es") + ". Upgrade the plan to add another branch.");
+    }
+  }
+  const now = nowIso();
+  const branch: Branch = {
+    id: existing?.id ?? createId("br"), businessId: input.businessId, name, code,
+    address: input.address?.trim() || undefined, timezone: input.timezone?.trim() || business.timezone,
+    isDefault: existing?.isDefault ?? false, isActive: input.isActive ?? existing?.isActive ?? true,
+    createdAt: existing?.createdAt ?? now, updatedAt: now,
+  };
+  return { db: { ...db, branches: existing ? replace(db.branches, branch.id, branch) : [...db.branches, branch] }, branch };
+}
+
+export function deleteBranch(db: WorkspaceDB, branchId: string): WorkspaceDB {
+  const branch = db.branches.find((item) => item.id === branchId);
+  if (!branch) return db;
+  if (branch.isDefault) throw new ServiceError("The default branch cannot be deleted.");
+  if (db.members.some((member) => member.businessId === branch.businessId && member.branchIds?.includes(branchId))) {
+    throw new ServiceError("This branch is assigned to team members. Reassign them before deleting it.");
+  }
+  return { ...db, branches: db.branches.filter((item) => item.id !== branchId) };
+}
+
 export function upsertMember(
   db: WorkspaceDB,
-  input: { id?: string; businessId: string; name: string; role: TeamMember["role"]; email?: string; phone?: string },
+  input: { id?: string; businessId: string; name: string; role: TeamMember["role"]; email?: string; phone?: string; branchIds?: string[] },
 ): WorkspaceDB {
   const name = input.name.trim();
   if (!name) throw new ServiceError("Name is required.");
@@ -973,18 +1029,22 @@ export function upsertMember(
       throw new ServiceError(`${plan.title} includes up to ${plan.maxUsers} users. Upgrade the plan to add another team member.`);
     }
   }
+  const branchIds = Array.from(new Set(input.branchIds ?? existing?.branchIds ?? db.branches.filter((item) => item.businessId === input.businessId && item.isActive).map((item) => item.id)));
+  if (branchIds.some((branchId) => !db.branches.some((item) => item.id === branchId && item.businessId === input.businessId && item.isActive))) {
+    throw new ServiceError("Choose active branches from this business only.");
+  }
   const now = nowIso();
   if (existing) {
     return {
       ...db,
       members: replace(db.members, input.id!, {
-        name, role: input.role, email: input.email?.trim() || undefined, phone: input.phone?.trim() || undefined,
+        name, role: input.role, email: input.email?.trim() || undefined, phone: input.phone?.trim() || undefined, branchIds,
       }),
     };
   }
   const member: TeamMember = {
     id: createId("mem"), businessId: input.businessId, name, role: input.role,
-    email: input.email?.trim() || undefined, phone: input.phone?.trim() || undefined, createdAt: now,
+    email: input.email?.trim() || undefined, phone: input.phone?.trim() || undefined, branchIds, createdAt: now,
   };
   return { ...db, members: [...db.members, member] };
 }
