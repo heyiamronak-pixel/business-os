@@ -3,11 +3,11 @@ import { Download } from "lucide-react";
 import { toast } from "sonner";
 import { AppPage, ConfirmBar, PageHeader } from "@/components/app-shell";
 import { BottomSheet } from "@/components/sheet";
-import { Button, Card, EmptyState, Field, Input, Select, Stat } from "@/components/ui";
-import type { Expense } from "@/lib/domain";
+import { Button, Card, EmptyState, Field, Input, Select, Stat, Segmented } from "@/components/ui";
+import type { Expense, RecordedPaymentMethod } from "@/lib/domain";
 import { downloadCsv } from "@/lib/csv";
 import { formatDate, money } from "@/lib/format";
-import { addExpenseCategory, deleteExpense, upsertExpense } from "@/lib/services";
+import { addExpenseCategory, archiveExpense, upsertExpense } from "@/lib/services";
 import { useAppStore, useBusiness } from "@/lib/store";
 import { monthRange } from "@/lib/engines";
 
@@ -23,13 +23,17 @@ export function ExpensesScreen() {
   const [vendor, setVendor] = React.useState("");
   const [notes, setNotes] = React.useState("");
   const [date, setDate] = React.useState(new Date().toISOString().slice(0, 10));
+  const [paymentMethod, setPaymentMethod] = React.useState<RecordedPaymentMethod>("cash");
+  const [reference, setReference] = React.useState("");
+  const [archiveFilter, setArchiveFilter] = React.useState<"active" | "archived" | "all">("active");
   const [newCat, setNewCat] = React.useState("");
 
   if (!business) return null;
   const cats = db.expenseCategories.filter((c) => c.businessId === business.id);
   const range = monthRange();
-  const expenses = db.expenses.filter((e) => e.businessId === business.id);
-  const month = expenses.filter((e) => e.date >= range.from.toISOString().slice(0, 10) && e.date <= range.to.toISOString().slice(0, 10));
+  const allExpenses = db.expenses.filter((e) => e.businessId === business.id);
+  const expenses = allExpenses.filter((e) => archiveFilter === "all" || (archiveFilter === "archived" ? e.archived : !e.archived));
+  const month = allExpenses.filter((e) => !e.archived && e.date >= range.from.toISOString().slice(0, 10) && e.date <= range.to.toISOString().slice(0, 10));
   const total = month.reduce((s, e) => s + e.amount, 0);
   const byCat = new Map<string, number>();
   for (const e of month) byCat.set(e.category, (byCat.get(e.category) ?? 0) + e.amount);
@@ -41,6 +45,8 @@ export function ExpensesScreen() {
     setVendor("");
     setNotes("");
     setDate(new Date().toISOString().slice(0, 10));
+    setPaymentMethod("cash");
+    setReference("");
     setOpen(true);
   }
 
@@ -51,13 +57,15 @@ export function ExpensesScreen() {
     setVendor(e.vendor ?? "");
     setNotes(e.notes ?? "");
     setDate(e.date.slice(0, 10));
+    setPaymentMethod(e.paymentMethod ?? "other");
+    setReference(e.reference ?? "");
     setOpen(true);
   }
 
   function exportExpenses() {
     downloadCsv("business-sutra-expenses.csv",
-      ["Date", "Category", "Amount", "Vendor", "Notes"],
-      expenses.map((expense) => [expense.date, expense.category, expense.amount, expense.vendor, expense.notes]));
+      ["Date", "Category", "Amount", "Vendor", "Payment method", "Reference", "Notes"],
+      expenses.map((expense) => [expense.date, expense.category, expense.amount, expense.vendor, expense.paymentMethod, expense.reference, expense.notes]));
     toast.success("Exported " + expenses.length + " expenses");
   }
 
@@ -73,6 +81,8 @@ export function ExpensesScreen() {
           vendor,
           notes,
           date,
+          paymentMethod,
+          reference,
         }),
       );
       toast.success(editing ? "Expense updated" : "Expense added");
@@ -96,6 +106,13 @@ export function ExpensesScreen() {
         <Card>
           <Stat label="Entries" value={String(month.length)} />
         </Card>
+      </div>
+      <div className="mb-3">
+        <Segmented value={archiveFilter} onChange={(value) => setArchiveFilter(value as typeof archiveFilter)} options={[
+          { id: "active", label: "Active" },
+          { id: "archived", label: "Archived" },
+          { id: "all", label: "All" },
+        ]} />
       </div>
       {byCat.size > 0 ? (
         <Card className="mb-4 space-y-2">
@@ -143,8 +160,8 @@ export function ExpensesScreen() {
               Save
             </Button>
             {editing ? (
-              <Button variant="ghost" className="w-full text-danger" onClick={() => setConfirm(editing.id)}>
-                Delete
+              <Button variant="ghost" className="w-full" onClick={() => setConfirm(editing.id)}>
+                {editing.archived ? "Restore expense" : "Archive expense"}
               </Button>
             ) : null}
           </div>
@@ -184,6 +201,14 @@ export function ExpensesScreen() {
           <Field label="Date">
             <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </Field>
+          <Field label="Payment method">
+            <Select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as RecordedPaymentMethod)}>
+              <option value="cash">Cash</option><option value="upi">UPI</option><option value="bank">Bank transfer</option><option value="card">Card</option><option value="other">Other</option>
+            </Select>
+          </Field>
+          <Field label="Payment reference (optional)">
+            <Input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="UTR / transaction reference" />
+          </Field>
           <Field label="Vendor">
             <Input value={vendor} onChange={(e) => setVendor(e.target.value)} />
           </Field>
@@ -195,22 +220,26 @@ export function ExpensesScreen() {
       <BottomSheet
         open={!!confirm}
         onOpenChange={() => setConfirm(null)}
-        title="Delete expense?"
+        title={allExpenses.find((expense) => expense.id === confirm)?.archived ? "Restore expense?" : "Archive expense?"}
         footer={
           <ConfirmBar
-            danger
-            confirmLabel="Delete"
+            confirmLabel={allExpenses.find((expense) => expense.id === confirm)?.archived ? "Restore" : "Archive"}
             onCancel={() => setConfirm(null)}
             onConfirm={() => {
-              apply(deleteExpense(useAppStore.getState().db, confirm!));
-              toast.success("Expense removed");
-              setConfirm(null);
-              setOpen(false);
+              try {
+                const target = allExpenses.find((expense) => expense.id === confirm);
+                apply(archiveExpense(useAppStore.getState().db, business.id, confirm!, !target?.archived));
+                toast.success(target?.archived ? "Expense restored" : "Expense archived");
+                setConfirm(null);
+                setOpen(false);
+              } catch (error) {
+                toast.error(error instanceof Error ? error.message : "Could not update expense");
+              }
             }}
           />
         }
       >
-        <p className="text-sm text-muted-foreground">This changes net profit for the period.</p>
+        <p className="text-sm text-muted-foreground">Archived expenses are excluded from current profit reports but remain in history and can be restored.</p>
       </BottomSheet>
     </AppPage>
   );

@@ -273,6 +273,9 @@ export interface Expense {
   vendor?: string;
   notes?: string;
   date: string;
+  paymentMethod?: RecordedPaymentMethod;
+  reference?: string;
+  archived?: boolean;
   createdAt: string;
 }
 

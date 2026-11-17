@@ -38,7 +38,7 @@ function salesIn(db: WorkspaceDB, businessId: string, range?: DateRange): Sale[]
 }
 
 function expensesIn(db: WorkspaceDB, businessId: string, range?: DateRange): Expense[] {
-  return db.expenses.filter((e) => e.businessId === businessId && (!range || inRange(e.date, range)));
+  return db.expenses.filter((e) => e.businessId === businessId && !e.archived && (!range || inRange(e.date, range)));
 }
 
 export interface FinanceSnapshot {

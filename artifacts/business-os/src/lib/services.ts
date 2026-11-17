@@ -926,6 +926,8 @@ export function upsertExpense(
     vendor?: string;
     notes?: string;
     date: string;
+    paymentMethod?: RecordedPaymentMethod;
+    reference?: string;
   },
 ): WorkspaceDB {
   if (!input.category.trim()) throw new ServiceError("Choose a category.");
@@ -945,6 +947,8 @@ export function upsertExpense(
         vendor: input.vendor?.trim() || undefined,
         notes: input.notes?.trim() || undefined,
         date: input.date,
+        paymentMethod: input.paymentMethod ?? existing.paymentMethod ?? "other",
+        reference: input.reference?.trim() || undefined,
       }),
     };
   }
@@ -956,13 +960,23 @@ export function upsertExpense(
     vendor: input.vendor?.trim() || undefined,
     notes: input.notes?.trim() || undefined,
     date: input.date,
+    paymentMethod: input.paymentMethod ?? "other",
+    reference: input.reference?.trim() || undefined,
+    archived: false,
     createdAt: now,
   };
   return { ...db, expenses: [expense, ...db.expenses] };
 }
 
-export function deleteExpense(db: WorkspaceDB, id: string): WorkspaceDB {
-  return { ...db, expenses: db.expenses.filter((e) => e.id !== id) };
+export function archiveExpense(db: WorkspaceDB, businessId: string, id: string, archived = true): WorkspaceDB {
+  const expense = db.expenses.find((item) => item.id === id && item.businessId === businessId);
+  if (!expense) throw new ServiceError("Expense not found in this business.");
+  return { ...db, expenses: replace(db.expenses, id, { archived }) };
+}
+
+/** Expense records are part of the financial audit trail; use archiveExpense instead. */
+export function deleteExpense(_db: WorkspaceDB, _id: string): WorkspaceDB {
+  throw new ServiceError("Expenses are archived, not deleted, so historical financial reports remain auditable.");
 }
 
 export function addExpenseCategory(db: WorkspaceDB, businessId: string, name: string): WorkspaceDB {
