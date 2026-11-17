@@ -265,7 +265,7 @@ export function SettingsScreen() {
                   if (overBranches) { toast.error(plan.title + " allows " + plan.maxBranches + " branches. Remove or archive extra branches before downgrading."); return; }
                   const cycle: SubscriptionBillingCycle = annualBilling ? "annual" : "monthly";
                   const history = [...(business.subscriptionHistory ?? []), {
-                    id: createId("sub"), fromPlan: business.subscriptionPlan, toPlan: plan.id,
+                    id: createId("sub"), fromPlan: currentPlanId, toPlan: plan.id,
                     billingCycle: cycle, changedAt: new Date().toISOString(), source: "selection" as const,
                   }];
                   patch({ subscriptionPlan: plan.id, subscriptionStatus: "selected", subscriptionBillingCycle: cycle, subscriptionHistory: history });
