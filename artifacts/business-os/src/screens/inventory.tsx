@@ -2,6 +2,7 @@ import * as React from "react";
 import { Download } from "lucide-react";
 import { toast } from "sonner";
 import { AppPage, PageHeader, SearchField } from "@/components/app-shell";
+import { SavedViewControls } from "@/components/saved-view-controls";
 import { BottomSheet } from "@/components/sheet";
 import { Badge, Button, EmptyState, Field, Input, Segmented, Select } from "@/components/ui";
 import type { MovementType, Product } from "@/lib/domain";
@@ -63,6 +64,10 @@ export function InventoryScreen() {
     <AppPage>
       <PageHeader title="Inventory" subtitle="Stock in, out, and adjustments" action={<Button size="sm" variant="secondary" onClick={exportInventory} disabled={!list.length}><Download className="size-4" />Export</Button>} />
       <SearchField value={q} onChange={setQ} placeholder="Search stock" />
+      <SavedViewControls businessId={business.id} moduleKey="inventory" filters={{ q, filter }} onApply={(saved) => {
+        setQ(saved.q ?? "");
+        setFilter((saved.filter as typeof filter) ?? "all");
+      }} />
       <div className="mb-3">
         <Segmented
           value={filter}
