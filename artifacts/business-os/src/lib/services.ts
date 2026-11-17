@@ -31,6 +31,7 @@ import {
 } from "@/lib/domain";
 import { createId, nowIso, roundMoney } from "@/lib/utils";
 import { generateSku } from "@/lib/sku";
+import { normaliseInvoiceCancellationReason } from "@/lib/invoice-utils";
 
 export class ServiceError extends Error {
   constructor(message: string) {
@@ -323,8 +324,9 @@ export function cancelInvoice(db: WorkspaceDB, id: string, reason: string): Work
   const invoice = db.invoices.find((item) => item.id === id);
   if (!invoice) throw new ServiceError("Invoice not found.");
   if (invoice.status === "cancelled") throw new ServiceError("This invoice is already cancelled.");
-  const cancellationReason = reason.trim();
-  if (cancellationReason.length < 3) throw new ServiceError("Add a cancellation reason (at least 3 characters).");
+  let cancellationReason: string;
+  try { cancellationReason = normaliseInvoiceCancellationReason(reason); }
+  catch (error) { throw new ServiceError(error instanceof Error ? error.message : 'Invalid cancellation reason.'); }
   const now = nowIso();
   const updated: InvoiceRecord = { ...invoice, status: 'cancelled', cancelReason: cancellationReason, cancelledAt: now, updatedAt: now };
   return { ...db, invoices: replace(db.invoices, id, updated) };
