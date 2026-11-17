@@ -2,6 +2,7 @@ import * as React from "react";
 import { toast } from "sonner";
 import { AppPage, ConfirmBar, PageHeader } from "@/components/app-shell";
 import { PlanFeatureGate } from "@/components/plan-feature-gate";
+import { getEffectiveSubscriptionPlan } from "@/lib/subscription";
 import { BottomSheet } from "@/components/sheet";
 import { Badge, Button, EmptyState, Field, Input, Select } from "@/components/ui";
 import { canRole, type Role, type TeamMember } from "@/lib/domain";
@@ -23,6 +24,8 @@ export function TeamScreen() {
   if (!business) return null;
   const members = db.members.filter((m) => m.businessId === business.id);
   const branches = db.branches.filter((item) => item.businessId === business.id && item.isActive);
+  const currentPlan = getEffectiveSubscriptionPlan(business);
+  const seatsFull = members.length >= currentPlan.maxUsers;
 
   function open(m?: TeamMember) {
     if (m) {
@@ -68,7 +71,7 @@ export function TeamScreen() {
       <PageHeader
         title="Team"
         subtitle="Roles control who can see revenue, costs and settings"
-        action={<Button size="sm" onClick={() => open()}>Add</Button>}
+        action={<div className="flex items-center gap-2"><span className="text-[10px] tabular-nums text-muted-foreground">{members.length}/{currentPlan.maxUsers} seats</span><Button size="sm" onClick={() => open()} disabled={seatsFull}>Add</Button></div>}
       />
       {members.length === 0 ? (
         <EmptyState title="No team members" body="The owner is created during setup. Add people to assign tasks." />
