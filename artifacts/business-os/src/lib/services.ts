@@ -30,6 +30,7 @@ import {
 } from "@/lib/domain";
 import { createId, nowIso, roundMoney } from "@/lib/utils";
 import { generateSku } from "@/lib/sku";
+import { nextTaskDueDate } from "@/lib/task-utils";
 
 export class ServiceError extends Error {
   constructor(message: string) {
@@ -826,59 +827,70 @@ export function deleteTarget(db: WorkspaceDB, id: string): WorkspaceDB {
 export function upsertTask(
   db: WorkspaceDB,
   input: {
-    id?: string;
-    businessId: string;
-    title: string;
-    description?: string;
-    assignedTo?: string;
-    priority: TaskPriority;
-    dueDate?: string;
-    reminder?: string;
-    status?: TaskStatus;
+    id?: string; businessId: string; title: string; description?: string; assignedTo?: string;
+    priority: TaskPriority; dueDate?: string; reminder?: string; status?: TaskStatus;
+    recurrence?: import("@/lib/domain").TaskRecurrence;
   },
 ): WorkspaceDB {
   const title = input.title.trim();
   if (!title) throw new ServiceError("Task title is required.");
   const now = nowIso();
   if (input.id) {
-    return {
-      ...db,
-      tasks: replace(db.tasks, input.id, {
-        title,
-        description: input.description?.trim() || undefined,
-        assignedTo: input.assignedTo || undefined,
-        priority: input.priority,
-        dueDate: input.dueDate || undefined,
-        reminder: input.reminder || undefined,
-        status: input.status,
-        updatedAt: now,
-      }),
-    };
+    const previous = db.tasks.find((task) => task.id === input.id && task.businessId === input.businessId);
+    if (!previous) throw new ServiceError("Task not found in this business.");
+    const updatedDb = { ...db, tasks: replace(db.tasks, input.id, {
+      title, description: input.description?.trim() || undefined, assignedTo: input.assignedTo || undefined,
+      priority: input.priority, dueDate: input.dueDate || undefined, reminder: input.reminder || undefined,
+      recurrence: input.recurrence ?? previous.recurrence ?? "none", updatedAt: now,
+    }) };
+    return input.status && input.status !== previous.status
+      ? setTaskStatus(updatedDb, input.id, input.status)
+      : updatedDb;
   }
   const task: TaskItem = {
-    id: createId("tsk"),
-    businessId: input.businessId,
-    title,
-    description: input.description?.trim() || undefined,
-    assignedTo: input.assignedTo || undefined,
-    priority: input.priority,
-    dueDate: input.dueDate || undefined,
-    reminder: input.reminder || undefined,
-    status: "todo",
-    createdAt: now,
-    updatedAt: now,
+    id: createId("tsk"), businessId: input.businessId, title,
+    description: input.description?.trim() || undefined, assignedTo: input.assignedTo || undefined,
+    priority: input.priority, dueDate: input.dueDate || undefined, reminder: input.reminder || undefined,
+    status: input.status ?? "todo", recurrence: input.recurrence ?? "none",
+    statusHistory: [{ to: input.status ?? "todo", changedAt: now }], createdAt: now, updatedAt: now,
   };
   return { ...db, tasks: [task, ...db.tasks] };
 }
 
 export function setTaskStatus(db: WorkspaceDB, id: string, status: TaskStatus): WorkspaceDB {
-  return { ...db, tasks: replace(db.tasks, id, { status, updatedAt: nowIso() }) };
+  const task = db.tasks.find((item) => item.id === id);
+  if (!task || task.status === status) return db;
+  const now = nowIso();
+  const history = [...(task.statusHistory ?? []), { from: task.status, to: status, changedAt: now }];
+  if (status !== "done" || !task.recurrence || task.recurrence === "none" || task.nextOccurrenceId) {
+    return { ...db, tasks: replace(db.tasks, id, { status, statusHistory: history, updatedAt: now }) };
+  }
+  const nextId = createId("tsk");
+  const nextTask: TaskItem = {
+    id: nextId, businessId: task.businessId, title: task.title, description: task.description,
+    assignedTo: task.assignedTo, priority: task.priority,
+    dueDate: nextTaskDueDate(task.dueDate, task.recurrence, now), status: 'todo', recurrence: task.recurrence,
+    seriesId: task.seriesId ?? task.id, statusHistory: [{ to: 'todo', changedAt: now }],
+    createdAt: now, updatedAt: now,
+  };
+  const completedTask = { ...task, status, statusHistory: history, seriesId: task.seriesId ?? task.id, nextOccurrenceId: nextId, updatedAt: now };
+  return { ...db, tasks: [nextTask, ...replace(db.tasks, id, completedTask)] };
+}
+
+export function addTaskComment(db: WorkspaceDB, id: string, body: string, author = "Workspace"): WorkspaceDB {
+  const task = db.tasks.find((item) => item.id === id);
+  if (!task) throw new ServiceError("Task not found.");
+  const message = body.trim();
+  if (!message) throw new ServiceError("Write a comment before adding it.");
+  if (message.length > 2000) throw new ServiceError("Comments must be 2,000 characters or fewer.");
+  const now = nowIso();
+  const comment = { id: createId("cmt"), author: author.trim() || "Workspace", body: message, createdAt: now };
+  return { ...db, tasks: replace(db.tasks, id, { comments: [...(task.comments ?? []), comment], updatedAt: now }) };
 }
 
 export function deleteTask(db: WorkspaceDB, id: string): WorkspaceDB {
   return { ...db, tasks: db.tasks.filter((t) => t.id !== id) };
 }
-
 export function upsertMember(
   db: WorkspaceDB,
   input: { id?: string; businessId: string; name: string; role: TeamMember["role"]; email?: string; phone?: string },
