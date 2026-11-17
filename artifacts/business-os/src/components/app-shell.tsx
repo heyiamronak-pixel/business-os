@@ -179,7 +179,7 @@ export function AppPage({
           </Link>
         </header>
 
-        <main className="mx-auto w-full max-w-[1440px] flex-1 px-4 pb-[calc(var(--nav-h)+var(--safe-b)+24px)] pt-6 sm:px-6 sm:pt-8 lg:px-9 lg:pb-12 lg:pt-9">
+        <main key={pathname} className="app-main-enter mx-auto w-full max-w-[1440px] flex-1 px-4 pb-[calc(var(--nav-h)+var(--safe-b)+24px)] pt-6 sm:px-6 sm:pt-8 lg:px-9 lg:pb-12 lg:pt-9">
           {children}
         </main>
       </div>

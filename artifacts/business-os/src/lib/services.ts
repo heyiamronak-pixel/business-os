@@ -59,7 +59,8 @@ export function createWorkspace(
     phone?: string;
     email?: string;
     website?: string;
-    location?: string;
+    location?: string; address?:string; state?:string; stateCode?:string; postalCode?:string;
+    gstRegistered?:boolean; gstin?:string; legalName?:string;
     brandColors: string[];
     themePreset: Business["themePreset"];
     appearance: Business["appearance"];
@@ -69,7 +70,12 @@ export function createWorkspace(
 ): { db: WorkspaceDB; business: Business } {
   const name = input.name.trim();
   if (name.length < 2) throw new ServiceError("Enter a business name.");
+  const gstin = input.gstin?.trim().toUpperCase() || undefined;
+  if (input.gstRegistered && (!gstin || !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(gstin))) {
+    throw new ServiceError("Enter a valid 15-character GSTIN or turn off GST registration.");
+  }
   const now = nowIso();
+  const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
   const modules = input.enabledModules.length ? input.enabledModules : recommendModules(input.industry);
   const business: Business = {
     id: createId("biz"),
@@ -84,6 +90,18 @@ export function createWorkspace(
     email: input.email?.trim() || undefined,
     website: input.website?.trim() || undefined,
     location: input.location?.trim() || undefined,
+    address: input.address?.trim() || undefined,
+    state: input.state?.trim() || undefined,
+    stateCode: input.stateCode?.trim() || undefined,
+    postalCode: input.postalCode?.trim() || undefined,
+    gstRegistered: Boolean(input.gstRegistered),
+    gstin: input.gstRegistered ? gstin : undefined,
+    legalName: input.legalName?.trim() || undefined,
+    invoiceSettings: { prefix:"INV", template:"modern", accentColor:"#176B73", showLogo:true, defaultDueDays:0, footerNote:"Thank you for your business.", terms:"" },
+    subscriptionPlan: "growth",
+    subscriptionStatus: "trial",
+    trialStartedAt: now,
+    trialEndsAt,
     brandColors: input.brandColors,
     themePreset: input.themePreset,
     appearance: input.appearance,
@@ -144,6 +162,7 @@ export function deleteBusiness(db: WorkspaceDB, id: string): WorkspaceDB {
     campaigns: drop(db.campaigns),
     activity: drop(db.activity),
     notifications: drop(db.notifications),
+    invoices: drop(db.invoices),
   };
 }
 

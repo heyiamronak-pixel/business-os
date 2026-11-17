@@ -7,6 +7,22 @@ export type PaymentMethod = "cash" | "card" | "upi" | "bank" | "credit" | "other
 export type PaymentStatus = "paid" | "partial" | "unpaid";
 export type MovementType = "in" | "out" | "adjustment" | "sale";
 export type TargetPeriod = "monthly" | "quarterly" | "annual";
+export type InvoiceTemplate = "modern" | "classic" | "minimal";
+export type InvoiceStatus = "issued" | "cancelled";
+export type InvoiceSupplyType = "intra" | "inter";
+export type SubscriptionPlan = "starter" | "growth";
+export type SubscriptionStatus = "trial" | "selected";
+export interface InvoiceDesignSettings { prefix:string; template:InvoiceTemplate; accentColor:string; showLogo:boolean; defaultDueDays:number; footerNote:string; terms:string; }
+export interface InvoiceLineItem { id:string; productId?:string; description:string; hsnSac?:string; quantity:number; unit:string; rate:number; discount:number; taxRate:number; taxableValue:number; taxAmount:number; total:number; }
+export interface InvoiceRecord {
+  id:string; businessId:string; invoiceNumber:string; status:InvoiceStatus; issueDate:string; dueDate?:string;
+  sellerName:string; sellerLegalName?:string; sellerGstin?:string; sellerAddress?:string; sellerState?:string; sellerStateCode?:string; sellerPhone?:string; sellerEmail?:string;
+  customerId?:string; customerName:string; customerGstin?:string; customerAddress?:string; customerState?:string; customerStateCode?:string; customerPhone?:string; customerEmail?:string;
+  placeOfSupply:string; placeOfSupplyCode?:string; supplyType:InvoiceSupplyType; reverseCharge:boolean;
+  items:InvoiceLineItem[]; subtotal:number; discountTotal:number; taxableValue:number; cgst:number; sgst:number; igst:number; taxTotal:number; total:number;
+  notes?:string; terms?:string; createdAt:string; updatedAt:string;
+}
+export const DEFAULT_INVOICE_SETTINGS:InvoiceDesignSettings = {prefix:"INV",template:"modern",accentColor:"#176B73",showLogo:true,defaultDueDays:0,footerNote:"Thank you for your business.",terms:""};
 
 export type ModuleId =
   | "products"
@@ -86,7 +102,9 @@ export interface Business {
   phone?: string;
   email?: string;
   website?: string;
-  location?: string;
+  location?: string; address?:string; state?:string; stateCode?:string; postalCode?:string;
+  gstRegistered?:boolean; gstin?:string; legalName?:string; invoiceSettings?:InvoiceDesignSettings;
+  subscriptionPlan?:SubscriptionPlan; subscriptionStatus?:SubscriptionStatus; trialStartedAt?:string; trialEndsAt?:string;
   brandColors: string[];
   themePreset: ThemePreset;
   appearance: Appearance;
@@ -325,6 +343,7 @@ export interface WorkspaceDB {
   campaigns: Campaign[];
   activity: Activity[];
   notifications: AppNotification[];
+  invoices: InvoiceRecord[];
 }
 
 export const SYSTEM_EXPENSE_CATEGORIES = [
@@ -374,6 +393,7 @@ export const CORE_IMPLEMENTED: ModuleId[] = [
   "purchases",
   "marketing",
   "reports",
+  "invoices",
 ];
 
 export type AppHref =
@@ -397,6 +417,7 @@ export type AppHref =
   | "/inbox"
   | "/reports"
   | "/attendance"
+  | "/invoices"
   | "/onboarding";
 
 export interface ModuleDef {
@@ -435,7 +456,7 @@ export const MODULE_CATALOG: Record<ModuleId, ModuleDef> = {
   clients: { id: "clients", label: "Clients", description: "Retainers", path: "/more", implemented: false },
   services: { id: "services", label: "Services", description: "Service catalog", path: "/more", implemented: false },
   projects: { id: "projects", label: "Projects", description: "Delivery work", path: "/more", implemented: false },
-  invoices: { id: "invoices", label: "Invoices", description: "Billing", path: "/more", implemented: false },
+  invoices: { id: "invoices", label: "Invoices", description: "Custom invoices and customer billing history", path: "/invoices", implemented: true },
   materials: { id: "materials", label: "Raw materials", description: "BOM inputs", path: "/more", implemented: false },
   production: { id: "production", label: "Production", description: "Work orders", path: "/more", implemented: false },
   orders: { id: "orders", label: "Orders", description: "Online orders", path: "/more", implemented: false },
@@ -612,11 +633,12 @@ export function emptyDb(): WorkspaceDB {
     campaigns: [],
     activity: [],
     notifications: [],
+    invoices: [],
   };
 }
 
 export function recommendModules(industry: IndustryId): ModuleId[] {
   const def = INDUSTRIES.find((i) => i.id === industry) ?? INDUSTRIES[INDUSTRIES.length - 1];
-  const unique = new Set<ModuleId>([...def.recommended, "reports"]);
+  const unique = new Set<ModuleId>([...def.recommended, "reports", "invoices"]);
   return Array.from(unique);
 }

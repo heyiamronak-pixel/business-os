@@ -20,12 +20,18 @@ export function CockpitScreen() {
   const hasFinance = ctx.kpis.orderCount > 0 || ctx.kpis.expenses > 0;
   const spark = ctx.series;
   const maxSpark = Math.max(1, ...spark.map((p) => p.revenue));
+  const todayKey = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  const salesToday = db.sales.filter((sale) => {
+    const date = new Date(sale.createdAt);
+    const dayKey = [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
+    return sale.businessId === business.id && dayKey === todayKey;
+  }).reduce((sum, sale) => sum + sale.total, 0);
 
   return (
     <AppPage>
       <PageHeader title={greeting()} subtitle={business.name} />
 
-      <section className="relative mb-7 overflow-hidden rounded-[26px] bg-gradient-to-br from-[#122B42] via-[#155B66] to-[#168078] px-5 py-6 text-white shadow-[0_18px_42px_rgba(18,70,82,0.18)] sm:px-7 sm:py-7">
+      <section className="animate-enter relative mb-7 overflow-hidden rounded-[26px] bg-gradient-to-br from-[#122B42] via-[#155B66] to-[#168078] px-5 py-6 text-white shadow-[0_18px_42px_rgba(18,70,82,0.18)] sm:px-7 sm:py-7">
         <div className="pointer-events-none absolute -right-12 -top-20 size-64 rounded-full border border-white/10" />
         <div className="pointer-events-none absolute -right-2 -top-8 size-44 rounded-full border border-white/[0.07]" />
         <div className="relative max-w-2xl">
@@ -50,6 +56,24 @@ export function CockpitScreen() {
         </div>
       </section>
 
+      <section className="mb-6 grid gap-3 sm:grid-cols-3">
+        <Card className="card-lift animate-enter">
+          <div className="flex items-center justify-between"><p className="text-[11px] font-medium text-muted-foreground">Owed to you</p><span className="rounded-lg bg-warning/10 px-2 py-1 text-[10px] font-semibold text-warning">{ctx.payments.count} open</span></div>
+          <p className="mt-3 text-2xl font-semibold tracking-tight tabular">{m(ctx.kpis.outstanding)}</p>
+          <p className="mt-1 text-xs text-muted-foreground">Outstanding customer payments</p>
+        </Card>
+        <Card className="card-lift animate-enter-delay-1">
+          <p className="text-[11px] font-medium text-muted-foreground">Sales today</p>
+          <p className="mt-3 text-2xl font-semibold tracking-tight tabular">{m(salesToday)}</p>
+          <p className="mt-1 text-xs text-muted-foreground">Recorded for today</p>
+        </Card>
+        <Card className="card-lift animate-enter-delay-2">
+          <p className="text-[11px] font-medium text-muted-foreground">Profit this period</p>
+          <p className={cn("mt-3 text-2xl font-semibold tracking-tight tabular", ctx.kpis.netProfit < 0 && "text-danger")}>{m(ctx.kpis.netProfit)}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{ctx.period.label}</p>
+        </Card>
+      </section>
+
       {insights[0] ? (
         <Card className="mb-4 border-primary/20 bg-primary/6">
           <p className="text-xs font-medium uppercase tracking-wide text-primary">Why it happened</p>
@@ -58,7 +82,7 @@ export function CockpitScreen() {
         </Card>
       ) : null}
 
-      <section className="mb-7">
+      <section className="animate-enter-delay-1 mb-7">
         <div className="mb-3 flex items-center justify-between gap-3"><h2 className="text-sm font-semibold tracking-[-0.02em]">Business health</h2><span className="text-[10px] font-medium text-muted-foreground">{ctx.period.label}</span></div>
         {hasFinance ? (
           <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">

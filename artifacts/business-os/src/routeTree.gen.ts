@@ -16,6 +16,7 @@ import { Route as AdvisorRouteImport } from './routes/advisor'
 import { Route as CustomersRouteImport } from './routes/customers'
 import { Route as ExpensesRouteImport } from './routes/expenses'
 import { Route as InboxRouteImport } from './routes/inbox'
+import { Route as InvoicesRouteImport } from './routes/invoices'
 import { Route as InventoryRouteImport } from './routes/inventory'
 import { Route as MarketingRouteImport } from './routes/marketing'
 import { Route as MoreRouteImport } from './routes/more'
@@ -64,6 +65,11 @@ const ExpensesRoute = ExpensesRouteImport.update({
 const InboxRoute = InboxRouteImport.update({
   id: '/inbox',
   path: '/inbox',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InvoicesRoute = InvoicesRouteImport.update({
+  id: '/invoices',
+  path: '/invoices',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InventoryRoute = InventoryRouteImport.update({
@@ -145,6 +151,7 @@ export interface FileRoutesByFullPath {
   '/customers': typeof CustomersRoute
   '/expenses': typeof ExpensesRoute
   '/inbox': typeof InboxRoute
+  '/invoices': typeof InvoicesRoute
   '/inventory': typeof InventoryRoute
   '/marketing': typeof MarketingRoute
   '/more': typeof MoreRoute
@@ -168,6 +175,7 @@ export interface FileRoutesByTo {
   '/customers': typeof CustomersRoute
   '/expenses': typeof ExpensesRoute
   '/inbox': typeof InboxRoute
+  '/invoices': typeof InvoicesRoute
   '/inventory': typeof InventoryRoute
   '/marketing': typeof MarketingRoute
   '/more': typeof MoreRoute
@@ -192,6 +200,7 @@ export interface FileRoutesById {
   '/customers': typeof CustomersRoute
   '/expenses': typeof ExpensesRoute
   '/inbox': typeof InboxRoute
+  '/invoices': typeof InvoicesRoute
   '/inventory': typeof InventoryRoute
   '/marketing': typeof MarketingRoute
   '/more': typeof MoreRoute
@@ -217,6 +226,7 @@ export interface FileRouteTypes {
     | '/customers'
     | '/expenses'
     | '/inbox'
+    | '/invoices'
     | '/inventory'
     | '/marketing'
     | '/more'
@@ -240,6 +250,7 @@ export interface FileRouteTypes {
     | '/customers'
     | '/expenses'
     | '/inbox'
+    | '/invoices'
     | '/inventory'
     | '/marketing'
     | '/more'
@@ -262,6 +273,7 @@ export interface FileRouteTypes {
     | '/customers'
     | '/expenses'
     | '/inbox'
+    | '/invoices'
     | '/inventory'
     | '/marketing'
     | '/more'
@@ -285,6 +297,7 @@ export interface RootRouteChildren {
   CustomersRoute: typeof CustomersRoute
   ExpensesRoute: typeof ExpensesRoute
   InboxRoute: typeof InboxRoute
+  InvoicesRoute: typeof InvoicesRoute
   InventoryRoute: typeof InventoryRoute
   MarketingRoute: typeof MarketingRoute
   MoreRoute: typeof MoreRoute
@@ -350,6 +363,13 @@ declare module '@tanstack/react-router' {
       path: '/inbox'
       fullPath: '/inbox'
       preLoaderRoute: typeof InboxRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/invoices': {
+      id: '/invoices'
+      path: '/invoices'
+      fullPath: '/invoices'
+      preLoaderRoute: typeof InvoicesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/inventory': {
@@ -461,6 +481,7 @@ const rootRouteChildren: RootRouteChildren = {
   CustomersRoute: CustomersRoute,
   ExpensesRoute: ExpensesRoute,
   InboxRoute: InboxRoute,
+  InvoicesRoute: InvoicesRoute,
   InventoryRoute: InventoryRoute,
   MarketingRoute: MarketingRoute,
   MoreRoute: MoreRoute,
