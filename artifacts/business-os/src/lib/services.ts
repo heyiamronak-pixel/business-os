@@ -30,6 +30,7 @@ import {
 } from "@/lib/domain";
 import { createId, nowIso, roundMoney } from "@/lib/utils";
 import { generateSku } from "@/lib/sku";
+import { getSubscriptionPlan } from "@/lib/subscription";
 
 export class ServiceError extends Error {
   constructor(message: string) {
@@ -885,30 +886,32 @@ export function upsertMember(
 ): WorkspaceDB {
   const name = input.name.trim();
   if (!name) throw new ServiceError("Name is required.");
+  const business = db.businesses.find((item) => item.id === input.businessId);
+  if (!business) throw new ServiceError("Business not found.");
+  const existing = input.id ? db.members.find((member) => member.id === input.id && member.businessId === input.businessId) : undefined;
+  if (input.id && !existing) throw new ServiceError("Team member not found in this business.");
+  if (!existing) {
+    const plan = getSubscriptionPlan(business.subscriptionPlan);
+    const currentUsers = db.members.filter((member) => member.businessId === input.businessId).length;
+    if (currentUsers >= plan.maxUsers) {
+      throw new ServiceError(`${plan.title} includes up to ${plan.maxUsers} users. Upgrade the plan to add another team member.`);
+    }
+  }
   const now = nowIso();
-  if (input.id) {
+  if (existing) {
     return {
       ...db,
-      members: replace(db.members, input.id, {
-        name,
-        role: input.role,
-        email: input.email?.trim() || undefined,
-        phone: input.phone?.trim() || undefined,
+      members: replace(db.members, input.id!, {
+        name, role: input.role, email: input.email?.trim() || undefined, phone: input.phone?.trim() || undefined,
       }),
     };
   }
   const member: TeamMember = {
-    id: createId("mem"),
-    businessId: input.businessId,
-    name,
-    role: input.role,
-    email: input.email?.trim() || undefined,
-    phone: input.phone?.trim() || undefined,
-    createdAt: now,
+    id: createId("mem"), businessId: input.businessId, name, role: input.role,
+    email: input.email?.trim() || undefined, phone: input.phone?.trim() || undefined, createdAt: now,
   };
   return { ...db, members: [...db.members, member] };
 }
-
 export function deleteMember(db: WorkspaceDB, id: string): WorkspaceDB {
   const member = db.members.find((m) => m.id === id);
   if (member?.role === "owner") {
