@@ -6,6 +6,7 @@ on:
       - main
       - foundation/hardening
       - phase-2/data-foundation
+      - codex/phase1-invoice-payment-tracking
   pull_request:
     branches:
       - main

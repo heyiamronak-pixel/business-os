@@ -4,7 +4,7 @@ import { ArrowLeft, Check, FileText, Palette, Plus, Printer, Search, Settings2, 
 import { AppPage, PageHeader } from "@/components/app-shell";
 import { Badge, Button, Card, Field, Input, Select, Switch, Textarea } from "@/components/ui";
 import { DEFAULT_INVOICE_SETTINGS, type Business, type Customer, type InvoiceDesignSettings, type InvoiceRecord, type InvoiceSupplyType } from "@/lib/domain";
-import { calculateInvoiceTotals, isValidGstin, nextInvoiceNumber, type InvoiceLineDraft } from "@/lib/invoice-utils";
+import { addInvoicePayment, calculateInvoiceTotals, getInvoicePaymentSummary, isValidGstin, nextInvoiceNumber, type InvoiceLineDraft } from "@/lib/invoice-utils";
 import { money } from "@/lib/format";
 import { createId } from "@/lib/utils";
 import { useAppStore, useBusiness } from "@/lib/store";
@@ -44,6 +44,9 @@ function InvoicesWorkspace({ business }: { business: Business }) {
   const [notes, setNotes] = React.useState("");
   const [lines, setLines] = React.useState<InvoiceLineDraft[]>([blankLine()]);
   const [formError, setFormError] = React.useState("");
+  const [paymentAmount, setPaymentAmount] = React.useState("");
+  const [paymentMethod, setPaymentMethod] = React.useState<"cash" | "upi" | "bank" | "card" | "other">("upi");
+  const [paymentReference, setPaymentReference] = React.useState("");
   const currentSettings = business.invoiceSettings ?? DEFAULT_INVOICE_SETTINGS;
   const [settings, setSettings] = React.useState<InvoiceDesignSettings>(currentSettings);
   const totals = React.useMemo(() => calculateInvoiceTotals(lines, gstRegistered, supplyType), [lines, gstRegistered, supplyType]);
@@ -147,6 +150,26 @@ function InvoicesWorkspace({ business }: { business: Business }) {
     apply({ ...currentDb, customers: nextCustomers, invoices: [invoice, ...currentDb.invoices] });
     setSelectedId(invoice.id); setMode("view"); toast.success("Invoice saved to this workspace");
   }
+  function recordInvoicePayment(invoice: InvoiceRecord) {
+    try {
+      const payment = {
+        id: createId("pay"),
+        amount: Number(paymentAmount),
+        method: paymentMethod,
+        reference: paymentReference.trim() || undefined,
+        receivedAt: new Date().toISOString(),
+      };
+      const updated = addInvoicePayment(invoice, payment);
+      const currentDb = useAppStore.getState().db;
+      apply({ ...currentDb, invoices: currentDb.invoices.map((item) => item.id === invoice.id ? updated : item) });
+      setPaymentAmount("");
+      setPaymentReference("");
+      toast.success("Invoice payment recorded");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not record payment");
+    }
+  }
+
   function saveDesign() {
     const prefix = settings.prefix.trim().toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 4);
     if (!prefix) { toast.error("Choose a prefix with 1–4 letters or numbers."); return; }
@@ -240,6 +263,27 @@ function InvoicesWorkspace({ business }: { business: Business }) {
         <section className="animate-enter space-y-4">
           <div className="no-print flex flex-wrap items-center justify-between gap-2"><Button size="sm" variant="ghost" onClick={() => setMode("list")}><ArrowLeft className="size-4" />All invoices</Button><div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => setMode("template")}><Palette className="size-4" />Format settings</Button><Button size="sm" onClick={() => window.print()}><Printer className="size-4" />Print / Save PDF</Button></div></div>
           <InvoicePaper invoice={selectedInvoice} settings={currentSettings} currency={business.currency} logo={business.logoDataUrl} />
+          {selectedInvoice.status === "issued" ? (() => {
+            const paymentSummary = getInvoicePaymentSummary(selectedInvoice.total, selectedInvoice.payments);
+            return <Card className="no-print space-y-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div><h2 className="text-sm font-semibold">Payment tracking</h2><p className="mt-1 text-xs text-muted-foreground">Record payments received against this invoice. This does not process a payment.</p></div>
+                <Badge tone={paymentSummary.status === "paid" ? "good" : paymentSummary.status === "partial" ? "warn" : "neutral"}>{paymentSummary.status === "paid" ? "Paid" : paymentSummary.status === "partial" ? "Partially paid" : "Unpaid"}</Badge>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-3">
+                <div className="rounded-xl bg-muted/45 p-3"><p className="text-[10px] text-muted-foreground">Invoice total</p><p className="mt-1 text-lg font-semibold tabular-nums">{fmt(selectedInvoice.total)}</p></div>
+                <div className="rounded-xl bg-muted/45 p-3"><p className="text-[10px] text-muted-foreground">Received</p><p className="mt-1 text-lg font-semibold tabular-nums">{fmt(paymentSummary.paidAmount)}</p></div>
+                <div className="rounded-xl bg-muted/45 p-3"><p className="text-[10px] text-muted-foreground">Outstanding</p><p className="mt-1 text-lg font-semibold tabular-nums">{fmt(paymentSummary.balance)}</p></div>
+              </div>
+              {selectedInvoice.payments?.length ? <div className="space-y-2"><p className="text-xs font-semibold">Payment history</p>{selectedInvoice.payments.map((payment) => <div key={payment.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-border py-2 text-xs"><span><strong>{fmt(payment.amount)}</strong><span className="ml-2 capitalize text-muted-foreground">{payment.method}</span>{payment.reference ? <span className="ml-2 text-muted-foreground">· {payment.reference}</span> : null}</span><span className="text-muted-foreground">{new Date(payment.receivedAt).toLocaleString("en-IN")}</span></div>)}</div> : <p className="text-xs text-muted-foreground">No payments have been recorded yet.</p>}
+              {paymentSummary.balance > 0 ? <div className="grid items-end gap-3 sm:grid-cols-[1fr_1fr_1.2fr_auto]">
+                <Field label="Amount received"><Input type="number" min="0.01" max={paymentSummary.balance} step="0.01" value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} placeholder={String(paymentSummary.balance)} /></Field>
+                <Field label="Method"><Select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as typeof paymentMethod)}><option value="upi">UPI</option><option value="bank">Bank transfer</option><option value="cash">Cash</option><option value="card">Card</option><option value="other">Other</option></Select></Field>
+                <Field label="Reference (optional)"><Input value={paymentReference} onChange={(e) => setPaymentReference(e.target.value)} placeholder="UTR / transaction ID" /></Field>
+                <Button onClick={() => recordInvoicePayment(selectedInvoice)} disabled={!paymentAmount || Number(paymentAmount) <= 0}>Record payment</Button>
+              </div> : <p className="text-xs font-semibold text-primary">This invoice is fully paid.</p>}
+            </Card>;
+          })() : null}
           <p className="no-print text-center text-[11px] leading-5 text-muted-foreground">Choose “Save as PDF” in your browser's print dialog to create a PDF copy.</p>
         </section>
       ) : null}
