@@ -285,6 +285,7 @@ export interface BusinessContext {
   topCustomers: CustomerStats[];
   followUpCustomers: CustomerStats[];
   followUpLeads: Lead[];
+  activeLeads: Lead[];
   procurement: {
     supplierCount: number;
     purchaseCount: number;
@@ -326,6 +327,7 @@ export function buildContext(db: WorkspaceDB, business: Business, now = new Date
   const customers = db.customers.filter((c) => c.businessId === business.id);
   const stats = customers.map((c) => customerStats(db, c, now)).sort((a, b) => b.spend - a.spend);
   const followUpLeads = db.leads.filter((lead) => lead.businessId === business.id && isLeadFollowUpDue(lead, now));
+  const activeLeads = db.leads.filter((lead) => lead.businessId === business.id && lead.stage !== "won" && lead.stage !== "lost");
   const expenseBreakdownMap = new Map<string, number>();
   for (const e of expensesIn(db, business.id, range)) {
     expenseBreakdownMap.set(e.category, roundMoney((expenseBreakdownMap.get(e.category) ?? 0) + e.amount));
@@ -355,6 +357,7 @@ export function buildContext(db: WorkspaceDB, business: Business, now = new Date
       .filter((customer) => customer.segment === "follow_up" || customer.segment === "inactive" || customer.outstanding > 0)
       .sort((a, b) => b.outstanding - a.outstanding || b.spend - a.spend),
     followUpLeads,
+    activeLeads,
     procurement: (() => {
       const suppliers = db.suppliers.filter((supplier) => supplier.businessId === business.id);
       const purchases = db.purchases.filter((purchase) => purchase.businessId === business.id);
@@ -763,6 +766,8 @@ const ADVISOR_PROMPTS = [
   "How are my marketing campaigns performing?",
   "Show supplier payments and purchase balance",
   "Which customers need follow-up?",
+  "Which leads need follow-up?",
+  "What is the value of my active sales pipeline?",
   "What should I focus on today?",
   "Will I hit my revenue target?",
   "Why is my profit falling?",
@@ -826,6 +831,20 @@ function inventoryAdvice(ctx: BusinessContext, question: string): AdvisorReply {
   }
   if (!recommendations.length) recommendations.push("No stock alerts are active. Review stock levels after each goods receipt and sale.");
   return { question, facts, calculations, recommendations };
+}
+
+function leadAdvice(ctx: BusinessContext, question: string): AdvisorReply {
+  const value = ctx.activeLeads.reduce((sum, lead) => sum + lead.value, 0);
+  const facts = [
+    `${ctx.activeLeads.length} active leads in the pipeline, with a combined potential value of ${fmt(value, ctx)}.`,
+    ctx.followUpLeads.length
+      ? `Follow-up due: ${ctx.followUpLeads.slice(0, 6).map((lead) => lead.name + (lead.company ? ' (' + lead.company + ')' : '')).join(', ')}.`
+      : "No open lead follow-ups are due right now.",
+  ];
+  const recommendations = ctx.followUpLeads.length
+    ? ["Contact leads with due follow-ups first, then record the outcome and set the next follow-up date."]
+    : ["Review New and Proposal stage leads and set a specific next follow-up date for each active opportunity."];
+  return { question, facts, calculations: [], recommendations };
 }
 
 function marketingAdvice(ctx: BusinessContext, question: string): AdvisorReply {
@@ -902,6 +921,9 @@ export function advise(question: string, ctx: BusinessContext): AdvisorReply {
   }
   if (/(stock|inventory|reorder|restock|out of stock|low stock|maal kitna|stock kitna)/.test(q)) {
     return inventoryAdvice(ctx, question);
+  }
+  if (/(lead follow.?up|which leads|leads need|sales pipeline|prospect|enquir|pipeline value)/.test(q)) {
+    return leadAdvice(ctx, question);
   }
   if (/(marketing|campaign|ads|ad spend|roas|cpl|cac|lead|advertising|facebook|google ad)/.test(q)) {
     return marketingAdvice(ctx, question);
