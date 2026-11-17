@@ -2,6 +2,7 @@ import * as React from "react";
 import { BookmarkPlus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button, Select } from "@/components/ui";
+import { PlanFeatureGate } from "@/components/plan-feature-gate";
 import { createId } from "@/lib/utils";
 
 type SavedView = { id: string; name: string; filters: Record<string, string>; createdAt: string };
@@ -89,6 +90,7 @@ export function SavedViewControls({
   }
 
   return (
+    <PlanFeatureGate feature="savedViews" compact title="Saved views are included in Growth" description="Upgrade to Growth to save and reuse custom filters in this module.">
     <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-muted/25 p-2">
       <span className="px-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Saved views</span>
       <div className="min-w-40 flex-1">
@@ -100,5 +102,6 @@ export function SavedViewControls({
       <Button size="sm" variant="secondary" onClick={saveView}><BookmarkPlus className="size-4" />Save</Button>
       {selectedId ? <Button size="sm" variant="ghost" className="text-danger" onClick={deleteView} aria-label="Delete selected saved view"><Trash2 className="size-4" /></Button> : null}
     </div>
+    </PlanFeatureGate>
   );
 }
