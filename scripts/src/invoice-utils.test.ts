@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { calculateInvoiceTotals, financialYearFor, isValidGstin, nextInvoiceNumber, type InvoiceLineDraft } from "../../artifacts/business-os/src/lib/invoice-utils.ts";
+import { calculateInvoiceTotals, financialYearFor, isValidGstin, nextInvoiceNumber, normaliseInvoiceCancellationReason, type InvoiceLineDraft } from "../../artifacts/business-os/src/lib/invoice-utils.ts";
 import type { InvoiceRecord } from "../../artifacts/business-os/src/lib/domain.ts";
 
 const line = (overrides: Partial<InvoiceLineDraft> = {}): InvoiceLineDraft => ({
