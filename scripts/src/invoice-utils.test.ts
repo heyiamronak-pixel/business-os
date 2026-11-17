@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { calculateInvoiceTotals, financialYearFor, isValidGstin, nextInvoiceNumber, type InvoiceLineDraft } from "../../artifacts/business-os/src/lib/invoice-utils.ts";
+import { calculateInvoiceTotals, financialYearFor, isValidGstin, nextInvoiceNumber, normaliseInvoiceCancellationReason, type InvoiceLineDraft } from "../../artifacts/business-os/src/lib/invoice-utils.ts";
 import type { InvoiceRecord } from "../../artifacts/business-os/src/lib/domain.ts";
 
 const line = (overrides: Partial<InvoiceLineDraft> = {}): InvoiceLineDraft => ({
@@ -87,4 +87,10 @@ test("non-GST invoices do not calculate tax even if a draft has a rate", () => {
   const result = calculateInvoiceTotals([line()], false, "intra");
   assert.equal(result.taxTotal, 0);
   assert.equal(result.total, 1000);
+});
+
+test("invoice cancellation reasons are trimmed and required", () => {
+  assert.equal(normaliseInvoiceCancellationReason("  Duplicate invoice  "), "Duplicate invoice");
+  assert.throws(() => normaliseInvoiceCancellationReason("  "), /cancellation reason/);
+  assert.throws(() => normaliseInvoiceCancellationReason("no"), /at least 3 characters/);
 });
