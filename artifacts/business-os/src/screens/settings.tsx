@@ -28,11 +28,12 @@ export function SettingsScreen() {
   const navigate = useNavigate();
   const [name, setName] = React.useState(business?.name ?? "");
   const [gstError, setGstError] = React.useState("");
-  const [annualBilling, setAnnualBilling] = React.useState(false);
+  const [annualBilling, setAnnualBilling] = React.useState(business?.subscriptionBillingCycle === "annual");
 
   React.useEffect(() => {
     setName(business?.name ?? "");
-  }, [business?.id, business?.name]);
+    setAnnualBilling(business?.subscriptionBillingCycle === "annual");
+  }, [business?.id, business?.name, business?.subscriptionBillingCycle]);
 
   if (!business) return null;
   const currentPlan = getSubscriptionPlan(business.subscriptionPlan);
@@ -171,7 +172,7 @@ export function SettingsScreen() {
       </Card>
 
       <Card className="mb-4 space-y-4">
-        <div className="flex items-start justify-between gap-3"><div><h2 className="text-sm font-semibold">Plans & subscription</h2><p className="mt-1 text-xs text-muted-foreground">Choose the plan that fits your team. Online billing will be connected later.</p></div><span className="rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-semibold text-primary">{business.subscriptionStatus==="trial"?"14-day trial":"Plan preference"}</span></div>
+        <div className="flex items-start justify-between gap-3"><div><h2 className="text-sm font-semibold">Plans & subscription</h2><p className="mt-1 text-xs text-muted-foreground">Choose the plan that fits your team. Online billing will be connected later.</p></div><span className="rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-semibold text-primary">{business.subscriptionStatus==="trial"?(trial.expired?"Trial ended":"14-day trial"):"Plan preference"}</span></div>
         {business.subscriptionStatus === "trial" && business.trialEndsAt ? (
           <div className="rounded-xl bg-primary/7 px-3 py-3 text-xs text-muted-foreground">
             <p className="font-semibold text-foreground">{trial.expired ? "Your trial period has ended" : "Your Growth trial ends " + new Date(business.trialEndsAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</p>
