@@ -11,6 +11,7 @@ import {
   X,
 } from "lucide-react";
 import { AppPage, PageHeader } from "@/components/app-shell";
+import { PlanFeatureGate } from "@/components/plan-feature-gate";
 import { Badge, Button, Card, EmptyState, Input, Select, Stat } from "@/components/ui";
 import {
   activeReportFilterCount,
@@ -24,6 +25,7 @@ import { financeSnapshot, marketingTotals, productProfits, type DateRange } from
 import { money, pct } from "@/lib/format";
 import { useAppStore, useBusiness } from "@/lib/store";
 import { createId } from "@/lib/utils";
+import { businessHasFeature } from "@/lib/subscription";
 
 type Period = "today" | "last7" | "last30" | "month" | "quarter" | "year" | "custom";
 
@@ -407,6 +409,7 @@ export function ReportsScreen() {
   }
 
   function saveCurrentView() {
+    if (!businessHasFeature(business, "savedViews")) return;
     const name = saveViewName.trim();
     if (!name) return;
     const view: SavedReportView = {
@@ -540,6 +543,7 @@ export function ReportsScreen() {
               <p className="mt-0.5 text-xs text-muted-foreground">Choose what you want to see. Results update automatically.</p>
             </div>
           </div>
+          <PlanFeatureGate feature="savedViews" compact title="Saved report views are in Growth" description="Upgrade to Growth to save and reuse report filter combinations.">
           <div className="flex flex-wrap items-center gap-2">
             <Select
               aria-label="Saved report views"
@@ -559,6 +563,7 @@ export function ReportsScreen() {
               <Bookmark className="size-4" />Save view
             </Button>
           </div>
+          </PlanFeatureGate>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 border-t border-border/70 pt-3">
@@ -598,6 +603,7 @@ export function ReportsScreen() {
         ) : null}
 
         {saveViewOpen ? (
+          <PlanFeatureGate feature="savedViews" compact>
           <div className="flex flex-col gap-2 rounded-xl border border-primary/20 bg-primary/[0.035] p-3 sm:flex-row sm:items-center">
             <div className="min-w-0 flex-1">
               <p className="text-xs font-semibold text-foreground">Save this filter setup</p>
@@ -617,6 +623,7 @@ export function ReportsScreen() {
               </Button>
             </div>
           </div>
+          </PlanFeatureGate>
         ) : null}
 
         {chips.length > 0 ? (
@@ -767,6 +774,7 @@ export function ReportsScreen() {
         </div>
       </section>
 
+      <PlanFeatureGate feature="advancedReports" title="Advanced reports are included in Growth" description="Starter keeps standard financial, sales and purchase summaries. Upgrade to Growth to unlock detailed marketing performance and product profitability reports.">
       <section className="mb-5">
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-sm font-semibold">Marketing performance</h2>
@@ -814,6 +822,7 @@ export function ReportsScreen() {
           </Card>
         ) : <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">Product profit ranking will appear after matching sales are recorded.</p>}
       </section>
+      </PlanFeatureGate>
 
       <p className="mt-5 text-xs text-muted-foreground">All figures use the selected date range and applied report filters. Saved views are stored in this browser for this workspace.</p>
     </AppPage>
