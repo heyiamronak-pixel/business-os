@@ -30,7 +30,7 @@ import {
 } from "@/lib/domain";
 import { createId, nowIso, roundMoney } from "@/lib/utils";
 import { generateSku } from "@/lib/sku";
-import { getSubscriptionPlan } from "@/lib/subscription";
+import { getSubscriptionPlan, hasAvailableUserSeat } from "@/lib/subscription";
 
 export class ServiceError extends Error {
   constructor(message: string) {
@@ -893,7 +893,7 @@ export function upsertMember(
   if (!existing) {
     const plan = getSubscriptionPlan(business.subscriptionPlan);
     const currentUsers = db.members.filter((member) => member.businessId === input.businessId).length;
-    if (currentUsers >= plan.maxUsers) {
+    if (!hasAvailableUserSeat(business.subscriptionPlan, currentUsers)) {
       throw new ServiceError(`${plan.title} includes up to ${plan.maxUsers} users. Upgrade the plan to add another team member.`);
     }
   }
