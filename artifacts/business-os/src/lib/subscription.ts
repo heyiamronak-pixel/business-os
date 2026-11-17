@@ -35,3 +35,6 @@ export function getPlanPrice(plan: SubscriptionPlan, cycle: SubscriptionBillingC
   const definition = getSubscriptionPlan(plan);
   return cycle === "annual" ? definition.annualPrice : definition.monthlyPrice;
 }
+export function hasAvailableUserSeat(plan: SubscriptionPlan | undefined, currentUsers: number): boolean {
+  return Number.isFinite(currentUsers) && currentUsers >= 0 && currentUsers < getSubscriptionPlan(plan).maxUsers;
+}
