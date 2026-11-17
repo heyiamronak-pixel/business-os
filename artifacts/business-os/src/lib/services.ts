@@ -7,6 +7,8 @@ import {
   type Business,
   type Campaign,
   type Customer,
+  type Lead,
+  type LeadStage,
   type Expense,
   type ExpenseCategory,
   type IndustryId,
@@ -30,6 +32,7 @@ import {
 } from "@/lib/domain";
 import { createId, nowIso, roundMoney } from "@/lib/utils";
 import { generateSku } from "@/lib/sku";
+import { normaliseLeadInput } from "@/lib/lead-utils";
 
 export class ServiceError extends Error {
   constructor(message: string) {
@@ -151,6 +154,7 @@ export function deleteBusiness(db: WorkspaceDB, id: string): WorkspaceDB {
     products: drop(db.products),
     movements: drop(db.movements),
     customers: drop(db.customers),
+    leads: drop(db.leads),
     suppliers: drop(db.suppliers),
     purchases: drop(db.purchases),
     sales: drop(db.sales),
@@ -360,6 +364,51 @@ export function upsertCustomer(
 
 export function deleteCustomer(db: WorkspaceDB, id: string): WorkspaceDB {
   return { ...db, customers: db.customers.filter((c) => c.id !== id) };
+}
+
+export function upsertLead(
+  db: WorkspaceDB,
+  input: { id?: string; businessId: string; name: string; company?: string; email?: string; phone?: string; source?: string; stage: LeadStage; value: number; expectedCloseDate?: string; followUpAt?: string; assignedTo?: string; notes?: string },
+): WorkspaceDB {
+  const business = db.businesses.find((item) => item.id === input.businessId);
+  if (!business) throw new ServiceError("Business not found.");
+  const existing = input.id ? db.leads.find((lead) => lead.id === input.id && lead.businessId === input.businessId) : undefined;
+  if (input.id && !existing) throw new ServiceError("Lead not found in this business.");
+  if (input.assignedTo && !db.members.some((member) => member.id === input.assignedTo && member.businessId === input.businessId)) {
+    throw new ServiceError("Choose a team member from this business.");
+  }
+  let normalized: ReturnType<typeof normaliseLeadInput>;
+  try { normalized = normaliseLeadInput(input); }
+  catch (error) { throw new ServiceError(error instanceof Error ? error.message : 'Invalid lead details.'); }
+  const now = nowIso();
+  const lead: Lead = {
+    ...(existing ?? {}), id: existing?.id ?? createId('lead'), businessId: input.businessId,
+    ...normalized, company: input.company?.trim() || undefined, phone: input.phone?.trim() || undefined,
+    source: input.source?.trim() || undefined, expectedCloseDate: input.expectedCloseDate || undefined,
+    followUpAt: input.followUpAt || undefined, assignedTo: input.assignedTo || undefined,
+    notes: input.notes?.trim() || undefined, createdAt: existing?.createdAt ?? now, updatedAt: now,
+  };
+  return { ...db, leads: existing ? replace(db.leads, lead.id, lead) : [lead, ...db.leads] };
+}
+
+export function deleteLead(db: WorkspaceDB, id: string): WorkspaceDB {
+  return { ...db, leads: db.leads.filter((lead) => lead.id !== id) };
+}
+
+export function convertLeadToCustomer(db: WorkspaceDB, id: string): { db: WorkspaceDB; customer: Customer } {
+  const lead = db.leads.find((item) => item.id === id);
+  if (!lead) throw new ServiceError("Lead not found.");
+  const linked = lead.convertedCustomerId ? db.customers.find((customer) => customer.id === lead.convertedCustomerId && customer.businessId === lead.businessId) : undefined;
+  if (linked) return { db, customer: linked };
+  const match = db.customers.find((customer) => customer.businessId === lead.businessId && (
+    (lead.email && customer.email?.toLowerCase() === lead.email.toLowerCase()) ||
+    (lead.phone && customer.phone === lead.phone)
+  ));
+  const result = match ? { db, customer: match } : upsertCustomer(db, {
+    businessId: lead.businessId, name: lead.company || lead.name, email: lead.email, phone: lead.phone, notes: lead.notes,
+  });
+  const updatedLead = { ...lead, stage: 'won' as const, convertedCustomerId: result.customer.id, updatedAt: nowIso() };
+  return { db: { ...result.db, leads: replace(result.db.leads, lead.id, updatedLead) }, customer: result.customer };
 }
 
 export function upsertSupplier(
