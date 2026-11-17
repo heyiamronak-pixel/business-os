@@ -2,6 +2,7 @@ import * as React from "react";
 import { Download } from "lucide-react";
 import { toast } from "sonner";
 import { AppPage, ConfirmBar, PageHeader, SearchField } from "@/components/app-shell";
+import { SavedViewControls } from "@/components/saved-view-controls";
 import { BottomSheet } from "@/components/sheet";
 import { Badge, Button, Card, EmptyState, Input, Segmented, Stat } from "@/components/ui";
 import type { Sale } from "@/lib/domain";
@@ -107,6 +108,11 @@ export function SalesScreen() {
       </div>
 
       <SearchField value={query} onChange={setQuery} placeholder="Search customer, sale ID, product or SKU" />
+      <SavedViewControls businessId={business.id} moduleKey="sales" filters={{ query, dateFilter, paymentFilter }} onApply={(saved) => {
+        setQuery(saved.query ?? "");
+        setDateFilter((saved.dateFilter as DateFilter) ?? "month");
+        setPaymentFilter((saved.paymentFilter as PaymentFilter) ?? "all");
+      }} />
       <p className="mb-2 mt-3 text-[11px] font-semibold uppercase tracking-wide text-subtle">Date range</p>
       <div className="mb-3">
         <Segmented
