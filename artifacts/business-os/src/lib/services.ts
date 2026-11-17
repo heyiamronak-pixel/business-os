@@ -12,6 +12,7 @@ import {
   type Expense,
   type ExpenseCategory,
   type IndustryId,
+  type InvoiceRecord,
   type ModuleId,
   type PaymentMethod,
   type Product,
