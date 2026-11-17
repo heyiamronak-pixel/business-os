@@ -69,7 +69,7 @@ export function TasksScreen() {
                 <button type="button" className="w-full text-left" onClick={() => setEditing(t)}>
                   <div className="flex items-start justify-between gap-2">
                     <p className="font-medium">{t.title}</p>
-                    <Badge tone={t.priority === "high" ? "bad" : t.priority === "medium" ? "warn" : "neutral"}>{t.priority}</Badge>
+                    <Badge tone={t.priority === "urgent" ? "bad" : t.priority === "high" ? "warn" : t.priority === "medium" ? "neutral" : "neutral"}>{t.priority}</Badge>
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {assignee?.name ?? "Unassigned"}
@@ -224,6 +224,7 @@ function TaskForm({
               <option value="low">Low</option>
               <option value="medium">Medium</option>
               <option value="high">High</option>
+              <option value="urgent">Urgent</option>
             </Select>
           </Field>
           <Field label="Status">
