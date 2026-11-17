@@ -235,6 +235,8 @@ export function ReportsScreen() {
   }, [business?.id]);
 
   if (!business) return null;
+  const businessId = business.id;
+  const businessName = business.name;
 
   const range = getRange(period, customFrom, customTo);
   const validRange =
@@ -424,7 +426,7 @@ export function ReportsScreen() {
     };
     const next = [view, ...savedViews.filter((saved) => saved.name.toLocaleLowerCase() !== name.toLocaleLowerCase())];
     setSavedViews(next);
-    writeSavedViews(business.id, next);
+    writeSavedViews(businessId, next);
     setSelectedSavedViewId(view.id);
     setSaveViewName("");
     setSaveViewOpen(false);
@@ -434,13 +436,13 @@ export function ReportsScreen() {
     if (!selectedSavedViewId) return;
     const next = savedViews.filter((view) => view.id !== selectedSavedViewId);
     setSavedViews(next);
-    writeSavedViews(business.id, next);
+    writeSavedViews(businessId, next);
     setSelectedSavedViewId("");
   }
 
   function exportCsv() {
     const rows = [
-      ["Business Sutra Report", business.name],
+      ["Business Sutra Report", businessName],
       ["Period", range.label],
       ["Saved view", savedViews.find((view) => view.id === selectedSavedViewId)?.name ?? ""],
       ["Matching records", filteredRecords.length],
