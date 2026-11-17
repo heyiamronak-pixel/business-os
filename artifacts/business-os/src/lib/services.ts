@@ -7,6 +7,8 @@ import {
   type Business,
   type Campaign,
   type Customer,
+  type Lead,
+  type LeadStage,
   type Expense,
   type ExpenseCategory,
   type IndustryId,
@@ -24,12 +26,17 @@ import {
   type TargetPeriod,
   type TaskItem,
   type TaskPriority,
+  type TaskRecurrence,
   type TaskStatus,
   type TeamMember,
   type WorkspaceDB,
 } from "@/lib/domain";
 import { createId, nowIso, roundMoney } from "@/lib/utils";
 import { generateSku } from "@/lib/sku";
+import { normaliseLeadInput } from "@/lib/lead-utils";
+import { normaliseInvoiceCancellationReason } from "@/lib/invoice-utils";
+import { nextTaskDueDate } from "@/lib/task-utils";
+import { getSubscriptionPlan, hasAvailableUserSeat } from "@/lib/subscription";
 
 export class ServiceError extends Error {
   constructor(message: string) {
@@ -151,6 +158,7 @@ export function deleteBusiness(db: WorkspaceDB, id: string): WorkspaceDB {
     products: drop(db.products),
     movements: drop(db.movements),
     customers: drop(db.customers),
+    leads: drop(db.leads),
     suppliers: drop(db.suppliers),
     purchases: drop(db.purchases),
     sales: drop(db.sales),
@@ -164,6 +172,18 @@ export function deleteBusiness(db: WorkspaceDB, id: string): WorkspaceDB {
     notifications: drop(db.notifications),
     invoices: drop(db.invoices),
   };
+}
+
+export function cancelInvoice(db: WorkspaceDB, id: string, reason: string): WorkspaceDB {
+  const invoice = db.invoices.find((item) => item.id === id);
+  if (!invoice) throw new ServiceError("Invoice not found.");
+  if (invoice.status === "cancelled") throw new ServiceError("This invoice is already cancelled.");
+  let cancellationReason: string;
+  try { cancellationReason = normaliseInvoiceCancellationReason(reason); }
+  catch (error) { throw new ServiceError(error instanceof Error ? error.message : 'Invalid cancellation reason.'); }
+  const now = nowIso();
+  const updated: InvoiceRecord = { ...invoice, status: 'cancelled', cancelReason: cancellationReason, cancelledAt: now, updatedAt: now };
+  return { ...db, invoices: replace(db.invoices, id, updated) };
 }
 
 export function upsertProduct(
@@ -360,6 +380,51 @@ export function upsertCustomer(
 
 export function deleteCustomer(db: WorkspaceDB, id: string): WorkspaceDB {
   return { ...db, customers: db.customers.filter((c) => c.id !== id) };
+}
+
+export function upsertLead(
+  db: WorkspaceDB,
+  input: { id?: string; businessId: string; name: string; company?: string; email?: string; phone?: string; source?: string; stage: LeadStage; value: number; expectedCloseDate?: string; followUpAt?: string; assignedTo?: string; notes?: string },
+): WorkspaceDB {
+  const business = db.businesses.find((item) => item.id === input.businessId);
+  if (!business) throw new ServiceError("Business not found.");
+  const existing = input.id ? db.leads.find((lead) => lead.id === input.id && lead.businessId === input.businessId) : undefined;
+  if (input.id && !existing) throw new ServiceError("Lead not found in this business.");
+  if (input.assignedTo && !db.members.some((member) => member.id === input.assignedTo && member.businessId === input.businessId)) {
+    throw new ServiceError("Choose a team member from this business.");
+  }
+  let normalized: ReturnType<typeof normaliseLeadInput>;
+  try { normalized = normaliseLeadInput(input); }
+  catch (error) { throw new ServiceError(error instanceof Error ? error.message : 'Invalid lead details.'); }
+  const now = nowIso();
+  const lead: Lead = {
+    ...(existing ?? {}), id: existing?.id ?? createId('lead'), businessId: input.businessId,
+    ...normalized, company: input.company?.trim() || undefined, phone: input.phone?.trim() || undefined,
+    source: input.source?.trim() || undefined, expectedCloseDate: input.expectedCloseDate || undefined,
+    followUpAt: input.followUpAt || undefined, assignedTo: input.assignedTo || undefined,
+    notes: input.notes?.trim() || undefined, createdAt: existing?.createdAt ?? now, updatedAt: now,
+  };
+  return { ...db, leads: existing ? replace(db.leads, lead.id, lead) : [lead, ...db.leads] };
+}
+
+export function deleteLead(db: WorkspaceDB, id: string): WorkspaceDB {
+  return { ...db, leads: db.leads.filter((lead) => lead.id !== id) };
+}
+
+export function convertLeadToCustomer(db: WorkspaceDB, id: string): { db: WorkspaceDB; customer: Customer } {
+  const lead = db.leads.find((item) => item.id === id);
+  if (!lead) throw new ServiceError("Lead not found.");
+  const linked = lead.convertedCustomerId ? db.customers.find((customer) => customer.id === lead.convertedCustomerId && customer.businessId === lead.businessId) : undefined;
+  if (linked) return { db, customer: linked };
+  const match = db.customers.find((customer) => customer.businessId === lead.businessId && (
+    (lead.email && customer.email?.toLowerCase() === lead.email.toLowerCase()) ||
+    (lead.phone && customer.phone === lead.phone)
+  ));
+  const result = match ? { db, customer: match } : upsertCustomer(db, {
+    businessId: lead.businessId, name: lead.company || lead.name, email: lead.email, phone: lead.phone, notes: lead.notes,
+  });
+  const updatedLead = { ...lead, stage: 'won' as const, convertedCustomerId: result.customer.id, updatedAt: nowIso() };
+  return { db: { ...result.db, leads: replace(result.db.leads, lead.id, updatedLead) }, customer: result.customer };
 }
 
 export function upsertSupplier(
@@ -826,89 +891,102 @@ export function deleteTarget(db: WorkspaceDB, id: string): WorkspaceDB {
 export function upsertTask(
   db: WorkspaceDB,
   input: {
-    id?: string;
-    businessId: string;
-    title: string;
-    description?: string;
-    assignedTo?: string;
-    priority: TaskPriority;
-    dueDate?: string;
-    reminder?: string;
-    status?: TaskStatus;
+    id?: string; businessId: string; title: string; description?: string; assignedTo?: string;
+    priority: TaskPriority; dueDate?: string; reminder?: string; status?: TaskStatus;
+    recurrence?: import("@/lib/domain").TaskRecurrence;
   },
 ): WorkspaceDB {
   const title = input.title.trim();
   if (!title) throw new ServiceError("Task title is required.");
   const now = nowIso();
   if (input.id) {
-    return {
-      ...db,
-      tasks: replace(db.tasks, input.id, {
-        title,
-        description: input.description?.trim() || undefined,
-        assignedTo: input.assignedTo || undefined,
-        priority: input.priority,
-        dueDate: input.dueDate || undefined,
-        reminder: input.reminder || undefined,
-        status: input.status,
-        updatedAt: now,
-      }),
-    };
+    const previous = db.tasks.find((task) => task.id === input.id && task.businessId === input.businessId);
+    if (!previous) throw new ServiceError("Task not found in this business.");
+    const updatedDb = { ...db, tasks: replace(db.tasks, input.id, {
+      title, description: input.description?.trim() || undefined, assignedTo: input.assignedTo || undefined,
+      priority: input.priority, dueDate: input.dueDate || undefined, reminder: input.reminder || undefined,
+      recurrence: input.recurrence ?? previous.recurrence ?? "none", updatedAt: now,
+    }) };
+    return input.status && input.status !== previous.status
+      ? setTaskStatus(updatedDb, input.id, input.status)
+      : updatedDb;
   }
   const task: TaskItem = {
-    id: createId("tsk"),
-    businessId: input.businessId,
-    title,
-    description: input.description?.trim() || undefined,
-    assignedTo: input.assignedTo || undefined,
-    priority: input.priority,
-    dueDate: input.dueDate || undefined,
-    reminder: input.reminder || undefined,
-    status: "todo",
-    createdAt: now,
-    updatedAt: now,
+    id: createId("tsk"), businessId: input.businessId, title,
+    description: input.description?.trim() || undefined, assignedTo: input.assignedTo || undefined,
+    priority: input.priority, dueDate: input.dueDate || undefined, reminder: input.reminder || undefined,
+    status: input.status ?? "todo", recurrence: input.recurrence ?? "none",
+    statusHistory: [{ to: input.status ?? "todo", changedAt: now }], createdAt: now, updatedAt: now,
   };
   return { ...db, tasks: [task, ...db.tasks] };
 }
 
 export function setTaskStatus(db: WorkspaceDB, id: string, status: TaskStatus): WorkspaceDB {
-  return { ...db, tasks: replace(db.tasks, id, { status, updatedAt: nowIso() }) };
+  const task = db.tasks.find((item) => item.id === id);
+  if (!task || task.status === status) return db;
+  const now = nowIso();
+  const history = [...(task.statusHistory ?? []), { from: task.status, to: status, changedAt: now }];
+  if (status !== "done" || !task.recurrence || task.recurrence === "none" || task.nextOccurrenceId) {
+    return { ...db, tasks: replace(db.tasks, id, { status, statusHistory: history, updatedAt: now }) };
+  }
+  const nextId = createId("tsk");
+  const nextTask: TaskItem = {
+    id: nextId, businessId: task.businessId, title: task.title, description: task.description,
+    assignedTo: task.assignedTo, priority: task.priority,
+    dueDate: nextTaskDueDate(task.dueDate, task.recurrence, now), status: 'todo', recurrence: task.recurrence,
+    seriesId: task.seriesId ?? task.id, statusHistory: [{ to: 'todo', changedAt: now }],
+    createdAt: now, updatedAt: now,
+  };
+  const completedTask = { ...task, status, statusHistory: history, seriesId: task.seriesId ?? task.id, nextOccurrenceId: nextId, updatedAt: now };
+  return { ...db, tasks: [nextTask, ...replace(db.tasks, id, completedTask)] };
+}
+
+export function addTaskComment(db: WorkspaceDB, id: string, body: string, author = "Workspace"): WorkspaceDB {
+  const task = db.tasks.find((item) => item.id === id);
+  if (!task) throw new ServiceError("Task not found.");
+  const message = body.trim();
+  if (!message) throw new ServiceError("Write a comment before adding it.");
+  if (message.length > 2000) throw new ServiceError("Comments must be 2,000 characters or fewer.");
+  const now = nowIso();
+  const comment = { id: createId("cmt"), author: author.trim() || "Workspace", body: message, createdAt: now };
+  return { ...db, tasks: replace(db.tasks, id, { comments: [...(task.comments ?? []), comment], updatedAt: now }) };
 }
 
 export function deleteTask(db: WorkspaceDB, id: string): WorkspaceDB {
   return { ...db, tasks: db.tasks.filter((t) => t.id !== id) };
 }
-
 export function upsertMember(
   db: WorkspaceDB,
   input: { id?: string; businessId: string; name: string; role: TeamMember["role"]; email?: string; phone?: string },
 ): WorkspaceDB {
   const name = input.name.trim();
   if (!name) throw new ServiceError("Name is required.");
+  const business = db.businesses.find((item) => item.id === input.businessId);
+  if (!business) throw new ServiceError("Business not found.");
+  const existing = input.id ? db.members.find((member) => member.id === input.id && member.businessId === input.businessId) : undefined;
+  if (input.id && !existing) throw new ServiceError("Team member not found in this business.");
+  if (!existing) {
+    const plan = getSubscriptionPlan(business.subscriptionPlan);
+    const currentUsers = db.members.filter((member) => member.businessId === input.businessId).length;
+    if (!hasAvailableUserSeat(business.subscriptionPlan, currentUsers)) {
+      throw new ServiceError(`${plan.title} includes up to ${plan.maxUsers} users. Upgrade the plan to add another team member.`);
+    }
+  }
   const now = nowIso();
-  if (input.id) {
+  if (existing) {
     return {
       ...db,
-      members: replace(db.members, input.id, {
-        name,
-        role: input.role,
-        email: input.email?.trim() || undefined,
-        phone: input.phone?.trim() || undefined,
+      members: replace(db.members, input.id!, {
+        name, role: input.role, email: input.email?.trim() || undefined, phone: input.phone?.trim() || undefined,
       }),
     };
   }
   const member: TeamMember = {
-    id: createId("mem"),
-    businessId: input.businessId,
-    name,
-    role: input.role,
-    email: input.email?.trim() || undefined,
-    phone: input.phone?.trim() || undefined,
-    createdAt: now,
+    id: createId("mem"), businessId: input.businessId, name, role: input.role,
+    email: input.email?.trim() || undefined, phone: input.phone?.trim() || undefined, createdAt: now,
   };
   return { ...db, members: [...db.members, member] };
 }
-
 export function deleteMember(db: WorkspaceDB, id: string): WorkspaceDB {
   const member = db.members.find((m) => m.id === id);
   if (member?.role === "owner") {
