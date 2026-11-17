@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { ArrowLeft, Check, FileText, Palette, Plus, Printer, Search, Settings2, Trash2 } from "lucide-react";
 import { AppPage, PageHeader } from "@/components/app-shell";
 import { Badge, Button, Card, Field, Input, Select, Switch, Textarea } from "@/components/ui";
-import { DEFAULT_INVOICE_SETTINGS, type InvoiceDesignSettings, type InvoiceRecord, type InvoiceSupplyType } from "@/lib/domain";
+import { DEFAULT_INVOICE_SETTINGS, type Business, type Customer, type InvoiceDesignSettings, type InvoiceRecord, type InvoiceSupplyType } from "@/lib/domain";
 import { calculateInvoiceTotals, isValidGstin, nextInvoiceNumber, type InvoiceLineDraft } from "@/lib/invoice-utils";
 import { money } from "@/lib/format";
 import { createId } from "@/lib/utils";
@@ -15,11 +15,17 @@ const blankLine = (): InvoiceLineDraft => ({ id: createId("line"), description: 
 
 export function InvoicesScreen() {
   const business = useBusiness();
+  if (!business) return null;
+  return <InvoicesWorkspace key={business.id} business={business} />;
+}
+
+function InvoicesWorkspace({ business }: { business: Business }) {
   const db = useAppStore((s) => s.db);
   const apply = useAppStore((s) => s.apply);
-  const gstRegistered = Boolean(business?.gstRegistered);
+  const gstRegistered = Boolean(business.gstRegistered);
   const [mode, setMode] = React.useState<Mode>("list");
   const [search, setSearch] = React.useState("");
+  const [customerFilter, setCustomerFilter] = React.useState("");
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const [customerId, setCustomerId] = React.useState("");
   const [customerName, setCustomerName] = React.useState("");
@@ -38,19 +44,17 @@ export function InvoicesScreen() {
   const [notes, setNotes] = React.useState("");
   const [lines, setLines] = React.useState<InvoiceLineDraft[]>([blankLine()]);
   const [formError, setFormError] = React.useState("");
-  const currentSettings = business?.invoiceSettings ?? DEFAULT_INVOICE_SETTINGS;
+  const currentSettings = business.invoiceSettings ?? DEFAULT_INVOICE_SETTINGS;
   const [settings, setSettings] = React.useState<InvoiceDesignSettings>(currentSettings);
   const totals = React.useMemo(() => calculateInvoiceTotals(lines, gstRegistered, supplyType), [lines, gstRegistered, supplyType]);
 
-  React.useEffect(() => { setSettings(business?.invoiceSettings ?? DEFAULT_INVOICE_SETTINGS); }, [business?.id, business?.invoiceSettings]);
-
-  if (!business) return null;
+  React.useEffect(() => { setSettings(business.invoiceSettings ?? DEFAULT_INVOICE_SETTINGS); }, [business.id, business.invoiceSettings]);
 
   const customers = db.customers.filter((x) => x.businessId === business.id).sort((a, b) => a.name.localeCompare(b.name));
   const products = db.products.filter((x) => x.businessId === business.id && !x.archived).sort((a, b) => a.name.localeCompare(b.name));
   const invoices = db.invoices.filter((x) => x.businessId === business.id).sort((a, b) => b.issueDate.localeCompare(a.issueDate) || b.createdAt.localeCompare(a.createdAt));
   const selectedInvoice = invoices.find((x) => x.id === selectedId) ?? null;
-  const filtered = invoices.filter((x) => [x.invoiceNumber, x.customerName, x.customerGstin ?? ""].some((v) => v.toLowerCase().includes(search.toLowerCase())));
+  const filtered = invoices.filter((x) => (!customerFilter || x.customerId === customerFilter) && [x.invoiceNumber, x.customerName, x.customerGstin ?? ""].some((v) => v.toLowerCase().includes(search.toLowerCase())));
   const fmt = (value: number) => money(value, business.currency);
 
   function updateLine(id: string, patch: Partial<InvoiceLineDraft>) {
@@ -94,13 +98,26 @@ export function InvoicesScreen() {
     const design = currentBusiness.invoiceSettings ?? DEFAULT_INVOICE_SETTINGS;
     const number = nextInvoiceNumber(currentDb.invoices, business.id, design.prefix, issueDate);
     const now = new Date().toISOString();
+    const matchedCustomer = currentDb.customers.find((customer) =>
+      customer.businessId === business.id && customer.name.trim().toLocaleLowerCase() === customerName.trim().toLocaleLowerCase()
+    );
+    const resolvedCustomerId = customerId || matchedCustomer?.id || createId("cus");
+    const newCustomer: Customer | undefined = !customerId && !matchedCustomer ? {
+      id: resolvedCustomerId,
+      businessId: business.id,
+      name: customerName.trim(),
+      email: customerEmail.trim() || undefined,
+      phone: customerPhone.trim() || undefined,
+      createdAt: now,
+      updatedAt: now,
+    } : undefined;
     const invoice: InvoiceRecord = {
       id: createId("inv"), businessId: business.id, invoiceNumber: number, status: "issued", issueDate, dueDate: dueDate || undefined,
       sellerName: currentBusiness.name, sellerLegalName: currentBusiness.legalName,
       sellerGstin: currentBusiness.gstRegistered ? currentBusiness.gstin : undefined,
       sellerAddress: [currentBusiness.address, currentBusiness.location, currentBusiness.state, currentBusiness.postalCode].filter(Boolean).join(", ") || undefined,
       sellerState: currentBusiness.state, sellerStateCode: currentBusiness.stateCode, sellerPhone: currentBusiness.phone, sellerEmail: currentBusiness.email,
-      customerId: customerId || undefined, customerName: customerName.trim(), customerGstin: customerGstin.trim().toUpperCase() || undefined,
+      customerId: resolvedCustomerId, customerName: customerName.trim(), customerGstin: customerGstin.trim().toUpperCase() || undefined,
       customerAddress: customerAddress.trim() || undefined, customerState: customerState.trim() || undefined, customerStateCode: customerStateCode || undefined,
       customerPhone: customerPhone.trim() || undefined, customerEmail: customerEmail.trim() || undefined,
       placeOfSupply: placeOfSupply.trim() || customerState.trim() || currentBusiness.state || "",
@@ -110,7 +127,7 @@ export function InvoicesScreen() {
       notes: notes.trim() || undefined, terms: design.terms.trim() || undefined, createdAt: now, updatedAt: now,
     };
     if (currentDb.invoices.some((x) => x.businessId === business.id && x.invoiceNumber === number)) { setFormError("This invoice number already exists. Update the prefix in invoice format settings."); return; }
-    apply({ ...currentDb, invoices: [invoice, ...currentDb.invoices] });
+    apply({ ...currentDb, customers: newCustomer ? [...currentDb.customers, newCustomer] : currentDb.customers, invoices: [invoice, ...currentDb.invoices] });
     setSelectedId(invoice.id); setMode("view"); toast.success("Invoice saved to this workspace");
   }
   function saveDesign() {
@@ -140,7 +157,7 @@ export function InvoicesScreen() {
             <Card className="card-lift"><p className="text-[11px] text-muted-foreground">Customers billed</p><p className="mt-2 text-2xl font-semibold tabular-nums">{new Set(invoices.map((x) => x.customerId ?? x.customerName)).size}</p><p className="mt-1 text-xs text-muted-foreground">Unique recipients</p></Card>
           </div>
           <Card className="animate-enter-delay-1 space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-sm font-semibold">Invoice history</h2><p className="mt-1 text-xs text-muted-foreground">Search by invoice number, customer or GSTIN.</p></div><div className="relative w-full sm:max-w-xs"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" placeholder="Search invoices" /></div></div>
+            <div className="flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-sm font-semibold">Invoice history</h2><p className="mt-1 text-xs text-muted-foreground">Search and filter by customer, invoice number or GSTIN.</p></div><div className="grid w-full gap-2 sm:max-w-xl sm:grid-cols-[minmax(180px,.8fr)_minmax(220px,1fr)]"><Field label="Customer"><Select value={customerFilter} onChange={(e) => setCustomerFilter(e.target.value)}><option value="">All customers</option>{customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}</Select></Field><Field label="Search"><div className="relative"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" placeholder="Invoice no. / customer / GSTIN" /></div></Field></div></div>
             {filtered.length ? <div className="divide-y divide-border">{filtered.map((invoice) => <button type="button" key={invoice.id} onClick={() => { setSelectedId(invoice.id); setMode("view"); }} className="group flex w-full items-center gap-3 py-3 text-left transition-colors hover:bg-muted/35">
               <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><FileText className="size-5" /></span>
               <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{invoice.customerName}</span><span className="mt-1 block truncate text-xs text-muted-foreground">{invoice.invoiceNumber} · {new Date(invoice.issueDate + "T00:00:00").toLocaleDateString("en-IN")}</span></span>

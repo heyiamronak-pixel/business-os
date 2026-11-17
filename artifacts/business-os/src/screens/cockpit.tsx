@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Check } from "lucide-react";
 import { AppPage, PageHeader } from "@/components/app-shell";
 import { Badge, Card, EmptyState, Progress, Stat } from "@/components/ui";
 import { buildContext, deriveActions, deriveInsights } from "@/lib/engines";
@@ -59,7 +59,7 @@ export function CockpitScreen() {
       <section className="mb-6 grid gap-3 sm:grid-cols-3">
         <Card className="card-lift animate-enter">
           <div className="flex items-center justify-between"><p className="text-[11px] font-medium text-muted-foreground">Owed to you</p><span className="rounded-lg bg-warning/10 px-2 py-1 text-[10px] font-semibold text-warning">{ctx.payments.count} open</span></div>
-          <p className="mt-3 text-2xl font-semibold tracking-tight tabular">{m(ctx.kpis.outstanding)}</p>
+          <p className="mt-3 text-2xl font-semibold tracking-tight tabular">{m(ctx.payments.amount)}</p>
           <p className="mt-1 text-xs text-muted-foreground">Outstanding customer payments</p>
         </Card>
         <Card className="card-lift animate-enter-delay-1">
@@ -72,6 +72,32 @@ export function CockpitScreen() {
           <p className={cn("mt-3 text-2xl font-semibold tracking-tight tabular", ctx.kpis.netProfit < 0 && "text-danger")}>{m(ctx.kpis.netProfit)}</p>
           <p className="mt-1 text-xs text-muted-foreground">{ctx.period.label}</p>
         </Card>
+      </section>
+
+      <section className="animate-enter-delay-1 mb-6">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold tracking-[-0.02em]">Needs attention</h2>
+          <Link to="/actions" className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:underline">View action centre <ArrowRight className="size-3" /></Link>
+        </div>
+        {actions.length ? (
+          <Card className="panel-shadow divide-y divide-border/80 p-0">
+            {actions.slice(0, 4).map((action) => (
+              <Link key={action.id} to={action.href} className="group flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-muted/35">
+                <span className={cn("size-2.5 shrink-0 rounded-full", action.severity === "high" ? "bg-danger" : action.severity === "medium" ? "bg-warning" : "bg-primary/50")} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-semibold">{action.title}</span>
+                  <span className="mt-1 block text-xs leading-5 text-muted-foreground">{action.body}</span>
+                </span>
+                <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-semibold text-primary">{action.cta}<ArrowRight className="size-3 transition-transform group-hover:translate-x-0.5" /></span>
+              </Link>
+            ))}
+          </Card>
+        ) : (
+          <Card className="flex items-center gap-3 bg-success/5">
+            <span className="grid size-9 place-items-center rounded-xl bg-success/10 text-success"><Check className="size-4" /></span>
+            <span><span className="block text-sm font-semibold">You're all caught up</span><span className="mt-1 block text-xs text-muted-foreground">No urgent business actions need your attention right now.</span></span>
+          </Card>
+        )}
       </section>
 
       {insights[0] ? (
