@@ -4,6 +4,7 @@ import type {
   Business,
   Campaign,
   Customer,
+  Lead,
   Expense,
   Product,
   Sale,
@@ -282,6 +283,7 @@ export interface BusinessContext {
   topProducts: ProductProfit[];
   topCustomers: CustomerStats[];
   followUpCustomers: CustomerStats[];
+  followUpLeads: Lead[];
   procurement: {
     supplierCount: number;
     purchaseCount: number;
@@ -322,6 +324,7 @@ export function buildContext(db: WorkspaceDB, business: Business, now = new Date
   const monthSales = salesIn(db, business.id, range);
   const customers = db.customers.filter((c) => c.businessId === business.id);
   const stats = customers.map((c) => customerStats(db, c, now)).sort((a, b) => b.spend - a.spend);
+  const followUpLeads = db.leads.filter((lead) => lead.businessId === business.id && lead.followUpAt && new Date(lead.followUpAt).getTime() <= now.getTime() && lead.stage !== "won" && lead.stage !== "lost");
   const expenseBreakdownMap = new Map<string, number>();
   for (const e of expensesIn(db, business.id, range)) {
     expenseBreakdownMap.set(e.category, roundMoney((expenseBreakdownMap.get(e.category) ?? 0) + e.amount));
@@ -350,6 +353,7 @@ export function buildContext(db: WorkspaceDB, business: Business, now = new Date
     followUpCustomers: stats
       .filter((customer) => customer.segment === "follow_up" || customer.segment === "inactive" || customer.outstanding > 0)
       .sort((a, b) => b.outstanding - a.outstanding || b.spend - a.spend),
+    followUpLeads,
     procurement: (() => {
       const suppliers = db.suppliers.filter((supplier) => supplier.businessId === business.id);
       const purchases = db.purchases.filter((purchase) => purchase.businessId === business.id);
@@ -674,6 +678,16 @@ export function deriveNotifications(ctx: BusinessContext): AppNotification[] {
       body: "This task is past its due date.",
       href: "/tasks",
       actionLabel: "Update",
+    });
+  }
+  for (const lead of ctx.followUpLeads) {
+    push({
+      key: `lead-followup:${lead.id}`,
+      type: "customer_followup",
+      title: `Lead follow-up due: ${lead.name}`,
+      body: lead.company ? `Follow up with ${lead.company}.` : "This lead has a follow-up scheduled.",
+      href: "/leads",
+      actionLabel: "Open lead",
     });
   }
   if (ctx.target && !ctx.target.onTrack && ctx.target.pct < 90) {
