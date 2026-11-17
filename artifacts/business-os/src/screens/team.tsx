@@ -17,9 +17,11 @@ export function TeamScreen() {
   const [role, setRole] = React.useState<Role>("employee");
   const [email, setEmail] = React.useState("");
   const [phone, setPhone] = React.useState("");
+  const [branchIds, setBranchIds] = React.useState<string[]>([]);
 
   if (!business) return null;
   const members = db.members.filter((m) => m.businessId === business.id);
+  const branches = db.branches.filter((item) => item.businessId === business.id && item.isActive);
 
   function open(m?: TeamMember) {
     if (m) {
@@ -28,12 +30,14 @@ export function TeamScreen() {
       setRole(m.role);
       setEmail(m.email ?? "");
       setPhone(m.phone ?? "");
+      setBranchIds(m.branchIds ?? branches.slice(0, 1).map((item) => item.id));
     } else {
       setEditing("new");
       setName("");
       setRole("employee");
       setEmail("");
       setPhone("");
+      setBranchIds(branches.slice(0, 1).map((item) => item.id));
     }
   }
 
@@ -48,6 +52,7 @@ export function TeamScreen() {
           role,
           email,
           phone,
+          branchIds,
         }),
       );
       toast.success("Team member saved");
@@ -74,6 +79,7 @@ export function TeamScreen() {
                 <div>
                   <p className="font-medium">{m.name}</p>
                   <p className="text-xs text-muted-foreground">{m.email || m.phone || "No contact"}</p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">{(m.branchIds ?? []).map((id) => branches.find((item) => item.id === id)?.name).filter(Boolean).join(", ") || "No branch assigned"}</p>
                 </div>
                 <Badge tone={m.role === "owner" ? "brand" : "neutral"}>{m.role}</Badge>
               </button>
@@ -122,6 +128,16 @@ export function TeamScreen() {
           <Field label="Phone">
             <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
           </Field>
+          <div className="space-y-2 rounded-xl border border-border p-3">
+            <p className="text-xs font-semibold">Branch access</p>
+            {branches.length ? branches.map((item) => (
+              <label key={item.id} className="flex min-h-9 items-center gap-2 text-sm">
+                <input type="checkbox" checked={branchIds.includes(item.id)} onChange={(event) => setBranchIds((current) => event.target.checked ? [...current, item.id] : current.filter((id) => id !== item.id))} />
+                <span>{item.name}</span><span className="ml-auto text-[10px] text-muted-foreground">{item.code}</span>
+              </label>
+            )) : <p className="text-xs text-muted-foreground">Create a branch in Settings before assigning branch access.</p>}
+            <p className="text-[10px] leading-4 text-muted-foreground">Branch assignment is saved locally. Secure sign-in and server-enforced branch permissions will be enabled in the authentication stage.</p>
+          </div>
         </div>
       </BottomSheet>
       <BottomSheet
