@@ -995,7 +995,7 @@ export function upsertBranch(
   const now = nowIso();
   const branch: Branch = {
     id: existing?.id ?? createId("br"), businessId: input.businessId, name, code,
-    address: input.address?.trim() || undefined, timezone: input.timezone?.trim() || business.timezone,
+    address: input.address?.trim() || existing?.address, timezone: input.timezone?.trim() || existing?.timezone || business.timezone,
     isDefault: existing?.isDefault ?? false, isActive: input.isActive ?? existing?.isActive ?? true,
     createdAt: existing?.createdAt ?? now, updatedAt: now,
   };
