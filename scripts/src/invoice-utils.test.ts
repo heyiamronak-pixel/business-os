@@ -88,3 +88,9 @@ test("non-GST invoices do not calculate tax even if a draft has a rate", () => {
   assert.equal(result.taxTotal, 0);
   assert.equal(result.total, 1000);
 });
+
+test("invoice cancellation reasons are trimmed and required", () => {
+  assert.equal(normaliseInvoiceCancellationReason("  Duplicate invoice  "), "Duplicate invoice");
+  assert.throws(() => normaliseInvoiceCancellationReason("  "), /cancellation reason/);
+  assert.throws(() => normaliseInvoiceCancellationReason("no"), /at least 3 characters/);
+});
