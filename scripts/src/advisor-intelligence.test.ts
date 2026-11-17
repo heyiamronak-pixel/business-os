@@ -6,6 +6,7 @@ import {
   type Business,
   type Campaign,
   type Customer,
+  type Lead,
   type Product,
   type Purchase,
   type Sale,
@@ -210,4 +211,17 @@ test("Advisor does not invent marketing results when no campaign records exist",
   const reply = advise("How are my ads performing?", getContext(makeDb({ campaigns: [] })));
   assert.ok(reply.facts.some((fact) => fact.includes("No marketing campaign metrics")));
   assert.ok(reply.recommendations.some((item) => item.toLowerCase().includes("add campaign")));
+});
+
+test("Advisor identifies due lead follow-ups and active pipeline value", () => {
+  const lead: Lead = {
+    id: "lead-ai-1", businessId: business.id, name: "Asha", company: "North Star Hotel",
+    stage: "proposal", value: 125000, followUpAt: "2026-11-16T10:00:00.000Z",
+    createdAt: "2026-11-10T10:00:00.000Z", updatedAt: "2026-11-10T10:00:00.000Z",
+  };
+  const ctx = getContext(makeDb({ leads: [lead] }));
+  assert.equal(ctx.followUpLeads.length, 1);
+  const reply = advise("Which leads need follow-up?", ctx);
+  assert.ok(reply.facts.some((fact) => fact.includes("North Star Hotel")));
+  assert.ok(reply.facts.some((fact) => fact.includes("125,000")));
 });
