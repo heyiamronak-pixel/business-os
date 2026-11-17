@@ -12,3 +12,8 @@ export function normaliseLeadInput(input: LeadInputValues): { name: string; emai
   if (!Number.isFinite(input.value) || input.value < 0) throw new Error("Lead value must be a non-negative amount.");
   return { name, email, value: Math.round(input.value * 100) / 100, stage: input.stage };
 }
+export function isLeadFollowUpDue(input: { stage: LeadStage; followUpAt?: string }, now: Date): boolean {
+  if (!input.followUpAt || input.stage === "won" || input.stage === "lost") return false;
+  const dueAt = new Date(input.followUpAt).getTime();
+  return Number.isFinite(dueAt) && dueAt <= now.getTime();
+}
