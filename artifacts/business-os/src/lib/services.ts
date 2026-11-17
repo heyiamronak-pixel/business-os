@@ -838,11 +838,14 @@ export function upsertTask(
   if (input.id) {
     const previous = db.tasks.find((task) => task.id === input.id && task.businessId === input.businessId);
     if (!previous) throw new ServiceError("Task not found in this business.");
-    return { ...db, tasks: replace(db.tasks, input.id, {
+    const updatedDb = { ...db, tasks: replace(db.tasks, input.id, {
       title, description: input.description?.trim() || undefined, assignedTo: input.assignedTo || undefined,
       priority: input.priority, dueDate: input.dueDate || undefined, reminder: input.reminder || undefined,
-      recurrence: input.recurrence ?? "none", status: input.status ?? previous.status, updatedAt: now,
+      recurrence: input.recurrence ?? previous.recurrence ?? "none", updatedAt: now,
     }) };
+    return input.status && input.status !== previous.status
+      ? setTaskStatus(updatedDb, input.id, input.status)
+      : updatedDb;
   }
   const task: TaskItem = {
     id: createId("tsk"), businessId: input.businessId, title,
