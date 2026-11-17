@@ -6,6 +6,7 @@ on:
       - main
       - foundation/hardening
       - phase-2/data-foundation
+      - codex/task-workflow-completion
   pull_request:
     branches:
       - main
