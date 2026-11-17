@@ -25,3 +25,34 @@ export function calculateInvoiceTotals(drafts:InvoiceLineDraft[],gstRegistered:b
  const cgst=gstRegistered&&supplyType==="intra"?round2(taxTotal/2):0,sgst=gstRegistered&&supplyType==="intra"?round2(taxTotal-cgst):0,igst=gstRegistered&&supplyType==="inter"?taxTotal:0;
  return {items,subtotal,discountTotal,taxableValue,cgst,sgst,igst,taxTotal:round2(cgst+sgst+igst),total:round2(taxableValue+cgst+sgst+igst)};
 }
+
+
+export interface InvoicePaymentSummary {
+ paidAmount: number;
+ balance: number;
+ status: "paid" | "partial" | "unpaid";
+}
+export function getInvoicePaymentSummary(total: number, payments: Array<{ amount: number }> = []): InvoicePaymentSummary {
+ const safeTotal = round2(Math.max(0, Number.isFinite(total) ? total : 0));
+ const paidAmount = round2(Math.min(safeTotal, payments.reduce((sum, payment) => {
+  const amount = Number(payment.amount);
+  return sum + (Number.isFinite(amount) && amount > 0 ? amount : 0);
+ }, 0)));
+ const balance = round2(Math.max(0, safeTotal - paidAmount));
+ return { paidAmount, balance, status: balance === 0 ? "paid" : paidAmount > 0 ? "partial" : "unpaid" };
+}
+export function addInvoicePayment(invoice: InvoiceRecord, payment: import("@/lib/domain").InvoicePayment): InvoiceRecord {
+ if (invoice.status !== "issued") throw new Error("Payments can only be recorded for issued invoices.");
+ if (!Number.isFinite(payment.amount) || payment.amount <= 0) throw new Error("Enter a payment amount greater than zero.");
+ const summary = getInvoicePaymentSummary(invoice.total, invoice.payments);
+ if (payment.amount > summary.balance + 0.009) throw new Error("Payment cannot exceed the outstanding invoice balance.");
+ if (!payment.id.trim()) throw new Error("Payment reference is missing.");
+ if (!payment.receivedAt.trim()) throw new Error("Payment date is missing.");
+ return { ...invoice, payments: [...(invoice.payments ?? []), { ...payment, amount: round2(payment.amount) }], updatedAt: payment.receivedAt };
+}
+
+export function normaliseInvoiceCancellationReason(reason: string): string {
+  const value = reason.trim();
+  if (value.length < 3) throw new Error("Add a cancellation reason (at least 3 characters).");
+  return value;
+}
