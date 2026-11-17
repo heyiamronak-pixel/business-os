@@ -270,6 +270,9 @@ export interface TeamMember {
   createdAt: string;
 }
 
+export type TaskRecurrence = "none" | "daily" | "weekly" | "monthly";
+export interface TaskStatusEvent { from?: TaskStatus; to: TaskStatus; changedAt: string; }
+export interface TaskComment { id: string; author: string; body: string; createdAt: string; }
 export interface TaskItem {
   id: string;
   businessId: string;
@@ -280,6 +283,11 @@ export interface TaskItem {
   dueDate?: string;
   reminder?: string;
   status: TaskStatus;
+  recurrence?: TaskRecurrence;
+  seriesId?: string;
+  nextOccurrenceId?: string;
+  statusHistory?: TaskStatusEvent[];
+  comments?: TaskComment[];
   createdAt: string;
   updatedAt: string;
 }
