@@ -150,6 +150,10 @@ export interface Customer {
   name: string;
   email?: string;
   phone?: string;
+  address?: string;
+  gstin?: string;
+  state?: string;
+  stateCode?: string;
   notes?: string;
   createdAt: string;
   updatedAt: string;

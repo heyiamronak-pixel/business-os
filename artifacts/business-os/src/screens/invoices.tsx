@@ -70,7 +70,15 @@ function InvoicesWorkspace({ business }: { business: Business }) {
   function chooseCustomer(id: string) {
     setCustomerId(id);
     const customer = customers.find((x) => x.id === id);
-    setCustomerName(customer?.name ?? ""); setCustomerEmail(customer?.email ?? ""); setCustomerPhone(customer?.phone ?? "");
+    setCustomerName(customer?.name ?? "");
+    setCustomerEmail(customer?.email ?? "");
+    setCustomerPhone(customer?.phone ?? "");
+    setCustomerGstin(customer?.gstin ?? "");
+    setCustomerAddress(customer?.address ?? "");
+    setCustomerState(customer?.state ?? "");
+    setCustomerStateCode(customer?.stateCode ?? "");
+    setPlaceOfSupply(customer?.state ?? business.state ?? "");
+    setPlaceOfSupplyCode(customer?.stateCode ?? business.stateCode ?? "");
   }
   function onRecipientState(value: string) { setCustomerState(value); setPlaceOfSupply(value); }
   function onRecipientCode(value: string) {
@@ -99,18 +107,24 @@ function InvoicesWorkspace({ business }: { business: Business }) {
     const number = nextInvoiceNumber(currentDb.invoices, business.id, design.prefix, issueDate);
     const now = new Date().toISOString();
     const matchedCustomer = currentDb.customers.find((customer) =>
-      customer.businessId === business.id && customer.name.trim().toLocaleLowerCase() === customerName.trim().toLocaleLowerCase()
+      customer.businessId === business.id &&
+      (customer.id === customerId || customer.name.trim().toLocaleLowerCase() === customerName.trim().toLocaleLowerCase())
     );
-    const resolvedCustomerId = customerId || matchedCustomer?.id || createId("cus");
-    const newCustomer: Customer | undefined = !customerId && !matchedCustomer ? {
+    const resolvedCustomerId = matchedCustomer?.id ?? createId("cus");
+    const customerRecord: Customer = {
+      ...(matchedCustomer ?? {}),
       id: resolvedCustomerId,
       businessId: business.id,
       name: customerName.trim(),
       email: customerEmail.trim() || undefined,
       phone: customerPhone.trim() || undefined,
-      createdAt: now,
+      address: customerAddress.trim() || undefined,
+      gstin: customerGstin.trim().toUpperCase() || undefined,
+      state: customerState.trim() || undefined,
+      stateCode: customerStateCode || undefined,
+      createdAt: matchedCustomer?.createdAt ?? now,
       updatedAt: now,
-    } : undefined;
+    };
     const invoice: InvoiceRecord = {
       id: createId("inv"), businessId: business.id, invoiceNumber: number, status: "issued", issueDate, dueDate: dueDate || undefined,
       sellerName: currentBusiness.name, sellerLegalName: currentBusiness.legalName,
@@ -127,7 +141,10 @@ function InvoicesWorkspace({ business }: { business: Business }) {
       notes: notes.trim() || undefined, terms: design.terms.trim() || undefined, createdAt: now, updatedAt: now,
     };
     if (currentDb.invoices.some((x) => x.businessId === business.id && x.invoiceNumber === number)) { setFormError("This invoice number already exists. Update the prefix in invoice format settings."); return; }
-    apply({ ...currentDb, customers: newCustomer ? [...currentDb.customers, newCustomer] : currentDb.customers, invoices: [invoice, ...currentDb.invoices] });
+    const nextCustomers = matchedCustomer
+      ? currentDb.customers.map((customer) => customer.id === matchedCustomer.id ? customerRecord : customer)
+      : [...currentDb.customers, customerRecord];
+    apply({ ...currentDb, customers: nextCustomers, invoices: [invoice, ...currentDb.invoices] });
     setSelectedId(invoice.id); setMode("view"); toast.success("Invoice saved to this workspace");
   }
   function saveDesign() {

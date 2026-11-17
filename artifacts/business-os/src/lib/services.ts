@@ -76,7 +76,7 @@ export function createWorkspace(
   }
   const now = nowIso();
   const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
-  const modules = input.enabledModules.length ? input.enabledModules : recommendModules(input.industry);
+  const modules = Array.from(new Set([...(input.enabledModules.length ? input.enabledModules : recommendModules(input.industry)), "invoices" as ModuleId]));
   const business: Business = {
     id: createId("biz"),
     name,
