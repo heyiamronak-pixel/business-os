@@ -1,10 +1,12 @@
 import * as React from "react";
+import { Download } from "lucide-react";
 import { toast } from "sonner";
 import { AppPage, ConfirmBar, PageHeader } from "@/components/app-shell";
 import { SavedViewControls } from "@/components/saved-view-controls";
 import { BottomSheet } from "@/components/sheet";
 import { Badge, Button, EmptyState, Field, Input, Segmented, Select, Textarea } from "@/components/ui";
 import type { TaskItem, TaskPriority, TaskRecurrence, TaskStatus } from "@/lib/domain";
+import { downloadCsv } from "@/lib/csv";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { addTaskComment, deleteTask, setTaskStatus, upsertTask } from "@/lib/services";
 import { useAppStore, useBusiness } from "@/lib/store";
@@ -31,6 +33,13 @@ export function TasksScreen() {
     return t.status !== "done";
   });
 
+  function exportTasks() {
+    downloadCsv("business-sutra-tasks.csv",
+      ["Task", "Description", "Assignee", "Priority", "Status", "Due date", "Reminder", "Recurrence", "Created"],
+      list.map((task) => [task.title, task.description, members.find((member) => member.id === task.assignedTo)?.name ?? "Unassigned", task.priority, task.status, task.dueDate, task.reminder, task.recurrence ?? "none", task.createdAt]));
+    toast.success("Exported " + list.length + " tasks");
+  }
+
   const form = editing === "new" || !editing ? null : editing;
 
   return (
@@ -38,7 +47,7 @@ export function TasksScreen() {
       <PageHeader
         title="Tasks"
         subtitle="What the team needs to finish"
-        action={<Button size="sm" onClick={() => setEditing("new")}>Add</Button>}
+        action={<div className="flex gap-2"><Button size="sm" variant="secondary" onClick={exportTasks} disabled={!list.length}><Download className="size-4" />Export</Button><Button size="sm" onClick={() => setEditing("new")}>Add</Button></div>}
       />
       <SavedViewControls businessId={business.id} moduleKey="tasks" filters={{ filter }} onApply={(saved) => setFilter((saved.filter as Filter) ?? "open")} />
       <div className="mb-3">
