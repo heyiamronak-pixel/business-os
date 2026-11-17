@@ -15,7 +15,7 @@ import {
   type ThemePreset,
 } from "@/lib/domain";
 import { extractLogoColors, fileToDataUrl } from "@/lib/theme";
-import { deleteBusiness, updateBusiness } from "@/lib/services";
+import { deleteBranch, deleteBusiness, updateBusiness, upsertBranch } from "@/lib/services";
 import { isValidGstin } from "@/lib/invoice-utils";
 import { useAppStore, useBusiness } from "@/lib/store";
 import { SUBSCRIPTION_PLANS, getSubscriptionPlan, getTrialStatus } from "@/lib/subscription";
@@ -30,6 +30,9 @@ export function SettingsScreen() {
   const [name, setName] = React.useState(business?.name ?? "");
   const [gstError, setGstError] = React.useState("");
   const [annualBilling, setAnnualBilling] = React.useState(business?.subscriptionBillingCycle === "annual");
+  const [branchName, setBranchName] = React.useState("");
+  const [branchCode, setBranchCode] = React.useState("");
+  const [branchAddress, setBranchAddress] = React.useState("");
 
   React.useEffect(() => {
     setName(business?.name ?? "");
@@ -40,10 +43,36 @@ export function SettingsScreen() {
   const currentPlan = getSubscriptionPlan(business.subscriptionPlan);
   const trial = getTrialStatus(business.trialEndsAt);
   const teamUsage = db.members.filter((member) => member.businessId === business.id).length;
+  const branches = db.branches.filter((item) => item.businessId === business.id);
 
   function patch(p: Parameters<typeof updateBusiness>[2]) {
     if (!business) return;
     apply(updateBusiness(useAppStore.getState().db, business.id, p));
+  }
+
+  function addBranch() {
+    try {
+      const result = upsertBranch(useAppStore.getState().db, {
+        businessId: business.id, name: branchName, code: branchCode || undefined, address: branchAddress || undefined,
+      });
+      apply(result.db);
+      setBranchName("");
+      setBranchCode("");
+      setBranchAddress("");
+      toast.success("Branch added");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not add branch");
+    }
+  }
+
+  function removeBranch(id: string) {
+    if (!window.confirm("Delete this branch? Team assignments must be cleared first.")) return;
+    try {
+      apply(deleteBranch(useAppStore.getState().db, id));
+      toast.success("Branch deleted");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not delete branch");
+    }
   }
 
   function toggleModule(id: ModuleId) {
@@ -224,6 +253,29 @@ export function SettingsScreen() {
           </div>
         ) : null}
         <p className="text-[11px] leading-5 text-muted-foreground">Indicative launch pricing only. Your plan preference is saved in this browser workspace; no payment method, checkout or charge is connected. Starter and Growth seat limits are enforced locally. Branch capacity is displayed but branch records are not yet implemented.</p>
+      </Card>
+
+      <Card className="mb-4 space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <div><h2 className="text-sm font-semibold">Branches</h2><p className="mt-1 text-xs text-muted-foreground">Manage locations and assign employees to the right branch.</p></div>
+          <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-semibold tabular-nums">{branches.length} / {currentPlan.maxBranches}</span>
+        </div>
+        {branches.length ? <div className="space-y-2">
+          {branches.map((item) => {
+            const assigned = db.members.filter((member) => member.businessId === business.id && member.branchIds?.includes(item.id)).length;
+            return <div key={item.id} className="flex items-center justify-between gap-3 rounded-xl border border-border p-3">
+              <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="truncate text-sm font-semibold">{item.name}</p>{item.isDefault ? <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">Default</span> : null}{!item.isActive ? <span className="rounded-full bg-muted px-2 py-0.5 text-[10px]">Inactive</span> : null}</div><p className="mt-1 text-xs text-muted-foreground">{item.code} · {assigned} assigned team {assigned === 1 ? "member" : "members"}</p>{item.address ? <p className="mt-1 truncate text-xs text-muted-foreground">{item.address}</p> : null}</div>
+              {!item.isDefault ? <Button size="sm" variant="ghost" className="text-danger" onClick={() => removeBranch(item.id)}>Delete</Button> : null}
+            </div>;
+          })}
+        </div> : <p className="rounded-xl border border-dashed border-border p-4 text-xs text-muted-foreground">No branches yet. Add your first location below.</p>}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Branch name"><Input value={branchName} onChange={(event) => setBranchName(event.target.value)} placeholder="e.g. Jaipur Branch" /></Field>
+          <Field label="Branch code (optional)"><Input value={branchCode} onChange={(event) => setBranchCode(event.target.value.toUpperCase())} placeholder="e.g. JAI" maxLength={12} /></Field>
+        </div>
+        <Field label="Address (optional)"><Input value={branchAddress} onChange={(event) => setBranchAddress(event.target.value)} placeholder="Branch address" /></Field>
+        <Button className="w-full" variant="secondary" onClick={addBranch} disabled={!branchName.trim() || branches.length >= currentPlan.maxBranches}>Add branch</Button>
+        {branches.length >= currentPlan.maxBranches ? <p className="text-[11px] text-muted-foreground">You have reached your {currentPlan.title} branch allowance. Choose a higher plan preference to increase this limit.</p> : null}
       </Card>
 
       <Card className="mb-4 space-y-3">
