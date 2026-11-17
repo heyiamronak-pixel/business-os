@@ -1,6 +1,7 @@
 import * as React from "react";
 import { toast } from "sonner";
 import { AppPage, ConfirmBar, PageHeader } from "@/components/app-shell";
+import { PlanFeatureGate } from "@/components/plan-feature-gate";
 import { BottomSheet } from "@/components/sheet";
 import { Badge, Button, EmptyState, Field, Input, Select } from "@/components/ui";
 import { canRole, type Role, type TeamMember } from "@/lib/domain";
@@ -87,6 +88,25 @@ export function TeamScreen() {
           ))}
         </ul>
       )}
+      <PlanFeatureGate feature="teamInsights" title="Team insights are included in Growth" description="Upgrade to Growth to see task workload and completion summaries by team member.">
+        <section className="mt-5 rounded-2xl border border-border bg-card p-4 sm:p-5">
+          <div className="mb-3"><h3 className="text-sm font-semibold">Team workload & completion</h3><p className="mt-1 text-xs text-muted-foreground">Calculated from tasks assigned to each team member.</p></div>
+          {members.length ? <div className="space-y-3">
+            {members.map((member) => {
+              const assigned = db.tasks.filter((task) => task.businessId === business.id && task.assignedTo === member.id);
+              const completed = assigned.filter((task) => task.status === "done").length;
+              const open = assigned.length - completed;
+              const rate = assigned.length ? Math.round((completed / assigned.length) * 100) : 0;
+              return <div key={member.id} className="rounded-xl border border-border/70 p-3">
+                <div className="flex items-center justify-between gap-3"><p className="text-sm font-medium">{member.name}</p><p className="text-xs tabular-nums text-muted-foreground">{assigned.length} assigned</p></div>
+                <div className="mt-2 grid grid-cols-3 gap-2 text-xs"><div><p className="text-muted-foreground">Completed</p><p className="mt-0.5 font-semibold tabular-nums">{completed}</p></div><div><p className="text-muted-foreground">Open</p><p className="mt-0.5 font-semibold tabular-nums">{open}</p></div><div><p className="text-muted-foreground">Completion</p><p className="mt-0.5 font-semibold tabular-nums">{assigned.length ? rate + "%" : "—"}</p></div></div>
+                {assigned.length ? <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary" style={{ width: rate + "%" }} /></div> : <p className="mt-2 text-[11px] text-muted-foreground">No tasks assigned yet.</p>}
+              </div>;
+            })}
+          </div> : <p className="text-xs text-muted-foreground">Add team members to start viewing workload insights.</p>}
+        </section>
+      </PlanFeatureGate>
+
       <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
         Permission map is ready for cloud auth: owners see everything; employees are limited to sales, inventory, customers and tasks. Access is scoped per business.
       </p>
