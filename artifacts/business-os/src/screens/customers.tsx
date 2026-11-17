@@ -1,9 +1,11 @@
 import * as React from "react";
+import { Download } from "lucide-react";
 import { toast } from "sonner";
 import { AppPage, ConfirmBar, PageHeader, SearchField } from "@/components/app-shell";
 import { BottomSheet } from "@/components/sheet";
 import { Badge, Button, EmptyState, Field, Input, Textarea } from "@/components/ui";
 import type { Customer } from "@/lib/domain";
+import { downloadCsv } from "@/lib/csv";
 import { customerStats } from "@/lib/engines";
 import { formatDate, money } from "@/lib/format";
 import { addCustomerNote, deleteCustomer, upsertCustomer } from "@/lib/services";
@@ -38,12 +40,19 @@ export function CustomersScreen() {
 
   const form = editing === "new" ? { name: "", email: "", phone: "", notes: "" } : editing;
 
+  function exportCustomers() {
+    downloadCsv("business-sutra-customers.csv",
+      ["Name", "Email", "Phone", "Address", "GSTIN", "Orders", "Spend", "Last purchase", "Segment", "Notes"],
+      list.map((entry) => [entry.customer.name, entry.customer.email, entry.customer.phone, entry.customer.address, entry.customer.gstin, entry.orders, entry.spend, entry.lastPurchase, entry.segment, entry.customer.notes]));
+    toast.success("Exported " + list.length + " customers");
+  }
+
   return (
     <AppPage>
       <PageHeader
         title="Customers"
         subtitle={`${customers.length} on file`}
-        action={<Button size="sm" onClick={() => setEditing("new")}>Add</Button>}
+        action={<div className="flex gap-2"><Button size="sm" variant="secondary" onClick={exportCustomers} disabled={!list.length}><Download className="size-4" />Export</Button><Button size="sm" onClick={() => setEditing("new")}>Add</Button></div>}
       />
       <SearchField value={q} onChange={setQ} placeholder="Search customers" />
       {customers.length === 0 ? (
