@@ -7,7 +7,7 @@ import { BottomSheet } from "@/components/sheet";
 import { Badge, Button, Card, EmptyState, Input, Segmented, Stat } from "@/components/ui";
 import type { Sale } from "@/lib/domain";
 import { formatDateTime, money } from "@/lib/format";
-import { deleteSale, recordPayment } from "@/lib/services";
+import { recordPayment, reverseSale } from "@/lib/services";
 import { useAppStore, useBusiness } from "@/lib/store";
 
 type DateFilter = "all" | "today" | "7d" | "month";
@@ -23,6 +23,7 @@ export function SalesScreen() {
   const [sale, setSale] = React.useState<Sale | null>(null);
   const [payment, setPayment] = React.useState("");
   const [confirm, setConfirm] = React.useState(false);
+  const [reverseReason, setReverseReason] = React.useState("");
 
   if (!business) return null;
   const currency = business.currency;
@@ -40,6 +41,7 @@ export function SalesScreen() {
       if (dateFilter === "today" && created < todayStart.getTime()) return false;
       if (dateFilter === "7d" && created < weekStart.getTime()) return false;
       if (dateFilter === "month" && created < monthStart.getTime()) return false;
+      if (record.status === "reversed" && paymentFilter !== "all") return false;
       if (paymentFilter === "due" && record.outstanding <= 0) return false;
       if (paymentFilter === "paid" && record.outstanding > 0) return false;
       if (!safeQuery) return true;
@@ -51,9 +53,10 @@ export function SalesScreen() {
     })
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
-  const booked = sales.reduce((sum, record) => sum + record.total, 0);
-  const collected = sales.reduce((sum, record) => sum + record.paidAmount, 0);
-  const due = sales.reduce((sum, record) => sum + record.outstanding, 0);
+  const activeSalesInView = sales.filter((record) => record.status !== "reversed");
+  const booked = activeSalesInView.reduce((sum, record) => sum + record.total, 0);
+  const collected = activeSalesInView.reduce((sum, record) => sum + record.paidAmount, 0);
+  const due = activeSalesInView.reduce((sum, record) => sum + record.outstanding, 0);
 
   function exportCsv() {
     const rows = [
@@ -97,11 +100,11 @@ export function SalesScreen() {
     <AppPage>
       <PageHeader
         title="Sales"
-        subtitle={`${allSales.length} completed checkouts`}
+        subtitle={`${allSales.filter((record) => record.status !== "reversed").length} completed · ${allSales.filter((record) => record.status === "reversed").length} reversed`}
         action={<Button size="sm" variant="secondary" onClick={exportCsv} disabled={!sales.length}><Download className="size-4" />Export</Button>}
       />
       <div className="mb-4 grid grid-cols-2 gap-2">
-        <Card><Stat label="Sales in view" value={String(sales.length)} /></Card>
+        <Card><Stat label="Sales in view" value={String(activeSalesInView.length)} /></Card>
         <Card><Stat label="Booked revenue" value={money(booked, currency)} /></Card>
         <Card><Stat label="Cash collected" value={money(collected, currency)} tone="good" /></Card>
         <Card><Stat label="Outstanding" value={money(due, currency)} tone={due > 0 ? "bad" : "good"} /></Card>
@@ -161,8 +164,8 @@ export function SalesScreen() {
                     {formatDateTime(record.createdAt)} · {record.items.length} items · {record.id.slice(-7).toUpperCase()}
                   </p>
                   <div className="mt-2">
-                    <Badge tone={record.paymentStatus === "paid" ? "good" : record.paymentStatus === "partial" ? "warn" : "bad"}>
-                      {record.paymentStatus}
+                    <Badge tone={record.status === "reversed" ? "bad" : record.paymentStatus === "paid" ? "good" : record.paymentStatus === "partial" ? "warn" : "bad"}>
+                      {record.status === "reversed" ? "reversed" : record.paymentStatus}
                     </Badge>
                   </div>
                 </div>
@@ -186,7 +189,7 @@ export function SalesScreen() {
         footer={
           sale ? (
             <div className="space-y-2">
-              {sale.outstanding > 0 ? (
+              {sale.status !== "reversed" && sale.outstanding > 0 ? (
                 <>
                   <Input
                     type="number"
@@ -201,9 +204,11 @@ export function SalesScreen() {
                   <Button className="w-full" onClick={collectPayment} disabled={!payment.trim()}>Record payment</Button>
                 </>
               ) : null}
-              <Button variant="ghost" className="w-full text-danger" onClick={() => setConfirm(true)}>
-                Reverse sale
-              </Button>
+              {sale.status !== "reversed" ? (
+                <Button variant="ghost" className="w-full text-danger" onClick={() => { setReverseReason(""); setConfirm(true); }}>
+                  Reverse sale
+                </Button>
+              ) : <p className="text-sm text-danger">Reversed · {sale.reversalReason ?? "Reason not recorded"}</p>}
             </div>
           ) : null
         }
@@ -234,7 +239,7 @@ export function SalesScreen() {
         open={confirm}
         onOpenChange={setConfirm}
         title="Reverse this sale?"
-        description="Stock will be returned to inventory."
+        description="Stock will be returned to inventory. The original sale stays in the ledger."
         footer={
           <ConfirmBar
             danger
@@ -242,15 +247,23 @@ export function SalesScreen() {
             onCancel={() => setConfirm(false)}
             onConfirm={() => {
               if (!sale) return;
-              apply(deleteSale(useAppStore.getState().db, sale.id));
-              toast.success("Sale reversed");
-              setConfirm(false);
-              setSale(null);
+              try {
+                apply(reverseSale(useAppStore.getState().db, sale.id, reverseReason));
+                toast.success("Sale reversed and original record preserved");
+                setConfirm(false);
+                setSale(null);
+                setReverseReason("");
+              } catch (error) {
+                toast.error(error instanceof Error ? error.message : "Could not reverse sale");
+              }
             }}
           />
         }
       >
-        <p className="text-sm text-muted-foreground">Use this only when the checkout was a mistake.</p>
+        <div className="space-y-2">
+          <p className="text-sm text-muted-foreground">Use this for a cancelled or incorrect checkout. Reversals restore stock and are excluded from revenue and profit totals without deleting the original transaction.</p>
+          <Input value={reverseReason} onChange={(event) => setReverseReason(event.target.value)} placeholder="Reason for reversal (required)" />
+        </div>
       </BottomSheet>
     </AppPage>
   );

@@ -24,7 +24,7 @@ export function InventoryScreen() {
   const [reason, setReason] = React.useState("");
 
   if (!business) return null;
-  const products = db.products.filter((p) => p.businessId === business.id);
+  const products = db.products.filter((p) => p.businessId === business.id && !p.archived);
   const list = products.filter((p) => {
     const s = q.toLowerCase();
     const matchesQ = !s || p.name.toLowerCase().includes(s) || p.sku.toLowerCase().includes(s);
@@ -107,7 +107,7 @@ export function InventoryScreen() {
         title={product?.name ?? "Stock"}
         description="Record a movement. Sales already deduct stock on their own."
         footer={
-          <Button className="w-full" onClick={submit}>
+          <Button className="w-full" onClick={submit} disabled={!qty.trim() || reason.trim().length < 3}>
             Save movement
           </Button>
         }
@@ -124,7 +124,7 @@ export function InventoryScreen() {
             <Field label={mode === "adjustment" ? "New quantity" : "Quantity"}>
               <Input type="number" inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} />
             </Field>
-            <Field label="Reason">
+            <Field label="Reason" hint="Required for stock audit history">
               <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Purchase, damage, count…" />
             </Field>
             <p className="text-xs font-medium uppercase tracking-wide text-subtle">Movement history</p>

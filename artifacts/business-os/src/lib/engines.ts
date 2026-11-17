@@ -34,7 +34,7 @@ export function inRange(iso: string, range: DateRange): boolean {
 }
 
 function salesIn(db: WorkspaceDB, businessId: string, range?: DateRange): Sale[] {
-  return db.sales.filter((s) => s.businessId === businessId && (!range || inRange(s.createdAt, range)));
+  return db.sales.filter((s) => s.businessId === businessId && s.status !== "reversed" && (!range || inRange(s.createdAt, range)));
 }
 
 function expensesIn(db: WorkspaceDB, businessId: string, range?: DateRange): Expense[] {
@@ -215,11 +215,11 @@ export interface CustomerStats {
 }
 
 export function customerStats(db: WorkspaceDB, customer: Customer, now = new Date()): CustomerStats {
-  const sales = db.sales.filter((s) => s.customerId === customer.id);
+  const sales = db.sales.filter((s) => s.customerId === customer.id && s.status !== "reversed");
   const spend = roundMoney(sales.reduce((s, x) => s + x.total, 0));
   const outstanding = roundMoney(sales.reduce((s, x) => s + x.outstanding, 0));
   const lastPurchase = sales[0]?.createdAt;
-  const all = db.sales.filter((s) => s.businessId === customer.businessId);
+  const all = db.sales.filter((s) => s.businessId === customer.businessId && s.status !== "reversed");
   const avg = all.length ? all.reduce((s, x) => s + x.total, 0) / Math.max(1, new Set(all.map((s) => s.customerId).filter(Boolean)).size) : 0;
   const daysSince = lastPurchase ? (now.getTime() - new Date(lastPurchase).getTime()) / 86400000 : 999;
   let segment: CustomerStats["segment"] = "new";
@@ -244,7 +244,7 @@ export function lastNDaysSeries(db: WorkspaceDB, businessId: string, days = 14, 
     d.setDate(d.getDate() - i);
     const key = d.toISOString().slice(0, 10);
     const revenue = db.sales
-      .filter((s) => s.businessId === businessId && s.createdAt.slice(0, 10) === key)
+      .filter((s) => s.businessId === businessId && s.status !== "reversed" && s.createdAt.slice(0, 10) === key)
       .reduce((s, x) => s + x.total, 0);
     const expenses = db.expenses
       .filter((e) => e.businessId === businessId && e.date.slice(0, 10) === key)
@@ -321,7 +321,7 @@ export function buildContext(db: WorkspaceDB, business: Business, now = new Date
   const today = startOfDay(now).toISOString().slice(0, 10);
   const dueToday = tasks.filter((t) => t.dueDate && t.dueDate.slice(0, 10) === today);
   const overdue = tasks.filter((t) => t.dueDate && t.dueDate.slice(0, 10) < today);
-  const unpaid = db.sales.filter((s) => s.businessId === business.id && s.outstanding > 0);
+  const unpaid = db.sales.filter((s) => s.businessId === business.id && s.status !== "reversed" && s.outstanding > 0);
   const campaigns = db.campaigns.filter((c) => c.businessId === business.id && inRange(c.date, range));
   const monthSales = salesIn(db, business.id, range);
   const customers = db.customers.filter((c) => c.businessId === business.id);

@@ -178,6 +178,7 @@ export interface Customer {
   state?: string;
   stateCode?: string;
   notes?: string;
+  archived?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -209,6 +210,9 @@ export interface Sale {
   outstanding: number;
   note?: string;
   createdAt: string;
+  status?: "completed" | "reversed";
+  reversalReason?: string;
+  reversedAt?: string;
 }
 
 export type SupplierStatus = "active" | "inactive";

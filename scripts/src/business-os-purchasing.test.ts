@@ -3,7 +3,15 @@ import assert from "node:assert/strict";
 import {
   createPurchase,
   deleteSupplier,
+  archiveProduct,
+  archiveCustomer,
+  adjustStock,
+  completeSale,
+  deleteProduct,
+  deleteCustomer,
+  reverseSale,
   recordPayment,
+  upsertCustomer,
   updatePurchasePayment,
   upsertSupplier,
 } from "../../artifacts/business-os/src/lib/services.ts";
@@ -151,4 +159,77 @@ test("customer collection rejects amounts above the remaining sale balance", () 
   assert.equal(paid.sales[0].paidAmount, 100);
   assert.equal(paid.sales[0].outstanding, 0);
   assert.equal(paid.sales[0].paymentStatus, "paid");
+});
+
+
+test("stock movements require a reason, stay within the business, and record the exact adjustment", () => {
+  const { db } = setup();
+  assert.throws(() => adjustStock(db, {
+    businessId: "business-1", productId: product.id, type: "out", quantity: 1,
+  }), /movement reason/);
+  assert.throws(() => adjustStock(db, {
+    businessId: "business-2", productId: product.id, type: "out", quantity: 1, reason: "Damage",
+  }), /this business/);
+
+  const updated = adjustStock(db, {
+    businessId: "business-1", productId: product.id, type: "adjustment", quantity: 3, reason: "Cycle count",
+  });
+  assert.equal(updated.products[0].stock, 3);
+  assert.equal(updated.movements[0].quantity, -2);
+  assert.equal(updated.movements[0].reason, "Cycle count");
+});
+
+test("products with transaction history are archived instead of deleted", () => {
+  const { db } = setup();
+  const withMovement = adjustStock(db, {
+    businessId: "business-1", productId: product.id, type: "in", quantity: 1, reason: "Opening correction",
+  });
+  assert.throws(() => deleteProduct(withMovement, product.id), /transaction history/);
+  const archived = archiveProduct(withMovement, product.id);
+  assert.equal(archived.products[0].archived, true);
+  assert.equal(archiveProduct(archived, product.id, false).products[0].archived, false);
+});
+
+test("customers linked to transactions are archived and cannot be deleted", () => {
+  const created = upsertSupplier(emptyDb(), { businessId: "business-1", name: "Supplier" });
+  const customerResult = upsertCustomer(created.db, {
+    businessId: "business-1", name: "Customer One", phone: "9999999999",
+  });
+  const withSale = completeSale({
+    ...customerResult.db,
+    products: [product],
+  }, {
+    businessId: "business-1",
+    customerId: customerResult.customer.id,
+    lines: [{ productId: product.id, qty: 1, unitPrice: 80, discount: 0 }],
+    cartDiscount: 0,
+    paymentMethod: "cash",
+    paidAmount: 80,
+  }).db;
+  assert.throws(() => deleteCustomer(withSale, customerResult.customer.id), /business history/);
+  const archived = archiveCustomer(withSale, customerResult.customer.id);
+  assert.equal(archived.customers[0].archived, true);
+  assert.equal(archiveCustomer(archived, customerResult.customer.id, false).customers[0].archived, false);
+});
+
+test("sale reversal restores stock once, preserves the sale, and requires a reason", () => {
+  const { db } = setup();
+  const created = completeSale(db, {
+    businessId: "business-1",
+    lines: [{ productId: product.id, qty: 2, unitPrice: 80, discount: 0 }],
+    cartDiscount: 0,
+    paymentMethod: "cash",
+    paidAmount: 160,
+  });
+  assert.equal(created.db.products[0].stock, 3);
+  assert.throws(() => reverseSale(created.db, created.sale.id, "  "), /reversal reason/);
+
+  const reversed = reverseSale(created.db, created.sale.id, "Incorrect checkout");
+  assert.equal(reversed.products[0].stock, 5);
+  assert.equal(reversed.sales[0].status, "reversed");
+  assert.equal(reversed.sales[0].reversalReason, "Incorrect checkout");
+  assert.equal(reversed.movements[0].refId, created.sale.id);
+  assert.equal(reversed.activity[0].refId, created.sale.id);
+  assert.throws(() => reverseSale(reversed, created.sale.id, "Duplicate reversal"), /already been reversed/);
+  assert.throws(() => recordPayment(reversed, created.sale.id, 1), /cannot receive another payment/);
 });

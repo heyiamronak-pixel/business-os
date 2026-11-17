@@ -239,6 +239,7 @@ export function upsertProduct(
     const prev = db.products.find((p) => p.id === input.id);
     if (!prev) throw new ServiceError("Product not found.");
     const stockDelta = roundMoney(input.stock - prev.stock);
+    if (stockDelta !== 0) throw new ServiceError("Use Inventory to change stock so every movement has a reason and audit entry.");
     const product: Product = {
       ...prev,
       name,
@@ -307,8 +308,22 @@ export function upsertProduct(
   return { db: { ...db, products: [product, ...db.products], movements }, product };
 }
 
+export function archiveProduct(db: WorkspaceDB, id: string, archived = true): WorkspaceDB {
+  const product = db.products.find((item) => item.id === id);
+  if (!product) throw new ServiceError("Product not found.");
+  return { ...db, products: replace(db.products, id, { archived, updatedAt: nowIso() }) };
+}
+
 export function deleteProduct(db: WorkspaceDB, id: string): WorkspaceDB {
-  return { ...db, products: db.products.filter((p) => p.id !== id) };
+  const product = db.products.find((item) => item.id === id);
+  if (!product) return db;
+  const hasHistory =
+    db.movements.some((movement) => movement.productId === id) ||
+    db.sales.some((sale) => sale.items.some((item) => item.productId === id)) ||
+    db.purchases.some((purchase) => purchase.items.some((item) => item.productId === id)) ||
+    db.invoices.some((invoice) => invoice.items.some((item) => item.productId === id));
+  if (hasHistory) throw new ServiceError("This product has transaction history. Archive it to preserve the audit trail.");
+  return { ...db, products: db.products.filter((item) => item.id !== id) };
 }
 
 export function adjustStock(
@@ -321,9 +336,13 @@ export function adjustStock(
     reason?: string;
   },
 ): WorkspaceDB {
-  const product = db.products.find((p) => p.id === input.productId);
-  if (!product) throw new ServiceError("Product not found.");
-  if (input.quantity === 0) throw new ServiceError("Enter a quantity.");
+  const product = db.products.find((p) => p.id === input.productId && p.businessId === input.businessId);
+  if (!product || product.archived) throw new ServiceError("Product not found in this business or is archived.");
+  if (!Number.isFinite(input.quantity) || (input.type !== "adjustment" && input.quantity <= 0) || input.quantity < 0) {
+    throw new ServiceError(input.type === "adjustment" ? "Enter a valid stock quantity." : "Enter a quantity greater than zero.");
+  }
+  const movementReason = input.reason?.trim() ?? "";
+  if (movementReason.length < 3) throw new ServiceError("Add a stock movement reason (at least 3 characters).");
   let next = product.stock;
   if (input.type === "in") next = roundMoney(product.stock + Math.abs(input.quantity));
   else if (input.type === "out") next = roundMoney(product.stock - Math.abs(input.quantity));
@@ -343,7 +362,7 @@ export function adjustStock(
     type: input.type,
     quantity: qty,
     resultingStock: next,
-    reason: input.reason?.trim() || undefined,
+    reason: movementReason,
     createdAt: now,
   };
   return {
@@ -368,8 +387,8 @@ export function upsertCustomer(
   if (!name) throw new ServiceError("Customer name is required.");
   const now = nowIso();
   if (input.id) {
-    const prev = db.customers.find((c) => c.id === input.id);
-    if (!prev) throw new ServiceError("Customer not found.");
+    const prev = db.customers.find((c) => c.id === input.id && c.businessId === input.businessId);
+    if (!prev) throw new ServiceError("Customer not found in this business.");
     const customer: Customer = {
       ...prev,
       name,
@@ -393,8 +412,22 @@ export function upsertCustomer(
   return { db: { ...db, customers: [customer, ...db.customers] }, customer };
 }
 
+export function archiveCustomer(db: WorkspaceDB, id: string, archived = true): WorkspaceDB {
+  const customer = db.customers.find((item) => item.id === id);
+  if (!customer) throw new ServiceError("Customer not found.");
+  return { ...db, customers: replace(db.customers, id, { archived, updatedAt: nowIso() }) };
+}
+
 export function deleteCustomer(db: WorkspaceDB, id: string): WorkspaceDB {
-  return { ...db, customers: db.customers.filter((c) => c.id !== id) };
+  const customer = db.customers.find((item) => item.id === id);
+  if (!customer) return db;
+  const hasHistory =
+    db.sales.some((sale) => sale.customerId === id) ||
+    db.leads.some((lead) => lead.convertedCustomerId === id) ||
+    db.invoices.some((invoice) => invoice.customerId === id) ||
+    db.activity.some((activity) => activity.customerId === id);
+  if (hasHistory) throw new ServiceError("This customer has business history. Archive the customer to preserve linked records.");
+  return { ...db, customers: db.customers.filter((item) => item.id !== id) };
 }
 
 export function upsertLead(
@@ -431,7 +464,7 @@ export function convertLeadToCustomer(db: WorkspaceDB, id: string): { db: Worksp
   if (!lead) throw new ServiceError("Lead not found.");
   const linked = lead.convertedCustomerId ? db.customers.find((customer) => customer.id === lead.convertedCustomerId && customer.businessId === lead.businessId) : undefined;
   if (linked) return { db, customer: linked };
-  const match = db.customers.find((customer) => customer.businessId === lead.businessId && (
+  const match = db.customers.find((customer) => customer.businessId === lead.businessId && !customer.archived && (
     (lead.email && customer.email?.toLowerCase() === lead.email.toLowerCase()) ||
     (lead.phone && customer.phone === lead.phone)
   ));
@@ -670,9 +703,11 @@ export function completeSale(
   for (const line of input.lines) {
     const product = productMap.get(line.productId);
     if (!product || product.businessId !== input.businessId) throw new ServiceError("A product in the cart is missing.");
-    if (line.qty <= 0) throw new ServiceError(`Enter a quantity for ${product.name}.`);
+    if (!Number.isFinite(line.qty) || line.qty <= 0) throw new ServiceError(`Enter a valid quantity for ${product.name}.`);
+    if (product.archived) throw new ServiceError(`${product.name} is archived and cannot be sold.`);
     if (product.stock < line.qty) throw new ServiceError(`${product.name} only has ${product.stock} ${product.unit} in stock.`);
-    if (line.unitPrice < 0) throw new ServiceError("Price cannot be negative.");
+    if (!Number.isFinite(line.unitPrice) || line.unitPrice < 0) throw new ServiceError("Price must be a valid non-negative amount.");
+    if (!Number.isFinite(line.discount) || line.discount < 0 || line.discount > line.unitPrice * line.qty) throw new ServiceError("Line discount must be between zero and the line value.");
     items.push({
       productId: product.id,
       name: product.name,
@@ -696,7 +731,8 @@ export function completeSale(
   const outstanding = roundMoney(Math.max(0, total - paid));
   const paymentStatus = outstanding <= 0 ? "paid" : paid > 0 ? "partial" : "unpaid";
   const now = nowIso();
-  const customer = input.customerId ? db.customers.find((c) => c.id === input.customerId) : undefined;
+  const customer = input.customerId ? db.customers.find((c) => c.id === input.customerId && c.businessId === input.businessId && !c.archived) : undefined;
+  if (input.customerId && !customer) throw new ServiceError("Select an active customer from this business.");
   const sale: Sale = {
     id: createId("sal"),
     businessId: input.businessId,
@@ -714,6 +750,7 @@ export function completeSale(
     outstanding,
     note: input.note?.trim() || undefined,
     createdAt: now,
+    status: "completed",
   };
   let products = db.products;
   let movements = db.movements;
@@ -758,8 +795,9 @@ export function completeSale(
 }
 
 export function recordPayment(db: WorkspaceDB, saleId: string, amount: number): WorkspaceDB {
-  const sale = db.sales.find((s) => s.id === saleId);
+  const sale = db.sales.find((item) => item.id === saleId);
   if (!sale) throw new ServiceError("Sale not found.");
+  if (sale.status === "reversed") throw new ServiceError("A reversed sale cannot receive another payment.");
   if (!Number.isFinite(amount) || amount <= 0) throw new ServiceError("Enter a payment amount greater than zero.");
   const currentPaid = Number.isFinite(sale.paidAmount) ? Math.min(sale.total, Math.max(0, sale.paidAmount)) : 0;
   const currentOutstanding = roundMoney(Math.max(0, sale.total - currentPaid));
@@ -767,45 +805,44 @@ export function recordPayment(db: WorkspaceDB, saleId: string, amount: number): 
   const paid = roundMoney(currentPaid + amount);
   const outstanding = roundMoney(Math.max(0, sale.total - paid));
   const paymentStatus = outstanding <= 0 ? "paid" : "partial";
-  return {
-    ...db,
-    sales: replace(db.sales, saleId, { paidAmount: paid, outstanding, paymentStatus }),
-  };
+  return { ...db, sales: replace(db.sales, saleId, { paidAmount: paid, outstanding, paymentStatus }) };
 }
 
-export function deleteSale(db: WorkspaceDB, saleId: string): WorkspaceDB {
-  const sale = db.sales.find((s) => s.id === saleId);
-  if (!sale) return db;
+export function reverseSale(db: WorkspaceDB, saleId: string, reason: string): WorkspaceDB {
+  const sale = db.sales.find((item) => item.id === saleId);
+  if (!sale) throw new ServiceError("Sale not found.");
+  if (sale.status === "reversed") throw new ServiceError("This sale has already been reversed.");
+  const reversalReason = reason.trim();
+  if (reversalReason.length < 3) throw new ServiceError("Add a reversal reason (at least 3 characters).");
   const now = nowIso();
   let products = db.products;
   let movements = db.movements;
   for (const item of sale.items) {
-    const product = products.find((p) => p.id === item.productId);
+    const product = products.find((entry) => entry.id === item.productId && entry.businessId === sale.businessId);
     if (!product) continue;
     const next = roundMoney(product.stock + item.qty);
     products = replace(products, product.id, { stock: next, updatedAt: now });
-    movements = [
-      {
-        id: createId("mov"),
-        businessId: sale.businessId,
-        productId: product.id,
-        type: "in",
-        quantity: item.qty,
-        resultingStock: next,
-        reason: "Sale reversed",
-        refId: sale.id,
-        createdAt: now,
-      },
-      ...movements,
-    ];
+    movements = [{
+      id: createId("mov"), businessId: sale.businessId, productId: product.id, type: "in",
+      quantity: item.qty, resultingStock: next, reason: `Sale reversal · ${reversalReason}`,
+      refId: sale.id, createdAt: now,
+    }, ...movements];
   }
-  return {
-    ...db,
-    products,
-    movements,
-    sales: db.sales.filter((s) => s.id !== saleId),
-    activity: db.activity.filter((a) => a.refId !== saleId),
+  const reversed: Sale = { ...sale, status: "reversed", reversalReason, reversedAt: now };
+  const activity: Activity = {
+    id: createId("act"), businessId: sale.businessId, customerId: sale.customerId,
+    type: "system", message: `Sale ${sale.id.slice(-7).toUpperCase()} reversed: ${reversalReason}`,
+    refId: sale.id, createdAt: now,
   };
+  return {
+    ...db, products, movements, sales: replace(db.sales, sale.id, reversed),
+    activity: [activity, ...db.activity],
+  };
+}
+
+/** Legacy deletion entry point intentionally refuses destructive transaction removal. */
+export function deleteSale(_db: WorkspaceDB, _saleId: string): WorkspaceDB {
+  throw new ServiceError("Sales are not deleted. Use reverseSale with a reason to preserve the transaction history.");
 }
 
 export function upsertExpense(
@@ -821,9 +858,14 @@ export function upsertExpense(
   },
 ): WorkspaceDB {
   if (!input.category.trim()) throw new ServiceError("Choose a category.");
-  if (!(input.amount > 0)) throw new ServiceError("Amount must be greater than zero.");
+  if (!Number.isFinite(input.amount) || input.amount <= 0) throw new ServiceError("Amount must be a valid number greater than zero.");
+  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(input.date) || Number.isNaN(new Date(input.date + "T00:00:00").getTime())) {
+    throw new ServiceError("Enter a valid expense date.");
+  }
   const now = nowIso();
   if (input.id) {
+    const existing = db.expenses.find((expense) => expense.id === input.id && expense.businessId === input.businessId);
+    if (!existing) throw new ServiceError("Expense not found in this business.");
     return {
       ...db,
       expenses: replace(db.expenses, input.id, {

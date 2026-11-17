@@ -4,12 +4,12 @@ import { toast } from "sonner";
 import { AppPage, ConfirmBar, PageHeader, SearchField } from "@/components/app-shell";
 import { SavedViewControls } from "@/components/saved-view-controls";
 import { BottomSheet } from "@/components/sheet";
-import { Badge, Button, EmptyState, Field, Input, Select, Textarea } from "@/components/ui";
+import { Badge, Button, EmptyState, Field, Input, Select, Textarea, Segmented } from "@/components/ui";
 import type { Customer } from "@/lib/domain";
 import { downloadCsv } from "@/lib/csv";
 import { customerStats } from "@/lib/engines";
 import { formatDate, money } from "@/lib/format";
-import { addCustomerNote, deleteCustomer, upsertCustomer } from "@/lib/services";
+import { addCustomerNote, archiveCustomer, upsertCustomer } from "@/lib/services";
 import { useAppStore, useBusiness } from "@/lib/store";
 
 const SEG: Record<string, { label: string; tone: "neutral" | "good" | "warn" | "brand" }> = {
@@ -30,10 +30,12 @@ export function CustomersScreen() {
   const [view, setView] = React.useState<Customer | null>(null);
   const [note, setNote] = React.useState("");
   const [confirm, setConfirm] = React.useState(false);
+  const [archiveFilter, setArchiveFilter] = React.useState<"active" | "archived" | "all">("active");
 
   if (!business) return null;
   const customers = db.customers.filter((c) => c.businessId === business.id);
   const list = customers
+    .filter((customer) => archiveFilter === "all" || (archiveFilter === "archived" ? customer.archived : !customer.archived))
     .map((c) => customerStats(db, c))
     .filter((s) => {
       const t = q.toLowerCase();
@@ -55,7 +57,7 @@ export function CustomersScreen() {
     <AppPage>
       <PageHeader
         title="Customers"
-        subtitle={`${customers.length} on file`}
+        subtitle={`${customers.filter((customer) => !customer.archived).length} active · ${customers.filter((customer) => customer.archived).length} archived`}
         action={<div className="flex gap-2"><Button size="sm" variant="secondary" onClick={exportCustomers} disabled={!list.length}><Download className="size-4" />Export</Button><Button size="sm" onClick={() => setEditing("new")}>Add</Button></div>}
       />
       <SearchField value={q} onChange={setQ} placeholder="Search customers" />
@@ -63,6 +65,13 @@ export function CustomersScreen() {
         setQ(saved.q ?? "");
         setSegment(saved.segment ?? "all");
       }} />
+      <div className="mb-3">
+        <Segmented value={archiveFilter} onChange={(value) => setArchiveFilter(value as typeof archiveFilter)} options={[
+          { id: "active", label: "Active" },
+          { id: "archived", label: "Archived" },
+          { id: "all", label: "All" },
+        ]} />
+      </div>
       <div className="mb-3">
         <Select value={segment} onChange={(event) => setSegment(event.target.value)} className="w-full sm:w-auto">
           <option value="all">All customer segments</option>
@@ -178,23 +187,23 @@ export function CustomersScreen() {
       <BottomSheet
         open={confirm}
         onOpenChange={setConfirm}
-        title="Delete customer?"
+        title={view?.archived ? "Restore customer?" : "Archive customer?"}
         footer={
           <ConfirmBar
             danger
-            confirmLabel="Delete"
+            confirmLabel={view?.archived ? "Restore" : "Archive"}
             onCancel={() => setConfirm(false)}
             onConfirm={() => {
               if (!view) return;
-              apply(deleteCustomer(useAppStore.getState().db, view.id));
-              toast.success("Customer removed");
+              apply(archiveCustomer(useAppStore.getState().db, view.id, !view.archived));
+              toast.success(view.archived ? "Customer restored" : "Customer archived");
               setConfirm(false);
               setView(null);
             }}
           />
         }
       >
-        <p className="text-sm text-muted-foreground">Past sales remain in the ledger.</p>
+        <p className="text-sm text-muted-foreground">Archived customers stay linked to sales, invoices, notes and lead records. You can restore them later.</p>
       </BottomSheet>
     </AppPage>
   );
@@ -234,7 +243,7 @@ function CustomerSheet({
             Edit
           </Button>
           <Button variant="ghost" className="text-danger" onClick={onDelete}>
-            Delete
+            {customer.archived ? "Restore" : "Archive"}
           </Button>
         </div>
       }

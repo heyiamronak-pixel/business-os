@@ -4,12 +4,12 @@ import { toast } from "sonner";
 import { AppPage, ConfirmBar, PageHeader, SearchField } from "@/components/app-shell";
 import { SavedViewControls } from "@/components/saved-view-controls";
 import { BottomSheet } from "@/components/sheet";
-import { Badge, Button, EmptyState, Field, Input, Select } from "@/components/ui";
+import { Badge, Button, EmptyState, Field, Input, Select, Segmented } from "@/components/ui";
 import { UNITS, type Product } from "@/lib/domain";
 import { downloadCsv } from "@/lib/csv";
 import { money } from "@/lib/format";
 import { generateSku } from "@/lib/sku";
-import { deleteProduct, upsertProduct } from "@/lib/services";
+import { archiveProduct, upsertProduct } from "@/lib/services";
 import { fileToDataUrl } from "@/lib/theme";
 import { useAppStore, useBusiness } from "@/lib/store";
 import { Thumb } from "@/screens/sell";
@@ -25,11 +25,15 @@ export function ProductsScreen() {
   const [sort, setSort] = React.useState<SortKey>("name");
   const [editing, setEditing] = React.useState<Partial<Product> | null>(null);
   const [confirmId, setConfirmId] = React.useState<string | null>(null);
+  const [productFilter, setProductFilter] = React.useState<"active" | "archived" | "all">("active");
 
   if (!business) return null;
   const products = db.products.filter((p) => p.businessId === business.id);
-  const categories = Array.from(new Set(products.map((p) => p.category).filter(Boolean))) as string[];
-  let list = products.filter((p) => {
+  const categories = Array.from(new Set(products.filter((p) => !p.archived).map((p) => p.category).filter(Boolean))) as string[];
+  const visibleProducts = products.filter((p) =>
+    productFilter === "all" || (productFilter === "archived" ? p.archived : !p.archived)
+  );
+  let list = visibleProducts.filter((p) => {
     const s = q.toLowerCase();
     const matchesQ = !s || p.name.toLowerCase().includes(s) || p.sku.toLowerCase().includes(s) || p.barcode?.includes(s);
     const matchesC = category === "all" || p.category === category;
@@ -52,7 +56,7 @@ export function ProductsScreen() {
     <AppPage>
       <PageHeader
         title="Products"
-        subtitle={`${products.length} in catalog`}
+        subtitle={`${products.filter((product) => !product.archived).length} active products · ${products.filter((product) => product.archived).length} archived`}
         action={
           <div className="flex gap-2">
             <Button size="sm" variant="secondary" onClick={exportProducts} disabled={!list.length}><Download className="size-4" />Export</Button>
@@ -66,6 +70,13 @@ export function ProductsScreen() {
         setCategory(saved.category ?? "all");
         setSort((saved.sort as SortKey) ?? "name");
       }} />
+      <div className="mb-3">
+        <Segmented value={productFilter} onChange={(value) => setProductFilter(value as typeof productFilter)} options={[
+          { id: "active", label: "Active" },
+          { id: "archived", label: "Archived" },
+          { id: "all", label: "All" },
+        ]} />
+      </div>
       <div className="mb-3 flex gap-2 overflow-x-auto">
         <Select value={category} onChange={(e) => setCategory(e.target.value)} className="w-auto min-w-28">
           <option value="all">All</option>
@@ -119,7 +130,7 @@ export function ProductsScreen() {
           existingSkus={products.map((p) => p.sku)}
           currency={business.currency}
           onClose={() => setEditing(null)}
-          onDelete={editing.id ? () => setConfirmId(editing.id!) : undefined}
+          onArchive={editing.id ? () => setConfirmId(editing.id!) : undefined}
           onSave={(input) => {
             try {
               const result = upsertProduct(useAppStore.getState().db, { ...input, businessId: business.id, id: editing.id });
@@ -135,23 +146,28 @@ export function ProductsScreen() {
       <BottomSheet
         open={!!confirmId}
         onOpenChange={() => setConfirmId(null)}
-        title="Delete product?"
-        description="Sales history stays. Stock records for this item remain in movement history."
+        title={products.find((product) => product.id === confirmId)?.archived ? "Restore product?" : "Archive product?"}
+        description="Archived products are hidden from checkout, inventory and new purchases. Existing sales, invoices and stock history remain intact."
         footer={
           <ConfirmBar
-            danger
-            confirmLabel="Delete"
+            confirmLabel={products.find((product) => product.id === confirmId)?.archived ? "Restore" : "Archive"}
             onCancel={() => setConfirmId(null)}
             onConfirm={() => {
-              apply(deleteProduct(useAppStore.getState().db, confirmId!));
-              toast.success("Product removed");
-              setConfirmId(null);
-              setEditing(null);
+              if (!confirmId) return;
+              try {
+                const target = products.find((product) => product.id === confirmId);
+                apply(archiveProduct(useAppStore.getState().db, confirmId, !target?.archived));
+                toast.success(target?.archived ? "Product restored" : "Product archived");
+                setConfirmId(null);
+                setEditing(null);
+              } catch (error) {
+                toast.error(error instanceof Error ? error.message : "Could not update product");
+              }
             }}
           />
         }
       >
-        <p className="text-sm text-muted-foreground">This cannot be undone.</p>
+        <p className="text-sm text-muted-foreground">You can restore an archived product at any time.</p>
       </BottomSheet>
     </AppPage>
   );
@@ -163,7 +179,7 @@ function ProductForm({
   currency,
   onClose,
   onSave,
-  onDelete,
+  onArchive,
 }: {
   product: Partial<Product>;
   existingSkus: string[];
@@ -181,7 +197,7 @@ function ProductForm({
     unit: string;
     imageDataUrl?: string;
   }) => void;
-  onDelete?: () => void;
+  onArchive?: () => void;
 }) {
   const [name, setName] = React.useState(product.name ?? "");
   const [sku, setSku] = React.useState(product.sku ?? "");
@@ -215,9 +231,9 @@ function ProductForm({
           })}>
             Save product
           </Button>
-          {onDelete ? (
-            <Button variant="ghost" className="w-full text-danger" onClick={onDelete}>
-              Delete
+          {onArchive ? (
+            <Button variant="ghost" className="w-full" onClick={onArchive}>
+              {product.archived ? "Restore product" : "Archive product"}
             </Button>
           ) : null}
         </div>
@@ -261,8 +277,8 @@ function ProductForm({
           <Field label={`Selling (${currency})`}>
             <Input type="number" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} />
           </Field>
-          <Field label="Stock">
-            <Input type="number" inputMode="decimal" value={stock} onChange={(e) => setStock(e.target.value)} />
+          <Field label="Stock" hint={product.id ? "Use Inventory to record reasoned stock movements." : "Opening stock is written to movement history."}>
+            <Input type="number" inputMode="decimal" value={stock} disabled={Boolean(product.id)} onChange={(e) => setStock(e.target.value)} />
           </Field>
           <Field label="Minimum">
             <Input type="number" inputMode="decimal" value={minStock} onChange={(e) => setMin(e.target.value)} />
