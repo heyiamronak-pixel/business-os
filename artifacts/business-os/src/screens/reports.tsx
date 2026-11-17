@@ -248,10 +248,10 @@ export function ReportsScreen() {
     range.from.getTime() <= range.to.getTime();
 
   const baseSales = validRange
-    ? db.sales.filter((sale) => sale.businessId === business.id && dateIsInRange(sale.createdAt, range))
+    ? db.sales.filter((sale) => sale.businessId === business.id && sale.status !== "reversed" && dateIsInRange(sale.createdAt, range))
     : [];
   const baseExpenses = validRange
-    ? db.expenses.filter((expense) => expense.businessId === business.id && dateIsInRange(expense.date, range))
+    ? db.expenses.filter((expense) => expense.businessId === business.id && !expense.archived && dateIsInRange(expense.date, range))
     : [];
   const basePurchases = validRange
     ? db.purchases.filter((purchase) => purchase.businessId === business.id && dateIsInRange(purchase.createdAt, range))

@@ -5,6 +5,8 @@ import {
   deleteSupplier,
   archiveProduct,
   archiveCustomer,
+  archiveExpense,
+  deleteExpense,
   adjustStock,
   completeSale,
   deleteProduct,
@@ -314,4 +316,25 @@ test("sale collections keep method/reference and reversal requires refund detail
   assert.equal(reversedSale.refunds?.[0].amount, 50);
   assert.equal(reversedSale.refunds?.[0].method, "bank");
   assert.equal(reversedSale.refunds?.[0].reference, "REF-777");
+});
+
+
+test("expense entries retain payment details and archive out of reporting", () => {
+  const created = upsertExpense(emptyDb(), {
+    businessId: "business-1",
+    category: "Travel",
+    amount: 250,
+    date: "2026-11-17",
+    paymentMethod: "upi",
+    reference: "UTR-EXP-1",
+  });
+  const expense = created.expenses[0];
+  assert.equal(expense.paymentMethod, "upi");
+  assert.equal(expense.reference, "UTR-EXP-1");
+  assert.throws(() => deleteExpense(created, expense.id), /archived, not deleted/);
+  const archived = archiveExpense(created, "business-1", expense.id);
+  assert.equal(archived.expenses[0].archived, true);
+  assert.equal(financeSnapshot(archived, "business-1").expenses, 0);
+  assert.equal(archiveExpense(archived, "business-1", expense.id, false).expenses[0].archived, false);
+  assert.throws(() => archiveExpense(archived, "business-2", expense.id), /not found in this business/);
 });

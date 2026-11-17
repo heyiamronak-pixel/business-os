@@ -67,7 +67,7 @@ Acceptance: totals must reconcile with source records and selected date range. D
 - [x] Sale records reduce stock and update workspace sales/revenue calculations.
 - [x] Partial sale payment collection exists.
 - [ ] Complete barcode scan, customer lookup, quantity changes, discounts and checkout validation.
-- [ ] Add payment collection history with method, transaction reference and date.
+- [x] Add sales payment collection history with method, transaction reference and date; record full reversal refunds separately and reconcile them against cash collected.
 - [x] Add reason-required sale reversal that restores stock, retains the original sale and writes a reversal activity/movement.
 - [ ] Add controlled sale edits and full customer payment-method/reference history.
 - [ ] Add returns, refunds, exchange and credit-note workflows with original transaction references.
@@ -90,7 +90,8 @@ Acceptance: totals must reconcile with source records and selected date range. D
 - [x] Supplier directory and purchase-record foundations exist.
 - [x] Purchase receipts update stock and purchase balances.
 - [ ] Complete purchase order → goods receipt → supplier bill → payment workflow.
-- [ ] Add supplier payment history, due dates, attachments and payables reporting.
+- [x] Add supplier payment history with method, transaction reference and date.
+- [ ] Add supplier payment due dates, attachments and payables reporting.
 - [ ] Support purchase returns and stock reconciliation.
 - [ ] Prevent duplicate stock-in when a purchase receipt has already updated inventory.
 
@@ -98,7 +99,8 @@ Acceptance: totals must reconcile with source records and selected date range. D
 
 - [x] Expense entry and standard expense categories exist.
 - [x] Monthly/quarterly/annual targets and actual revenue pace calculations exist.
-- [ ] Add expense edit/archive, payment method, receipt attachment and recurring expenses.
+- [x] Add expense editing, archive/restore, payment method and reference details.
+- [ ] Add receipt attachments and recurring expense generation.
 - [ ] Add budgets, category-level budget tracking and approval flow.
 - [ ] Add cashbook, receivables/payables, cash flow and ledger views.
 - [ ] Keep cash movement separate from recognised revenue/profit.
