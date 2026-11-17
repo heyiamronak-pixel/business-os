@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { getPlanPrice, getSubscriptionPlan, getTrialStatus } from "../../artifacts/business-os/src/lib/subscription.ts";
+import { getPlanPrice, getSubscriptionPlan, getTrialStatus, hasAvailableUserSeat } from "../../artifacts/business-os/src/lib/subscription.ts";
 
 test("subscription plans expose the published seat and branch limits", () => {
   assert.equal(getSubscriptionPlan("starter").maxUsers, 2);
@@ -21,4 +21,10 @@ test("trial status handles active, expired and missing dates", () => {
   assert.deepEqual(getTrialStatus("2026-11-20T12:00:00.000Z", now), { expired: false, daysRemaining: 3 });
   assert.deepEqual(getTrialStatus("2026-11-16T12:00:00.000Z", now), { expired: true, daysRemaining: 0 });
   assert.deepEqual(getTrialStatus(undefined, now), { expired: false, daysRemaining: null });
+});
+test("user seats are capped by the selected plan", () => {
+  assert.equal(hasAvailableUserSeat("starter", 1), true);
+  assert.equal(hasAvailableUserSeat("starter", 2), false);
+  assert.equal(hasAvailableUserSeat("growth", 4), true);
+  assert.equal(hasAvailableUserSeat("growth", 5), false);
 });
