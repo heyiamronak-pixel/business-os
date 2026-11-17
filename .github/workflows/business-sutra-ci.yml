@@ -1,4 +1,5 @@
 name: Business Sutra CI
+# Development PR verification enabled.
 
 on:
   push:
