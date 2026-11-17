@@ -5,6 +5,7 @@ import { BottomSheet } from "@/components/sheet";
 import { Badge, Button, EmptyState, Field, Input, Select, Textarea } from "@/components/ui";
 import type { Lead, LeadStage } from "@/lib/domain";
 import { formatDate, formatDateTime, money } from "@/lib/format";
+import { draftLeadFollowUp, suggestLeadNextStep } from "@/lib/lead-assistant";
 import { convertLeadToCustomer, deleteLead, upsertLead } from "@/lib/services";
 import { useAppStore, useBusiness } from "@/lib/store";
 
@@ -81,6 +82,8 @@ export function LeadsScreen() {
 }
 
 function LeadForm({ lead, members, onClose, onSave, onDelete }: { lead?: Lead; members: { id: string; name: string }[]; onClose: () => void; onSave: (draft: LeadDraft) => void; onDelete?: () => void }) {
+  const [aiSuggestion, setAiSuggestion] = React.useState<{ title: string; reason: string } | null>(null);
+  const [messageDraft, setMessageDraft] = React.useState("");
   const [draft, setDraft] = React.useState<LeadDraft>({
     name: lead?.name ?? "", company: lead?.company ?? "", email: lead?.email ?? "", phone: lead?.phone ?? "",
     source: lead?.source ?? "Website", stage: lead?.stage ?? "new", value: String(lead?.value ?? 0),
@@ -95,6 +98,15 @@ function LeadForm({ lead, members, onClose, onSave, onDelete }: { lead?: Lead; m
       <div className="grid grid-cols-2 gap-2"><Field label="Source"><Select value={draft.source} onChange={(event) => update("source", event.target.value)}><option>Website</option><option>Google Ads</option><option>Referral</option><option>Social media</option><option>Walk-in</option><option>Other</option></Select></Field><Field label="Stage"><Select value={draft.stage} onChange={(event) => update("stage", event.target.value as LeadStage)}>{STAGES.map((stage) => <option key={stage.id} value={stage.id}>{stage.label}</option>)}</Select></Field></div>
       <div className="grid grid-cols-2 gap-2"><Field label="Potential value"><Input type="number" min="0" step="0.01" value={draft.value} onChange={(event) => update("value", event.target.value)} /></Field><Field label="Assigned to"><Select value={draft.assignedTo} onChange={(event) => update("assignedTo", event.target.value)}><option value="">Unassigned</option>{members.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</Select></Field></div>
       <div className="grid grid-cols-2 gap-2"><Field label="Expected close"><Input type="date" value={draft.expectedCloseDate} onChange={(event) => update("expectedCloseDate", event.target.value)} /></Field><Field label="Next follow-up"><Input type="datetime-local" value={draft.followUpAt} onChange={(event) => update("followUpAt", event.target.value)} /></Field></div>
+      <section className="space-y-3 rounded-xl border border-primary/20 bg-primary/[0.035] p-3">
+        <div><p className="text-xs font-semibold">Sutra AI · Quick assist</p><p className="mt-1 text-[11px] leading-5 text-muted-foreground">Stage-based guidance and message drafts using this lead’s saved details. External AI is not connected in this preview.</p></div>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="secondary" onClick={() => setAiSuggestion(suggestLeadNextStep(draft.stage))}>Suggest next action</Button>
+          <Button size="sm" variant="outline" onClick={() => setMessageDraft(draftLeadFollowUp(draft))} disabled={!draft.name.trim()}>Draft follow-up</Button>
+        </div>
+        {aiSuggestion ? <div className="rounded-lg bg-card p-3"><p className="text-xs font-semibold">{aiSuggestion.title}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{aiSuggestion.reason}</p></div> : null}
+        {messageDraft ? <div className="space-y-2"><Textarea value={messageDraft} onChange={(event) => setMessageDraft(event.target.value)} /><Button size="sm" variant="secondary" onClick={() => { if (!navigator.clipboard) { toast.error("Clipboard access is unavailable in this browser."); return; } void navigator.clipboard.writeText(messageDraft).then(() => toast.success("Follow-up draft copied")).catch(() => toast.error("Could not copy the draft")); }}>Copy draft</Button></div> : null}
+      </section>
       <Field label="Notes"><Textarea value={draft.notes} onChange={(event) => update("notes", event.target.value)} placeholder="Context, requirements or next steps" /></Field>
       {lead?.convertedCustomerId ? <p className="text-xs text-muted-foreground">Converted to a customer record.</p> : null}
     </div>
