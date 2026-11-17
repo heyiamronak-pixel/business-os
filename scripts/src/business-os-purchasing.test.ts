@@ -18,6 +18,7 @@ import {
   upsertSupplier,
 } from "../../artifacts/business-os/src/lib/services.ts";
 import { emptyDb, type Product } from "../../artifacts/business-os/src/lib/domain.ts";
+import { financeSnapshot } from "../../artifacts/business-os/src/lib/engines.ts";
 
 const product: Product = {
   id: "product-1",
@@ -231,10 +232,13 @@ test("sale reversal restores stock once, preserves the sale, and requires a reas
   assert.equal(created.db.products[0].stock, 3);
   assert.throws(() => reverseSale(created.db, created.sale.id, "  "), /reversal reason/);
 
-  const reversed = reverseSale(created.db, created.sale.id, "Incorrect checkout");
+  const reversed = reverseSale(created.db, created.sale.id, "Incorrect checkout", { method: "cash", reference: "REF-001" });
   assert.equal(reversed.products[0].stock, 5);
   assert.equal(reversed.sales[0].status, "reversed");
   assert.equal(reversed.sales[0].reversalReason, "Incorrect checkout");
+  assert.equal(reversed.sales[0].refunds?.[0].amount, 160);
+  assert.equal(financeSnapshot(reversed, "business-1").cashIn, 0);
+  assert.equal(financeSnapshot(reversed, "business-1").revenue, 0);
   assert.equal(reversed.movements[0].refId, created.sale.id);
   assert.equal(reversed.activity[0].refId, created.sale.id);
   assert.throws(() => reverseSale(reversed, created.sale.id, "Duplicate reversal"), /already been reversed/);
@@ -302,6 +306,7 @@ test("sale collections keep method/reference and reversal requires refund detail
   assert.equal(sale.payments?.length, 2);
   assert.equal(sale.payments?.[1].method, "upi");
   assert.equal(sale.payments?.[1].reference, "UTR-SALE-2");
+  assert.equal(financeSnapshot(collected, "business-1").cashIn, 50);
   assert.throws(() => reverseSale(collected, sale.id, "Customer cancellation"), /refund method/);
   const reversed = reverseSale(collected, sale.id, "Customer cancellation", { method: "bank", reference: "REF-777" });
   const reversedSale = reversed.sales.find((item) => item.id === sale.id)!;
