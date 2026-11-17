@@ -17,7 +17,6 @@ const STAGES: { id: LeadStage; label: string; tone: "neutral" | "good" | "warn" 
   { id: "lost", label: "Lost", tone: "bad" },
 ];
 type LeadDraft = { name: string; company: string; email: string; phone: string; source: string; stage: LeadStage; value: string; expectedCloseDate: string; followUpAt: string; assignedTo: string; notes: string };
-const blank: LeadDraft = { name: "", company: "", email: "", phone: "", source: "Website", stage: "new", value: "0", expectedCloseDate: "", followUpAt: "", assignedTo: "", notes: "" };
 const stageMeta = (stage: LeadStage) => STAGES.find((item) => item.id === stage) ?? STAGES[0];
 
 export function LeadsScreen() {
