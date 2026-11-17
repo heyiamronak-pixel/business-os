@@ -2,6 +2,7 @@ import * as React from "react";
 import { Download } from "lucide-react";
 import { toast } from "sonner";
 import { AppPage, ConfirmBar, PageHeader, SearchField } from "@/components/app-shell";
+import { SavedViewControls } from "@/components/saved-view-controls";
 import { BottomSheet } from "@/components/sheet";
 import { Badge, Button, EmptyState, Field, Input, Select } from "@/components/ui";
 import { UNITS, type Product } from "@/lib/domain";
@@ -60,6 +61,11 @@ export function ProductsScreen() {
         }
       />
       <SearchField value={q} onChange={setQ} placeholder="Search products" />
+      <SavedViewControls businessId={business.id} moduleKey="products" filters={{ q, category, sort }} onApply={(saved) => {
+        setQ(saved.q ?? "");
+        setCategory(saved.category ?? "all");
+        setSort((saved.sort as SortKey) ?? "name");
+      }} />
       <div className="mb-3 flex gap-2 overflow-x-auto">
         <Select value={category} onChange={(e) => setCategory(e.target.value)} className="w-auto min-w-28">
           <option value="all">All</option>
