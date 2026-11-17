@@ -1,12 +1,14 @@
 import * as React from "react";
 import { toast } from "sonner";
-import { ArrowLeft, Check, FileText, Palette, Plus, Printer, Search, Settings2, Trash2 } from "lucide-react";
+import { ArrowLeft, Check, Download, FileText, Palette, Plus, Printer, Search, Settings2, Trash2 } from "lucide-react";
 import { AppPage, PageHeader } from "@/components/app-shell";
 import { BottomSheet } from "@/components/sheet";
+import { SavedViewControls } from "@/components/saved-view-controls";
 import { Badge, Button, Card, Field, Input, Select, Switch, Textarea } from "@/components/ui";
 import { DEFAULT_INVOICE_SETTINGS, type Business, type Customer, type InvoiceDesignSettings, type InvoiceRecord, type InvoiceSupplyType } from "@/lib/domain";
 import { addInvoicePayment, calculateInvoiceTotals, getInvoicePaymentSummary, isValidGstin, nextInvoiceNumber, type InvoiceLineDraft } from "@/lib/invoice-utils";
 import { money } from "@/lib/format";
+import { downloadCsv } from "@/lib/csv";
 import { cancelInvoice } from "@/lib/services";
 import { createId } from "@/lib/utils";
 import { useAppStore, useBusiness } from "@/lib/store";
@@ -63,6 +65,16 @@ function InvoicesWorkspace({ business }: { business: Business }) {
   const selectedInvoice = invoices.find((x) => x.id === selectedId) ?? null;
   const filtered = invoices.filter((x) => (!customerFilter || x.customerId === customerFilter) && [x.invoiceNumber, x.customerName, x.customerGstin ?? ""].some((v) => v.toLowerCase().includes(search.toLowerCase())));
   const fmt = (value: number) => money(value, business.currency);
+
+  function exportInvoices() {
+    downloadCsv("business-sutra-invoices.csv",
+      ["Invoice number", "Issue date", "Due date", "Customer", "GSTIN", "Total", "Paid", "Balance", "Status", "Cancellation reason"],
+      filtered.map((invoice) => {
+        const payment = getInvoicePaymentSummary(invoice.total, invoice.payments);
+        return [invoice.invoiceNumber, invoice.issueDate, invoice.dueDate, invoice.customerName, invoice.customerGstin, invoice.total, payment.paidAmount, payment.balance, invoice.status, invoice.cancelReason];
+      }));
+    toast.success("Exported " + filtered.length + " invoices");
+  }
 
   function updateLine(id: string, patch: Partial<InvoiceLineDraft>) {
     setLines((current) => current.map((line) => line.id === id ? { ...line, ...patch } : line));
@@ -200,6 +212,7 @@ function InvoicesWorkspace({ business }: { business: Business }) {
       <PageHeader title="Invoices" subtitle="Create branded invoices and keep every customer's billing history." action={
         <div className="flex flex-wrap gap-2">
           <Button size="sm" variant={mode === "list" ? "secondary" : "ghost"} onClick={() => { setMode("list"); setSelectedId(null); }}>All invoices</Button>
+          {mode === "list" ? <Button size="sm" variant="outline" onClick={exportInvoices} disabled={!filtered.length}><Download className="size-4" />Export</Button> : null}
           <Button size="sm" variant={mode === "template" ? "secondary" : "outline"} onClick={() => setMode("template")}><Palette className="size-4" />Format</Button>
           <Button size="sm" onClick={openCreate}><Plus className="size-4" />New invoice</Button>
         </div>
@@ -214,6 +227,10 @@ function InvoicesWorkspace({ business }: { business: Business }) {
           </div>
           <Card className="animate-enter-delay-1 space-y-4">
             <div className="flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-sm font-semibold">Invoice history</h2><p className="mt-1 text-xs text-muted-foreground">Search and filter by customer, invoice number or GSTIN.</p></div><div className="grid w-full gap-2 sm:max-w-xl sm:grid-cols-[minmax(180px,.8fr)_minmax(220px,1fr)]"><Field label="Customer"><Select value={customerFilter} onChange={(e) => setCustomerFilter(e.target.value)}><option value="">All customers</option>{customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}</Select></Field><Field label="Search"><div className="relative"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" placeholder="Invoice no. / customer / GSTIN" /></div></Field></div></div>
+            <SavedViewControls businessId={business.id} moduleKey="invoices" filters={{ search, customerFilter }} onApply={(saved) => {
+              setSearch(saved.search ?? "");
+              setCustomerFilter(saved.customerFilter ?? "");
+            }} />
             {filtered.length ? <div className="divide-y divide-border">{filtered.map((invoice) => <button type="button" key={invoice.id} onClick={() => { setSelectedId(invoice.id); setMode("view"); }} className="group flex w-full items-center gap-3 py-3 text-left transition-colors hover:bg-muted/35">
               <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><FileText className="size-5" /></span>
               <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{invoice.customerName}</span><span className="mt-1 block truncate text-xs text-muted-foreground">{invoice.invoiceNumber} · {new Date(invoice.issueDate + "T00:00:00").toLocaleDateString("en-IN")}</span></span>
