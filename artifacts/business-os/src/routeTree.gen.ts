@@ -182,6 +182,7 @@ export interface FileRoutesByTo {
   '/customers': typeof CustomersRoute
   '/expenses': typeof ExpensesRoute
   '/inbox': typeof InboxRoute
+  '/leads': typeof LeadsRoute
   '/invoices': typeof InvoicesRoute
   '/inventory': typeof InventoryRoute
   '/marketing': typeof MarketingRoute
@@ -207,6 +208,7 @@ export interface FileRoutesById {
   '/customers': typeof CustomersRoute
   '/expenses': typeof ExpensesRoute
   '/inbox': typeof InboxRoute
+  '/leads': typeof LeadsRoute
   '/invoices': typeof InvoicesRoute
   '/inventory': typeof InventoryRoute
   '/marketing': typeof MarketingRoute
@@ -258,6 +260,7 @@ export interface FileRouteTypes {
     | '/customers'
     | '/expenses'
     | '/inbox'
+    | '/leads'
     | '/invoices'
     | '/inventory'
     | '/marketing'
@@ -281,6 +284,7 @@ export interface FileRouteTypes {
     | '/customers'
     | '/expenses'
     | '/inbox'
+    | '/leads'
     | '/invoices'
     | '/inventory'
     | '/marketing'
