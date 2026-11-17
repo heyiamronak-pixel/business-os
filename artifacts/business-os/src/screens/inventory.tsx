@@ -1,9 +1,11 @@
 import * as React from "react";
+import { Download } from "lucide-react";
 import { toast } from "sonner";
 import { AppPage, PageHeader, SearchField } from "@/components/app-shell";
 import { BottomSheet } from "@/components/sheet";
 import { Badge, Button, EmptyState, Field, Input, Segmented, Select } from "@/components/ui";
 import type { MovementType, Product } from "@/lib/domain";
+import { downloadCsv } from "@/lib/csv";
 import { formatDateTime } from "@/lib/format";
 import { adjustStock } from "@/lib/services";
 import { useAppStore, useBusiness } from "@/lib/store";
@@ -29,6 +31,13 @@ export function InventoryScreen() {
     return matchesQ && matchesF;
   });
 
+  function exportInventory() {
+    downloadCsv("business-sutra-inventory.csv",
+      ["Product", "SKU", "Category", "Current stock", "Minimum stock", "Unit", "Stock status"],
+      list.map((product) => [product.name, product.sku, product.category, product.stock, product.minStock, product.unit, product.stock <= 0 ? "Out of stock" : product.stock <= product.minStock ? "Low stock" : "In stock"]));
+    toast.success("Exported " + list.length + " inventory rows");
+  }
+
   function submit() {
     if (!business || !product) return;
     try {
@@ -52,7 +61,7 @@ export function InventoryScreen() {
 
   return (
     <AppPage>
-      <PageHeader title="Inventory" subtitle="Stock in, out, and adjustments" />
+      <PageHeader title="Inventory" subtitle="Stock in, out, and adjustments" action={<Button size="sm" variant="secondary" onClick={exportInventory} disabled={!list.length}><Download className="size-4" />Export</Button>} />
       <SearchField value={q} onChange={setQ} placeholder="Search stock" />
       <div className="mb-3">
         <Segmented
