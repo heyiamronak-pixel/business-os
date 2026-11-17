@@ -691,6 +691,17 @@ export function deriveNotifications(ctx: BusinessContext): AppNotification[] {
       actionLabel: "Open lead",
     });
   }
+  for (const item of ctx.followUpCustomers.slice(0, 5)) {
+    const customer = item.customer;
+    push({
+      key: `customer-followup:${customer.id}`,
+      type: "customer_followup",
+      title: `Customer follow-up: ${customer.name}`,
+      body: item.outstanding > 0 ? `Outstanding balance: ${fmt(item.outstanding, ctx)}.` : "Review this customer relationship and plan the next touchpoint.",
+      href: "/customers",
+      actionLabel: "View customer",
+    });
+  }
   if (ctx.target && !ctx.target.onTrack && ctx.target.pct < 90) {
     push({
       key: `target:${ctx.target.target.id}:${ctx.period.label}`,
