@@ -2,8 +2,9 @@ import * as React from "react";
 import { Download } from "lucide-react";
 import { toast } from "sonner";
 import { AppPage, ConfirmBar, PageHeader, SearchField } from "@/components/app-shell";
+import { SavedViewControls } from "@/components/saved-view-controls";
 import { BottomSheet } from "@/components/sheet";
-import { Badge, Button, EmptyState, Field, Input, Textarea } from "@/components/ui";
+import { Badge, Button, EmptyState, Field, Input, Select, Textarea } from "@/components/ui";
 import type { Customer } from "@/lib/domain";
 import { downloadCsv } from "@/lib/csv";
 import { customerStats } from "@/lib/engines";
@@ -24,6 +25,7 @@ export function CustomersScreen() {
   const db = useAppStore((s) => s.db);
   const apply = useAppStore((s) => s.apply);
   const [q, setQ] = React.useState("");
+  const [segment, setSegment] = React.useState("all");
   const [editing, setEditing] = React.useState<Partial<Customer> | "new" | null>(null);
   const [view, setView] = React.useState<Customer | null>(null);
   const [note, setNote] = React.useState("");
@@ -35,7 +37,9 @@ export function CustomersScreen() {
     .map((c) => customerStats(db, c))
     .filter((s) => {
       const t = q.toLowerCase();
-      return !t || s.customer.name.toLowerCase().includes(t) || s.customer.phone?.includes(t) || s.customer.email?.toLowerCase().includes(t);
+      const matchesQuery = !t || s.customer.name.toLowerCase().includes(t) || s.customer.phone?.includes(t) || s.customer.email?.toLowerCase().includes(t);
+      const matchesSegment = segment === "all" || s.segment === segment;
+      return matchesQuery && matchesSegment;
     });
 
   const form = editing === "new" ? { name: "", email: "", phone: "", notes: "" } : editing;
@@ -55,6 +59,20 @@ export function CustomersScreen() {
         action={<div className="flex gap-2"><Button size="sm" variant="secondary" onClick={exportCustomers} disabled={!list.length}><Download className="size-4" />Export</Button><Button size="sm" onClick={() => setEditing("new")}>Add</Button></div>}
       />
       <SearchField value={q} onChange={setQ} placeholder="Search customers" />
+      <SavedViewControls businessId={business.id} moduleKey="customers" filters={{ q, segment }} onApply={(saved) => {
+        setQ(saved.q ?? "");
+        setSegment(saved.segment ?? "all");
+      }} />
+      <div className="mb-3">
+        <Select value={segment} onChange={(event) => setSegment(event.target.value)} className="w-full sm:w-auto">
+          <option value="all">All customer segments</option>
+          <option value="new">New</option>
+          <option value="active">Active</option>
+          <option value="high_value">High value</option>
+          <option value="inactive">Inactive</option>
+          <option value="follow_up">Follow up</option>
+        </Select>
+      </div>
       {customers.length === 0 ? (
         <EmptyState
           title="No customers yet"
