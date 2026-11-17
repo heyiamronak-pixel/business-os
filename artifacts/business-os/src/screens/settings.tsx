@@ -51,6 +51,7 @@ export function SettingsScreen() {
   }
 
   function addBranch() {
+    if (!business) return;
     try {
       const result = upsertBranch(useAppStore.getState().db, {
         businessId: business.id, name: branchName, code: branchCode || undefined, address: branchAddress || undefined,
