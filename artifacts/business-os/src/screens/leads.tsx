@@ -1,6 +1,7 @@
 import * as React from "react";
 import { toast } from "sonner";
 import { AppPage, ConfirmBar, PageHeader, SearchField } from "@/components/app-shell";
+import { SavedViewControls } from "@/components/saved-view-controls";
 import { BottomSheet } from "@/components/sheet";
 import { Badge, Button, EmptyState, Field, Input, Select, Textarea } from "@/components/ui";
 import type { Lead, LeadStage } from "@/lib/domain";
@@ -62,6 +63,10 @@ export function LeadsScreen() {
         <div className="col-span-2 rounded-xl border border-border bg-card p-3 sm:col-span-1"><p className="text-xs text-muted-foreground">Won</p><p className="mt-1 text-2xl font-semibold tabular-nums">{leads.filter((lead) => lead.stage === "won").length}</p></div>
       </div>
       <div className="mb-3 grid gap-2 sm:grid-cols-[1fr_190px]"><SearchField value={query} onChange={setQuery} placeholder="Search name, company, phone or email" /><Select value={filter} onChange={(event) => setFilter(event.target.value as LeadStage | "all")}><option value="all">All stages</option>{STAGES.map((stage) => <option key={stage.id} value={stage.id}>{stage.label}</option>)}</Select></div>
+      <SavedViewControls businessId={business.id} moduleKey="leads" filters={{ query, filter }} onApply={(saved) => {
+        setQuery(saved.query ?? "");
+        setFilter((saved.filter as LeadStage | "all") ?? "all");
+      }} />
       {leads.length === 0 ? <EmptyState title="No leads yet" body="Add your first prospect and move it through the pipeline as conversations progress." action={<Button onClick={() => setEditing("new")}>Add first lead</Button>} /> : filtered.length === 0 ? <EmptyState title="No matching leads" body="Try another search term or pipeline stage." /> : (
         <ul className="space-y-2">{filtered.map((lead) => {
           const stage = stageMeta(lead.stage);
