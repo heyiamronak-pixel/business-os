@@ -1,10 +1,12 @@
 import * as React from "react";
-import { Plus } from "lucide-react";
+import { Download, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { AppPage, PageHeader, SearchField } from "@/components/app-shell";
+import { SavedViewControls } from "@/components/saved-view-controls";
 import { BottomSheet } from "@/components/sheet";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, Stat, Textarea } from "@/components/ui";
 import type { Purchase } from "@/lib/domain";
+import { downloadCsv } from "@/lib/csv";
 import { formatDateTime, money } from "@/lib/format";
 import { createPurchase, updatePurchasePayment } from "@/lib/services";
 import { useAppStore, useBusiness } from "@/lib/store";
@@ -48,6 +50,13 @@ export function PurchasesScreen() {
   const subtotal = roundMoney(lines.reduce((sum, line) => sum + Math.max(0, line.quantity) * Math.max(0, line.unitCost), 0));
   const paidPreview = Number(paidAmount);
   const selectedSupplier = suppliers.find((supplier) => supplier.id === supplierId);
+
+  function exportPurchases() {
+    downloadCsv("business-sutra-purchases.csv",
+      ["Purchase reference", "Date", "Supplier", "Items", "Subtotal", "Total", "Paid", "Balance", "Payment status", "Note"],
+      list.map((purchase) => [purchase.id, purchase.createdAt, purchase.supplierName, purchase.items.map((item) => item.name + " x " + item.quantity).join("; "), purchase.subtotal, purchase.total, purchase.paidAmount, purchase.balance, purchase.paymentStatus, purchase.note]));
+    toast.success("Exported " + list.length + " purchases");
+  }
 
   function startPurchase() {
     setSupplierId(activeSuppliers[0]?.id ?? "");
@@ -103,7 +112,7 @@ export function PurchasesScreen() {
       <PageHeader
         title="Purchases"
         subtitle="Goods received, supplier payments and stock reconciliation"
-        action={<Button size="sm" onClick={startPurchase}><Plus className="size-4" />Record purchase</Button>}
+        action={<div className="flex gap-2"><Button size="sm" variant="secondary" onClick={exportPurchases} disabled={!list.length}><Download className="size-4" />Export</Button><Button size="sm" onClick={startPurchase}><Plus className="size-4" />Record purchase</Button></div>}
       />
       <div className="mb-4 grid grid-cols-2 gap-2 lg:grid-cols-3">
         <Card><Stat label="Purchase value" value={money(totalValue, business.currency)} /></Card>
@@ -111,6 +120,10 @@ export function PurchasesScreen() {
         <Card className="col-span-2 lg:col-span-1"><Stat label="Outstanding" value={money(totalDue, business.currency)} tone={totalDue > 0 ? "bad" : "good"} /></Card>
       </div>
       <SearchField value={query} onChange={setQuery} placeholder="Search supplier or purchase reference" />
+      <SavedViewControls businessId={businessId} moduleKey="purchases" filters={{ query, filter }} onApply={(saved) => {
+        setQuery(saved.query ?? "");
+        setFilter((saved.filter as "all" | "due") ?? "all");
+      }} />
       <div className="mb-3 flex gap-2">
         <Button size="sm" variant={filter === "all" ? "default" : "secondary"} onClick={() => setFilter("all")}>All purchases</Button>
         <Button size="sm" variant={filter === "due" ? "default" : "secondary"} onClick={() => setFilter("due")}>Outstanding</Button>
