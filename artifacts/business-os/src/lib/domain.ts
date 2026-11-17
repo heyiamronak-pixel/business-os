@@ -12,6 +12,8 @@ export type InvoiceStatus = "issued" | "cancelled";
 export type InvoiceSupplyType = "intra" | "inter";
 export type SubscriptionPlan = "starter" | "growth";
 export type SubscriptionStatus = "trial" | "selected";
+export type SubscriptionBillingCycle = "monthly" | "annual";
+export interface SubscriptionHistoryEntry { id: string; fromPlan?: SubscriptionPlan; toPlan: SubscriptionPlan; billingCycle: SubscriptionBillingCycle; changedAt: string; source: "trial" | "selection"; }
 export interface InvoiceDesignSettings { prefix:string; template:InvoiceTemplate; accentColor:string; showLogo:boolean; defaultDueDays:number; footerNote:string; terms:string; }
 export interface InvoiceLineItem { id:string; productId?:string; description:string; hsnSac?:string; quantity:number; unit:string; rate:number; discount:number; taxRate:number; taxableValue:number; taxAmount:number; total:number; }
 export interface InvoiceRecord {
@@ -104,7 +106,7 @@ export interface Business {
   website?: string;
   location?: string; address?:string; state?:string; stateCode?:string; postalCode?:string;
   gstRegistered?:boolean; gstin?:string; legalName?:string; invoiceSettings?:InvoiceDesignSettings;
-  subscriptionPlan?:SubscriptionPlan; subscriptionStatus?:SubscriptionStatus; trialStartedAt?:string; trialEndsAt?:string;
+  subscriptionPlan?:SubscriptionPlan; subscriptionStatus?:SubscriptionStatus; subscriptionBillingCycle?:SubscriptionBillingCycle; subscriptionHistory?:SubscriptionHistoryEntry[]; trialStartedAt?:string; trialEndsAt?:string;
   brandColors: string[];
   themePreset: ThemePreset;
   appearance: Appearance;
