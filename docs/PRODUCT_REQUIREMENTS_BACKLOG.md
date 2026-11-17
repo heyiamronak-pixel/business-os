@@ -212,16 +212,18 @@ The app must recommend the relevant modules for the chosen industry and keep eac
 
 ## 17. SaaS plans and workspace limits
 
-Current plan definitions in code (display/configuration only; not paid billing):
-- Starter: ₹699/month or ₹6,990/year; maximum 2 users and 1 branch.
-- Growth: ₹1,999/month or ₹19,990/year; maximum 5 users and 3 branches.
-- Trial status/countdown and plan selection history are local product UI; selecting a plan is not a payment or active paid subscription.
-- [x] Plan definitions, monthly/annual price display and local user-seat enforcement are in the integration work.
-- [x] Add local branch entities and enforce branch caps when creating branches; the Starter/Growth cap is reflected in Settings.
-- [ ] Enforce branch entitlements on the server and across every transaction/attendance record.
-- [ ] Add usage display for users, branches, storage and advanced feature access.
-- [ ] Make plan entitlements testable and explain the feature limits before upgrading.
-- [ ] Payment gateway, renewals, invoices, tax and subscription webhooks are deferred.
+Current plan definitions and local entitlement preview (not paid billing):
+- Starter: ₹699/month or ₹6,990/year; maximum 2 team members and 1 branch.
+- Growth: ₹1,999/month or ₹19,990/year; maximum 5 team members and 3 branches.
+- [x] Plan cards, monthly/annual pricing, plan comparison and local selection history.
+- [x] Enforce user-seat and branch caps in service methods and show usage in Settings/Team.
+- [x] Active Growth trial receives Growth access; expired trial falls back to Starter until a plan is selected.
+- [x] Growth-only advanced reports, saved views and team workload insights are gated in the UI.
+- [x] Block downgrades that exceed the target plan's current user or branch limits; retain existing records.
+- [x] Add tests for feature entitlements, trial expiry, user seats and branch caps.
+- [ ] Enforce all entitlements using authenticated server-side authorization after the cloud backend is connected.
+- [ ] Add per-record transaction, storage and usage metering only after limits are agreed; no arbitrary product/customer/invoice quotas are currently imposed.
+- [ ] Payment gateway, renewals, tax invoices and subscription webhooks remain deferred.
 
 ## 18. Security, authentication and integrations (later stage)
 
