@@ -144,6 +144,25 @@ export interface StockMovement {
   createdAt: string;
 }
 
+export type LeadStage = "new" | "contacted" | "qualified" | "proposal" | "won" | "lost";
+export interface Lead {
+  id: string;
+  businessId: string;
+  name: string;
+  company?: string;
+  email?: string;
+  phone?: string;
+  source?: string;
+  stage: LeadStage;
+  value: number;
+  expectedCloseDate?: string;
+  followUpAt?: string;
+  assignedTo?: string;
+  notes?: string;
+  convertedCustomerId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
 export interface Customer {
   id: string;
   businessId: string;
@@ -336,6 +355,7 @@ export interface WorkspaceDB {
   products: Product[];
   movements: StockMovement[];
   customers: Customer[];
+  leads: Lead[];
   suppliers: Supplier[];
   purchases: Purchase[];
   sales: Sale[];
@@ -389,6 +409,7 @@ export const CORE_IMPLEMENTED: ModuleId[] = [
   "pos",
   "sales",
   "customers",
+  "leads",
   "expenses",
   "targets",
   "tasks",
@@ -406,6 +427,7 @@ export type AppHref =
   | "/products"
   | "/inventory"
   | "/customers"
+  | "/leads"
   | "/suppliers"
   | "/purchases"
   | "/sales"
@@ -438,6 +460,7 @@ export const MODULE_CATALOG: Record<ModuleId, ModuleDef> = {
   pos: { id: "pos", label: "Point of sale", description: "Fast mobile checkout", path: "/sell", implemented: true },
   sales: { id: "sales", label: "Sales", description: "Orders and revenue history", path: "/sales", implemented: true },
   customers: { id: "customers", label: "Customers", description: "Profiles and purchase history", path: "/customers", implemented: true },
+  leads: { id: "leads", label: "Leads", description: "Lead pipeline, follow-ups and conversion", path: "/leads", implemented: true },
   expenses: { id: "expenses", label: "Expenses", description: "Costs by category", path: "/expenses", implemented: true },
   targets: { id: "targets", label: "Targets", description: "Revenue goals and pace", path: "/targets", implemented: true },
   tasks: { id: "tasks", label: "Tasks", description: "Work that needs doing", path: "/tasks", implemented: true },
@@ -493,22 +516,22 @@ export const INDUSTRIES: IndustryDef[] = [
     id: "travel",
     label: "Travel",
     description: "Tours, transport, and travel desks",
-    recommended: ["customers", "sales", "suppliers", "purchases", "tasks", "team", "expenses", "marketing", "targets", "reports"],
+    recommended: ["customers", "leads", "sales", "suppliers", "purchases", "tasks", "team", "expenses", "marketing", "targets", "reports"],
     extra: ["bookings", "trips", "vehicles", "drivers", "fuel", "maintenance"],
   },
   {
     id: "hospitality",
     label: "Hospitality",
     description: "Hotels, homestays, and lodging",
-    recommended: ["customers", "sales", "suppliers", "purchases", "expenses", "tasks", "team", "marketing", "targets", "reports"],
+    recommended: ["customers", "leads", "sales", "suppliers", "purchases", "expenses", "tasks", "team", "marketing", "targets", "reports"],
     extra: ["properties", "rooms", "bookings", "guests", "ota"],
   },
   {
     id: "agency",
     label: "Agency",
     description: "Studios, consultants, and retainers",
-    recommended: ["customers", "sales", "suppliers", "purchases", "tasks", "team", "expenses", "marketing", "targets", "reports"],
-    extra: ["leads", "clients", "services", "projects", "invoices"],
+    recommended: ["customers", "leads", "sales", "suppliers", "purchases", "tasks", "team", "expenses", "marketing", "targets", "reports"],
+    extra: ["clients", "services", "projects", "invoices"],
   },
   {
     id: "manufacturing",
@@ -542,7 +565,7 @@ export const INDUSTRIES: IndustryDef[] = [
     id: "services",
     label: "Services",
     description: "Studios, salons, and local services",
-    recommended: ["customers", "sales", "suppliers", "purchases", "tasks", "team", "expenses", "marketing", "targets", "reports"],
+    recommended: ["customers", "leads", "sales", "suppliers", "purchases", "tasks", "team", "expenses", "marketing", "targets", "reports"],
     extra: ["services", "bookings", "invoices"],
   },
   {
@@ -626,6 +649,7 @@ export function emptyDb(): WorkspaceDB {
     products: [],
     movements: [],
     customers: [],
+    leads: [],
     suppliers: [],
     purchases: [],
     sales: [],

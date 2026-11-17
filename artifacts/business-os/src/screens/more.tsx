@@ -3,6 +3,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import {
   Boxes,
   ChartColumn,
+  ContactRound,
   CalendarCheck,
   ClipboardList,
   FileText,
@@ -29,6 +30,7 @@ const ICONS: Partial<Record<ModuleId, ComponentType<{ className?: string }>>> = 
   invoices: FileText,
   sales: Receipt,
   customers: Users,
+  leads: ContactRound,
   suppliers: Truck,
   purchases: ShoppingCart,
   expenses: Wallet,
