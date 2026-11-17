@@ -4,11 +4,10 @@ import { AppPage, ConfirmBar, PageHeader } from "@/components/app-shell";
 import { BottomSheet } from "@/components/sheet";
 import { Badge, Button, EmptyState, Field, Input, Segmented, Select, Textarea } from "@/components/ui";
 import type { TaskItem, TaskPriority, TaskRecurrence, TaskStatus } from "@/lib/domain";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatDateTime } from "@/lib/format";
 import { addTaskComment, deleteTask, setTaskStatus, upsertTask } from "@/lib/services";
 import { useAppStore, useBusiness } from "@/lib/store";
 import { startOfDay } from "@/lib/utils";
-import { formatDateTime } from "@/lib/format";
 
 type Filter = "open" | "today" | "overdue" | "done";
 
@@ -86,7 +85,9 @@ export function TasksScreen() {
                       {t.status === "todo" ? "Start" : "Complete"}
                     </Button>
                   </div>
-                ) : null}
+                ) : (
+                  <div className="mt-2"><Button size="sm" variant="ghost" onClick={() => apply(setTaskStatus(useAppStore.getState().db, t.id, "todo"))}>Reopen</Button></div>
+                )}
               </li>
             );
           })}
