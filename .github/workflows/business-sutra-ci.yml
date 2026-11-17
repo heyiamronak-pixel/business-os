@@ -7,6 +7,7 @@ on:
       - foundation/hardening
       - phase-2/data-foundation
       - development/phase-completion
+      - codex/integrated-development-completion
   pull_request:
     branches:
       - main
