@@ -18,7 +18,7 @@ import { extractLogoColors, fileToDataUrl } from "@/lib/theme";
 import { deleteBranch, deleteBusiness, updateBusiness, upsertBranch } from "@/lib/services";
 import { isValidGstin } from "@/lib/invoice-utils";
 import { useAppStore, useBusiness } from "@/lib/store";
-import { SUBSCRIPTION_PLANS, getSubscriptionPlan, getTrialStatus } from "@/lib/subscription";
+import { SUBSCRIPTION_PLANS, getEffectivePlanId, getEffectiveSubscriptionPlan, getTrialStatus } from "@/lib/subscription";
 import { createId } from "@/lib/utils";
 
 export function SettingsScreen() {
@@ -40,7 +40,8 @@ export function SettingsScreen() {
   }, [business?.id, business?.name, business?.subscriptionBillingCycle]);
 
   if (!business) return null;
-  const currentPlan = getSubscriptionPlan(business.subscriptionPlan);
+  const currentPlan = getEffectiveSubscriptionPlan(business);
+  const currentPlanId = getEffectivePlanId(business);
   const trial = getTrialStatus(business.trialEndsAt);
   const teamUsage = db.members.filter((member) => member.businessId === business.id).length;
   const branches = db.branches.filter((item) => item.businessId === business.id);
@@ -203,47 +204,103 @@ export function SettingsScreen() {
       </Card>
 
       <Card className="mb-4 space-y-4">
-        <div className="flex items-start justify-between gap-3"><div><h2 className="text-sm font-semibold">Plans & subscription</h2><p className="mt-1 text-xs text-muted-foreground">Choose the plan that fits your team. Online billing will be connected later.</p></div><span className="rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-semibold text-primary">{business.subscriptionStatus==="trial"?(trial.expired?"Trial ended":"14-day trial"):"Plan preference"}</span></div>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold">Plans & subscription</h2>
+            <p className="mt-1 text-xs text-muted-foreground">Compare plans, see the limits and choose the access level for this workspace.</p>
+          </div>
+          <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-semibold text-primary">
+            {business.subscriptionStatus === "trial" ? (trial.expired ? "Trial expired · Starter access" : "Growth trial") : "Selected plan · preview"}
+          </span>
+        </div>
+
         {business.subscriptionStatus === "trial" && business.trialEndsAt ? (
-          <div className="rounded-xl bg-primary/7 px-3 py-3 text-xs text-muted-foreground">
-            <p className="font-semibold text-foreground">{trial.expired ? "Your trial period has ended" : "Your Growth trial ends " + new Date(business.trialEndsAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</p>
-            <p className="mt-1">{trial.expired ? "Choose a plan preference to continue planning your subscription. Checkout is not connected, so no payment is collected and no paid status is assumed." : trial.daysRemaining + " day" + (trial.daysRemaining === 1 ? "" : "s") + " remaining in your trial. No payment is collected in this preview."}</p>
+          <div className="rounded-xl bg-muted/55 px-3 py-3 text-xs text-muted-foreground">
+            <p className="font-semibold text-foreground">{trial.expired ? "Your Growth trial has ended" : "Your Growth trial ends " + new Date(business.trialEndsAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</p>
+            <p className="mt-1">{trial.expired ? "Starter limits now apply until you choose another plan in this preview." : trial.daysRemaining + " day" + (trial.daysRemaining === 1 ? "" : "s") + " remaining. All Growth features are temporarily available during the trial."}</p>
           </div>
         ) : null}
+
         <div className="grid gap-2 sm:grid-cols-2">
           <div className="rounded-xl border border-border p-3">
-            <p className="text-[10px] text-muted-foreground">Team seats</p>
+            <p className="text-[10px] text-muted-foreground">Team members</p>
             <p className="mt-1 text-lg font-semibold tabular-nums">{teamUsage} / {currentPlan.maxUsers}</p>
             <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary" style={{ width: Math.min(100, (teamUsage / currentPlan.maxUsers) * 100) + "%" }} /></div>
           </div>
           <div className="rounded-xl border border-border p-3">
-            <p className="text-[10px] text-muted-foreground">Branch allowance</p>
-            <p className="mt-1 text-lg font-semibold tabular-nums">{currentPlan.maxBranches} included</p>
-            <p className="mt-1 text-[10px] text-muted-foreground">Branch management is part of the upcoming operations module.</p>
+            <p className="text-[10px] text-muted-foreground">Branches</p>
+            <p className="mt-1 text-lg font-semibold tabular-nums">{branches.length} / {currentPlan.maxBranches}</p>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary" style={{ width: Math.min(100, (branches.length / currentPlan.maxBranches) * 100) + "%" }} /></div>
           </div>
         </div>
-        <div className="flex items-center justify-between"><p className="text-xs font-medium text-muted-foreground">Billing display</p><div className="flex rounded-xl bg-muted p-1"><button type="button" onClick={()=>setAnnualBilling(false)} className={annualBilling?"rounded-lg px-3 py-1.5 text-xs text-muted-foreground":"rounded-lg bg-card px-3 py-1.5 text-xs font-semibold shadow-sm"}>Monthly</button><button type="button" onClick={()=>setAnnualBilling(true)} className={annualBilling?"rounded-lg bg-card px-3 py-1.5 text-xs font-semibold shadow-sm":"rounded-lg px-3 py-1.5 text-xs text-muted-foreground"}>Annual · 2 months free</button></div></div>
+
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs font-medium text-muted-foreground">Billing display</p>
+          <div className="flex rounded-xl bg-muted p-1">
+            <button type="button" onClick={() => setAnnualBilling(false)} className={annualBilling ? "rounded-lg px-3 py-1.5 text-xs text-muted-foreground" : "rounded-lg bg-card px-3 py-1.5 text-xs font-semibold shadow-sm"}>Monthly</button>
+            <button type="button" onClick={() => setAnnualBilling(true)} className={annualBilling ? "rounded-lg bg-card px-3 py-1.5 text-xs font-semibold shadow-sm" : "rounded-lg px-3 py-1.5 text-xs text-muted-foreground"}>Annual · 2 months free</button>
+          </div>
+        </div>
+
         <div className="grid gap-3 md:grid-cols-2">
-          {Object.values(SUBSCRIPTION_PLANS).map((plan)=>{
-            const selected=business.subscriptionPlan===plan.id,amount=annualBilling?plan.annualPrice:plan.monthlyPrice;
-            return <div key={plan.id} className={`relative overflow-hidden rounded-2xl border p-4 transition-all duration-200 hover:-translate-y-1 hover:shadow-lg ${selected?"border-primary bg-primary/[0.045] shadow-md":"border-border bg-card"}`}>
-              {plan.id==="growth"?<span className="absolute right-3 top-3 rounded-full bg-primary/10 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-primary">Recommended</span>:null}
-              <p className="text-sm font-semibold">{plan.title}</p><p className="mt-3 text-3xl font-semibold tracking-tight tabular-nums">₹{amount.toLocaleString("en-IN")}<span className="ml-1 text-xs font-normal text-muted-foreground">/{annualBilling?"year":"month"}</span></p><p className="mt-1 text-xs text-muted-foreground">Up to {plan.maxUsers} users · {plan.maxBranches} {plan.maxBranches === 1 ? "branch" : "branches"}</p>
-              <ul className="mt-4 space-y-2">{plan.features.map((feature)=><li key={feature} className="flex gap-2 text-xs"><span className="text-primary">✓</span><span>{feature}</span></li>)}</ul>
-              <Button className="mt-5 w-full" variant={selected?"secondary":"default"} onClick={()=>{
-  if (teamUsage > plan.maxUsers) { toast.error(plan.title + " allows " + plan.maxUsers + " users. Remove or reassign seats before selecting this plan."); return; }
-  if (branches.length > plan.maxBranches) { toast.error(plan.title + " allows " + plan.maxBranches + " branches. Archive extra branches before selecting this plan."); return; }
-  const cycle: SubscriptionBillingCycle = annualBilling ? "annual" : "monthly";
-  const history = [...(business.subscriptionHistory ?? []), {
-    id: createId("sub"), fromPlan: business.subscriptionPlan, toPlan: plan.id,
-    billingCycle: cycle, changedAt: new Date().toISOString(), source: "selection" as const,
-  }];
-  patch({subscriptionPlan:plan.id,subscriptionStatus:"selected",subscriptionBillingCycle:cycle,subscriptionHistory:history});
-  toast.success(plan.title+" preference saved. Billing will be available later.");
-}}>{selected?"Selected plan":"Choose "+plan.title}</Button>
-            </div>;
+          {Object.values(SUBSCRIPTION_PLANS).map((plan) => {
+            const selected = currentPlanId === plan.id;
+            const amount = annualBilling ? plan.annualPrice : plan.monthlyPrice;
+            const overUsers = teamUsage > plan.maxUsers;
+            const overBranches = branches.length > plan.maxBranches;
+            return (
+              <div key={plan.id} className={`relative overflow-hidden rounded-2xl border p-4 transition-all duration-200 ${selected ? "border-primary bg-primary/[0.045] shadow-md" : "border-border bg-card"}`}>
+                {plan.id === "growth" ? <span className="absolute right-3 top-3 rounded-full bg-primary/10 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-primary">Recommended</span> : null}
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-semibold">{plan.title}</p>
+                  {selected ? <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[9px] font-semibold text-primary">Current</span> : null}
+                </div>
+                <p className="mt-3 text-3xl font-semibold tracking-tight tabular-nums">₹{amount.toLocaleString("en-IN")}<span className="ml-1 text-xs font-normal text-muted-foreground">/{annualBilling ? "year" : "month"}</span></p>
+                <p className="mt-1 text-xs text-muted-foreground">Up to {plan.maxUsers} team members · {plan.maxBranches} {plan.maxBranches === 1 ? "branch" : "branches"}</p>
+                <ul className="mt-4 space-y-2">
+                  {plan.features.map((feature) => <li key={feature} className="flex gap-2 text-xs"><span className="text-primary">✓</span><span>{feature}</span></li>)}
+                </ul>
+                <Button className="mt-5 w-full" variant={selected ? "secondary" : "default"} disabled={selected} onClick={() => {
+                  if (overUsers) { toast.error(plan.title + " allows " + plan.maxUsers + " team members. Remove or reassign seats before downgrading."); return; }
+                  if (overBranches) { toast.error(plan.title + " allows " + plan.maxBranches + " branches. Remove or archive extra branches before downgrading."); return; }
+                  const cycle: SubscriptionBillingCycle = annualBilling ? "annual" : "monthly";
+                  const history = [...(business.subscriptionHistory ?? []), {
+                    id: createId("sub"), fromPlan: business.subscriptionPlan, toPlan: plan.id,
+                    billingCycle: cycle, changedAt: new Date().toISOString(), source: "selection" as const,
+                  }];
+                  patch({ subscriptionPlan: plan.id, subscriptionStatus: "selected", subscriptionBillingCycle: cycle, subscriptionHistory: history });
+                  toast.success(plan.title + " access selected for this local preview. No payment was collected.");
+                }}>{selected ? "Current plan" : "Choose " + plan.title}</Button>
+              </div>
+            );
           })}
         </div>
+
+        <div className="overflow-hidden rounded-xl border border-border">
+          <div className="border-b border-border bg-muted/40 px-3 py-2.5">
+            <p className="text-xs font-semibold">Plan comparison</p>
+          </div>
+          <div className="grid grid-cols-[minmax(0,1fr)_76px_76px] items-center gap-2 border-b border-border px-3 py-2 text-[10px] font-semibold text-muted-foreground">
+            <span>Capability</span><span className="text-center">Starter</span><span className="text-center">Growth</span>
+          </div>
+          {[
+            ["Core business modules", "Included", "Included"],
+            ["Standard reports", "Included", "Included"],
+            ["Team members", "2", "5"],
+            ["Branches", "1", "3"],
+            ["Advanced reports", "Locked", "Included"],
+            ["Saved views", "Locked", "Included"],
+            ["Team & operations insights", "Locked", "Included"],
+            ["Workflow automation", "Not included", "Planned"],
+          ].map(([label, starter, growth]) => (
+            <div key={label} className="grid grid-cols-[minmax(0,1fr)_76px_76px] items-center gap-2 border-b border-border/70 px-3 py-2 last:border-b-0">
+              <span className="text-xs">{label}</span>
+              <span className="text-center text-[10px] text-muted-foreground">{starter}</span>
+              <span className="text-center text-[10px] font-medium">{growth}</span>
+            </div>
+          ))}
+        </div>
+
         {(business.subscriptionHistory ?? []).length ? (
           <div className="space-y-2 border-t border-border pt-3">
             <p className="text-xs font-semibold">Plan preference history</p>
@@ -255,7 +312,7 @@ export function SettingsScreen() {
             ))}
           </div>
         ) : null}
-        <p className="text-[11px] leading-5 text-muted-foreground">Indicative launch pricing only. Your plan preference is saved in this browser workspace; no payment method, checkout or charge is connected. Starter and Growth seat limits are enforced locally. Branch capacity is displayed but branch records are not yet implemented.</p>
+        <p className="text-[11px] leading-5 text-muted-foreground">Prices are the current plan values already configured for this project. Plan selection and entitlements are simulated locally for development: no checkout, renewal or charge is connected. No transaction, customer, product or invoice quota has been invented; only the published team and branch caps are enforced. Workflow automation is listed as planned, not live.</p>
       </Card>
 
       <Card className="mb-4 space-y-4">
