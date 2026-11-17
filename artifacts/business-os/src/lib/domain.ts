@@ -2,16 +2,20 @@ export type Appearance = "light" | "dark" | "auto";
 export type ThemePreset = "brand" | "professional" | "modern" | "contrast";
 export type Role = "owner" | "admin" | "manager" | "employee";
 export type TaskStatus = "todo" | "doing" | "done";
-export type TaskPriority = "low" | "medium" | "high";
+export type TaskPriority = "low" | "medium" | "high" | "urgent";
 export type PaymentMethod = "cash" | "card" | "upi" | "bank" | "credit" | "other";
 export type PaymentStatus = "paid" | "partial" | "unpaid";
 export type MovementType = "in" | "out" | "adjustment" | "sale";
 export type TargetPeriod = "monthly" | "quarterly" | "annual";
 export type InvoiceTemplate = "modern" | "classic" | "minimal";
 export type InvoiceStatus = "issued" | "cancelled";
+export type InvoicePaymentMethod = "cash" | "upi" | "bank" | "card" | "other";
+export interface InvoicePayment { id: string; amount: number; method: InvoicePaymentMethod; reference?: string; receivedAt: string; }
 export type InvoiceSupplyType = "intra" | "inter";
 export type SubscriptionPlan = "starter" | "growth";
 export type SubscriptionStatus = "trial" | "selected";
+export type SubscriptionBillingCycle = "monthly" | "annual";
+export interface SubscriptionHistoryEntry { id: string; fromPlan?: SubscriptionPlan; toPlan: SubscriptionPlan; billingCycle: SubscriptionBillingCycle; changedAt: string; source: "trial" | "selection"; }
 export interface InvoiceDesignSettings { prefix:string; template:InvoiceTemplate; accentColor:string; showLogo:boolean; defaultDueDays:number; footerNote:string; terms:string; }
 export interface InvoiceLineItem { id:string; productId?:string; description:string; hsnSac?:string; quantity:number; unit:string; rate:number; discount:number; taxRate:number; taxableValue:number; taxAmount:number; total:number; }
 export interface InvoiceRecord {
@@ -20,7 +24,7 @@ export interface InvoiceRecord {
   customerId?:string; customerName:string; customerGstin?:string; customerAddress?:string; customerState?:string; customerStateCode?:string; customerPhone?:string; customerEmail?:string;
   placeOfSupply:string; placeOfSupplyCode?:string; supplyType:InvoiceSupplyType; reverseCharge:boolean;
   items:InvoiceLineItem[]; subtotal:number; discountTotal:number; taxableValue:number; cgst:number; sgst:number; igst:number; taxTotal:number; total:number;
-  notes?:string; terms?:string; createdAt:string; updatedAt:string;
+  notes?:string; terms?:string; payments?:InvoicePayment[]; cancelReason?:string; cancelledAt?:string; createdAt:string; updatedAt:string;
 }
 export const DEFAULT_INVOICE_SETTINGS:InvoiceDesignSettings = {prefix:"INV",template:"modern",accentColor:"#176B73",showLogo:true,defaultDueDays:0,footerNote:"Thank you for your business.",terms:""};
 
@@ -104,7 +108,7 @@ export interface Business {
   website?: string;
   location?: string; address?:string; state?:string; stateCode?:string; postalCode?:string;
   gstRegistered?:boolean; gstin?:string; legalName?:string; invoiceSettings?:InvoiceDesignSettings;
-  subscriptionPlan?:SubscriptionPlan; subscriptionStatus?:SubscriptionStatus; trialStartedAt?:string; trialEndsAt?:string;
+  subscriptionPlan?:SubscriptionPlan; subscriptionStatus?:SubscriptionStatus; subscriptionBillingCycle?:SubscriptionBillingCycle; subscriptionHistory?:SubscriptionHistoryEntry[]; trialStartedAt?:string; trialEndsAt?:string;
   brandColors: string[];
   themePreset: ThemePreset;
   appearance: Appearance;
@@ -144,6 +148,25 @@ export interface StockMovement {
   createdAt: string;
 }
 
+export type LeadStage = "new" | "contacted" | "qualified" | "proposal" | "won" | "lost";
+export interface Lead {
+  id: string;
+  businessId: string;
+  name: string;
+  company?: string;
+  email?: string;
+  phone?: string;
+  source?: string;
+  stage: LeadStage;
+  value: number;
+  expectedCloseDate?: string;
+  followUpAt?: string;
+  assignedTo?: string;
+  notes?: string;
+  convertedCustomerId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
 export interface Customer {
   id: string;
   businessId: string;
@@ -270,6 +293,9 @@ export interface TeamMember {
   createdAt: string;
 }
 
+export type TaskRecurrence = "none" | "daily" | "weekly" | "monthly";
+export interface TaskStatusEvent { from?: TaskStatus; to: TaskStatus; changedAt: string; }
+export interface TaskComment { id: string; author: string; body: string; createdAt: string; }
 export interface TaskItem {
   id: string;
   businessId: string;
@@ -280,6 +306,11 @@ export interface TaskItem {
   dueDate?: string;
   reminder?: string;
   status: TaskStatus;
+  recurrence?: TaskRecurrence;
+  seriesId?: string;
+  nextOccurrenceId?: string;
+  statusHistory?: TaskStatusEvent[];
+  comments?: TaskComment[];
   createdAt: string;
   updatedAt: string;
 }
@@ -336,6 +367,7 @@ export interface WorkspaceDB {
   products: Product[];
   movements: StockMovement[];
   customers: Customer[];
+  leads: Lead[];
   suppliers: Supplier[];
   purchases: Purchase[];
   sales: Sale[];
@@ -389,6 +421,7 @@ export const CORE_IMPLEMENTED: ModuleId[] = [
   "pos",
   "sales",
   "customers",
+  "leads",
   "expenses",
   "targets",
   "tasks",
@@ -406,6 +439,7 @@ export type AppHref =
   | "/products"
   | "/inventory"
   | "/customers"
+  | "/leads"
   | "/suppliers"
   | "/purchases"
   | "/sales"
@@ -438,6 +472,7 @@ export const MODULE_CATALOG: Record<ModuleId, ModuleDef> = {
   pos: { id: "pos", label: "Point of sale", description: "Fast mobile checkout", path: "/sell", implemented: true },
   sales: { id: "sales", label: "Sales", description: "Orders and revenue history", path: "/sales", implemented: true },
   customers: { id: "customers", label: "Customers", description: "Profiles and purchase history", path: "/customers", implemented: true },
+  leads: { id: "leads", label: "Leads", description: "Lead pipeline, follow-ups and conversion", path: "/leads", implemented: true },
   expenses: { id: "expenses", label: "Expenses", description: "Costs by category", path: "/expenses", implemented: true },
   targets: { id: "targets", label: "Targets", description: "Revenue goals and pace", path: "/targets", implemented: true },
   tasks: { id: "tasks", label: "Tasks", description: "Work that needs doing", path: "/tasks", implemented: true },
@@ -456,7 +491,7 @@ export const MODULE_CATALOG: Record<ModuleId, ModuleDef> = {
   rooms: { id: "rooms", label: "Rooms", description: "Room inventory", path: "/more", implemented: false },
   guests: { id: "guests", label: "Guests", description: "Guest profiles", path: "/more", implemented: false },
   ota: { id: "ota", label: "OTA", description: "Channel managers", path: "/more", implemented: false },
-  leads: { id: "leads", label: "Leads", description: "Pipeline", path: "/more", implemented: false },
+
   clients: { id: "clients", label: "Clients", description: "Retainers", path: "/more", implemented: false },
   services: { id: "services", label: "Services", description: "Service catalog", path: "/more", implemented: false },
   projects: { id: "projects", label: "Projects", description: "Delivery work", path: "/more", implemented: false },
@@ -493,22 +528,22 @@ export const INDUSTRIES: IndustryDef[] = [
     id: "travel",
     label: "Travel",
     description: "Tours, transport, and travel desks",
-    recommended: ["customers", "sales", "suppliers", "purchases", "tasks", "team", "expenses", "marketing", "targets", "reports"],
+    recommended: ["customers", "leads", "sales", "suppliers", "purchases", "tasks", "team", "expenses", "marketing", "targets", "reports"],
     extra: ["bookings", "trips", "vehicles", "drivers", "fuel", "maintenance"],
   },
   {
     id: "hospitality",
     label: "Hospitality",
     description: "Hotels, homestays, and lodging",
-    recommended: ["customers", "sales", "suppliers", "purchases", "expenses", "tasks", "team", "marketing", "targets", "reports"],
+    recommended: ["customers", "leads", "sales", "suppliers", "purchases", "expenses", "tasks", "team", "marketing", "targets", "reports"],
     extra: ["properties", "rooms", "bookings", "guests", "ota"],
   },
   {
     id: "agency",
     label: "Agency",
     description: "Studios, consultants, and retainers",
-    recommended: ["customers", "sales", "suppliers", "purchases", "tasks", "team", "expenses", "marketing", "targets", "reports"],
-    extra: ["leads", "clients", "services", "projects", "invoices"],
+    recommended: ["customers", "leads", "sales", "suppliers", "purchases", "tasks", "team", "expenses", "marketing", "targets", "reports"],
+    extra: ["clients", "services", "projects", "invoices"],
   },
   {
     id: "manufacturing",
@@ -542,7 +577,7 @@ export const INDUSTRIES: IndustryDef[] = [
     id: "services",
     label: "Services",
     description: "Studios, salons, and local services",
-    recommended: ["customers", "sales", "suppliers", "purchases", "tasks", "team", "expenses", "marketing", "targets", "reports"],
+    recommended: ["customers", "leads", "sales", "suppliers", "purchases", "tasks", "team", "expenses", "marketing", "targets", "reports"],
     extra: ["services", "bookings", "invoices"],
   },
   {
@@ -626,6 +661,7 @@ export function emptyDb(): WorkspaceDB {
     products: [],
     movements: [],
     customers: [],
+    leads: [],
     suppliers: [],
     purchases: [],
     sales: [],
