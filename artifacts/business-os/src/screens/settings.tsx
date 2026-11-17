@@ -10,6 +10,7 @@ import {
   recommendModules,
   type Appearance,
   type IndustryId,
+  type SubscriptionBillingCycle,
   type ModuleId,
   type ThemePreset,
 } from "@/lib/domain";
@@ -200,7 +201,7 @@ export function SettingsScreen() {
               <p className="text-sm font-semibold">{plan.title}</p><p className="mt-3 text-3xl font-semibold tracking-tight tabular-nums">₹{amount.toLocaleString("en-IN")}<span className="ml-1 text-xs font-normal text-muted-foreground">/{annualBilling?"year":"month"}</span></p><p className="mt-1 text-xs text-muted-foreground">Up to {plan.maxUsers} users · {plan.maxBranches} {plan.maxBranches === 1 ? "branch" : "branches"}</p>
               <ul className="mt-4 space-y-2">{plan.features.map((feature)=><li key={feature} className="flex gap-2 text-xs"><span className="text-primary">✓</span><span>{feature}</span></li>)}</ul>
               <Button className="mt-5 w-full" variant={selected?"secondary":"default"} onClick={()=>{
-  const cycle = annualBilling ? "annual" : "monthly";
+  const cycle: SubscriptionBillingCycle = annualBilling ? "annual" : "monthly";
   const history = [...(business.subscriptionHistory ?? []), {
     id: createId("sub"), fromPlan: business.subscriptionPlan, toPlan: plan.id,
     billingCycle: cycle, changedAt: new Date().toISOString(), source: "selection" as const,
