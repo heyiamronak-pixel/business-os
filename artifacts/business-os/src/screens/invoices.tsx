@@ -2,10 +2,12 @@ import * as React from "react";
 import { toast } from "sonner";
 import { ArrowLeft, Check, FileText, Palette, Plus, Printer, Search, Settings2, Trash2 } from "lucide-react";
 import { AppPage, PageHeader } from "@/components/app-shell";
+import { BottomSheet } from "@/components/sheet";
 import { Badge, Button, Card, Field, Input, Select, Switch, Textarea } from "@/components/ui";
 import { DEFAULT_INVOICE_SETTINGS, type Business, type Customer, type InvoiceDesignSettings, type InvoiceRecord, type InvoiceSupplyType } from "@/lib/domain";
-import { calculateInvoiceTotals, isValidGstin, nextInvoiceNumber, type InvoiceLineDraft } from "@/lib/invoice-utils";
+import { addInvoicePayment, calculateInvoiceTotals, getInvoicePaymentSummary, isValidGstin, nextInvoiceNumber, type InvoiceLineDraft } from "@/lib/invoice-utils";
 import { money } from "@/lib/format";
+import { cancelInvoice } from "@/lib/services";
 import { createId } from "@/lib/utils";
 import { useAppStore, useBusiness } from "@/lib/store";
 
@@ -44,6 +46,11 @@ function InvoicesWorkspace({ business }: { business: Business }) {
   const [notes, setNotes] = React.useState("");
   const [lines, setLines] = React.useState<InvoiceLineDraft[]>([blankLine()]);
   const [formError, setFormError] = React.useState("");
+  const [paymentAmount, setPaymentAmount] = React.useState("");
+  const [paymentMethod, setPaymentMethod] = React.useState<"cash" | "upi" | "bank" | "card" | "other">("upi");
+  const [paymentReference, setPaymentReference] = React.useState("");
+  const [cancelOpen, setCancelOpen] = React.useState(false);
+  const [cancelReason, setCancelReason] = React.useState("");
   const currentSettings = business.invoiceSettings ?? DEFAULT_INVOICE_SETTINGS;
   const [settings, setSettings] = React.useState<InvoiceDesignSettings>(currentSettings);
   const totals = React.useMemo(() => calculateInvoiceTotals(lines, gstRegistered, supplyType), [lines, gstRegistered, supplyType]);
@@ -147,6 +154,38 @@ function InvoicesWorkspace({ business }: { business: Business }) {
     apply({ ...currentDb, customers: nextCustomers, invoices: [invoice, ...currentDb.invoices] });
     setSelectedId(invoice.id); setMode("view"); toast.success("Invoice saved to this workspace");
   }
+  function recordInvoicePayment(invoice: InvoiceRecord) {
+    try {
+      const payment = {
+        id: createId("pay"),
+        amount: Number(paymentAmount),
+        method: paymentMethod,
+        reference: paymentReference.trim() || undefined,
+        receivedAt: new Date().toISOString(),
+      };
+      const updated = addInvoicePayment(invoice, payment);
+      const currentDb = useAppStore.getState().db;
+      apply({ ...currentDb, invoices: currentDb.invoices.map((item) => item.id === invoice.id ? updated : item) });
+      setPaymentAmount("");
+      setPaymentReference("");
+      toast.success("Invoice payment recorded");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not record payment");
+    }
+  }
+
+  function confirmCancelInvoice() {
+    if (!selectedInvoice) return;
+    try {
+      apply(cancelInvoice(useAppStore.getState().db, selectedInvoice.id, cancelReason));
+      setCancelOpen(false);
+      setCancelReason("");
+      toast.success("Invoice cancelled and retained in history");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not cancel invoice");
+    }
+  }
+
   function saveDesign() {
     const prefix = settings.prefix.trim().toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 4);
     if (!prefix) { toast.error("Choose a prefix with 1–4 letters or numbers."); return; }
@@ -238,11 +277,43 @@ function InvoicesWorkspace({ business }: { business: Business }) {
 
       {mode === "view" && selectedInvoice ? (
         <section className="animate-enter space-y-4">
-          <div className="no-print flex flex-wrap items-center justify-between gap-2"><Button size="sm" variant="ghost" onClick={() => setMode("list")}><ArrowLeft className="size-4" />All invoices</Button><div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => setMode("template")}><Palette className="size-4" />Format settings</Button><Button size="sm" onClick={() => window.print()}><Printer className="size-4" />Print / Save PDF</Button></div></div>
+          <div className="no-print flex flex-wrap items-center justify-between gap-2"><Button size="sm" variant="ghost" onClick={() => setMode("list")}><ArrowLeft className="size-4" />All invoices</Button><div className="flex flex-wrap gap-2">
+            {selectedInvoice.status === "issued" ? <Button size="sm" variant="outline" onClick={() => { setCancelReason(""); setCancelOpen(true); }}>Cancel invoice</Button> : <Badge tone="warn">Cancelled</Badge>}
+            <Button size="sm" variant="outline" onClick={() => setMode("template")}><Palette className="size-4" />Format settings</Button>
+            <Button size="sm" onClick={() => window.print()}><Printer className="size-4" />Print / Save PDF</Button>
+          </div></div>
           <InvoicePaper invoice={selectedInvoice} settings={currentSettings} currency={business.currency} logo={business.logoDataUrl} />
+          {selectedInvoice.status === "issued" ? (() => {
+            const paymentSummary = getInvoicePaymentSummary(selectedInvoice.total, selectedInvoice.payments);
+            return <Card className="no-print space-y-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div><h2 className="text-sm font-semibold">Payment tracking</h2><p className="mt-1 text-xs text-muted-foreground">Record payments received against this invoice. This does not process a payment.</p></div>
+                <Badge tone={paymentSummary.status === "paid" ? "good" : paymentSummary.status === "partial" ? "warn" : "neutral"}>{paymentSummary.status === "paid" ? "Paid" : paymentSummary.status === "partial" ? "Partially paid" : "Unpaid"}</Badge>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-3">
+                <div className="rounded-xl bg-muted/45 p-3"><p className="text-[10px] text-muted-foreground">Invoice total</p><p className="mt-1 text-lg font-semibold tabular-nums">{fmt(selectedInvoice.total)}</p></div>
+                <div className="rounded-xl bg-muted/45 p-3"><p className="text-[10px] text-muted-foreground">Received</p><p className="mt-1 text-lg font-semibold tabular-nums">{fmt(paymentSummary.paidAmount)}</p></div>
+                <div className="rounded-xl bg-muted/45 p-3"><p className="text-[10px] text-muted-foreground">Outstanding</p><p className="mt-1 text-lg font-semibold tabular-nums">{fmt(paymentSummary.balance)}</p></div>
+              </div>
+              {selectedInvoice.payments?.length ? <div className="space-y-2"><p className="text-xs font-semibold">Payment history</p>{selectedInvoice.payments.map((payment) => <div key={payment.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-border py-2 text-xs"><span><strong>{fmt(payment.amount)}</strong><span className="ml-2 capitalize text-muted-foreground">{payment.method}</span>{payment.reference ? <span className="ml-2 text-muted-foreground">· {payment.reference}</span> : null}</span><span className="text-muted-foreground">{new Date(payment.receivedAt).toLocaleString("en-IN")}</span></div>)}</div> : <p className="text-xs text-muted-foreground">No payments have been recorded yet.</p>}
+              {paymentSummary.balance > 0 ? <div className="grid items-end gap-3 sm:grid-cols-[1fr_1fr_1.2fr_auto]">
+                <Field label="Amount received"><Input type="number" min="0.01" max={paymentSummary.balance} step="0.01" value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} placeholder={String(paymentSummary.balance)} /></Field>
+                <Field label="Method"><Select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as typeof paymentMethod)}><option value="upi">UPI</option><option value="bank">Bank transfer</option><option value="cash">Cash</option><option value="card">Card</option><option value="other">Other</option></Select></Field>
+                <Field label="Reference (optional)"><Input value={paymentReference} onChange={(e) => setPaymentReference(e.target.value)} placeholder="UTR / transaction ID" /></Field>
+                <Button onClick={() => recordInvoicePayment(selectedInvoice)} disabled={!paymentAmount || Number(paymentAmount) <= 0}>Record payment</Button>
+              </div> : <p className="text-xs font-semibold text-primary">This invoice is fully paid.</p>}
+            </Card>;
+          })() : null}
           <p className="no-print text-center text-[11px] leading-5 text-muted-foreground">Choose “Save as PDF” in your browser's print dialog to create a PDF copy.</p>
         </section>
       ) : null}
+      <BottomSheet open={cancelOpen} onOpenChange={setCancelOpen} title="Cancel invoice?"
+        footer={<div className="flex gap-2"><Button className="flex-1" variant="ghost" onClick={() => setCancelOpen(false)}>Keep invoice</Button><Button className="flex-1" variant="outline" disabled={cancelReason.trim().length < 3} onClick={confirmCancelInvoice}>Confirm cancellation</Button></div>}>
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">The invoice will remain in your history with a cancellation reason. Any payment already recorded remains in the payment history; this action does not issue a refund or reverse a bank transaction.</p>
+          <Field label="Reason for cancellation"><Textarea value={cancelReason} onChange={(event) => setCancelReason(event.target.value)} placeholder="Duplicate invoice, incorrect details, order cancelled…" /></Field>
+        </div>
+      </BottomSheet>
     </AppPage>
   );
 }
@@ -265,6 +336,7 @@ function InvoicePaper({ invoice, settings, currency, logo }: { invoice: InvoiceR
       <div className="mt-7 overflow-x-auto"><table className="w-full border-collapse text-left text-xs"><thead><tr style={{ background: minimal ? "#f8fafc" : accent, color: minimal ? "#334155" : "white" }}>{["Description", "HSN / SAC", "Qty", "Rate", "Taxable", "Tax", "Amount"].map((x) => <th key={x} className="px-2 py-3 font-semibold sm:px-3">{x}</th>)}</tr></thead><tbody>{invoice.items.map((item) => <tr key={item.id} className="border-b border-slate-200"><td className="px-2 py-3 font-semibold sm:px-3">{item.description}</td><td className="px-2 py-3 text-slate-500 sm:px-3">{item.hsnSac || "—"}</td><td className="px-2 py-3 tabular-nums sm:px-3">{item.quantity} {item.unit}</td><td className="px-2 py-3 tabular-nums sm:px-3">{money(item.rate, currency)}</td><td className="px-2 py-3 tabular-nums sm:px-3">{money(item.taxableValue, currency)}</td><td className="px-2 py-3 tabular-nums sm:px-3">{item.taxRate}%</td><td className="px-2 py-3 text-right font-semibold tabular-nums sm:px-3">{money(item.total, currency)}</td></tr>)}</tbody></table></div>
       <div className="mt-6 flex justify-end"><div className="w-full max-w-xs space-y-2 text-xs"><TotalRow label="Subtotal" value={money(invoice.subtotal, currency)} />{invoice.discountTotal > 0 ? <TotalRow label="Discount" value={"−" + money(invoice.discountTotal, currency)} /> : null}<TotalRow label="Taxable value" value={money(invoice.taxableValue, currency)} />{invoice.cgst > 0 ? <TotalRow label="CGST" value={money(invoice.cgst, currency)} /> : null}{invoice.sgst > 0 ? <TotalRow label="SGST" value={money(invoice.sgst, currency)} /> : null}{invoice.igst > 0 ? <TotalRow label="IGST" value={money(invoice.igst, currency)} /> : null}<div className="flex justify-between border-t-2 border-slate-800 pt-3 text-base font-bold"><span>Total</span><span style={{ color: accent }}>{money(invoice.total, currency)}</span></div></div></div>
       {invoice.notes ? <div className="mt-7"><p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Notes</p><p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-slate-600">{invoice.notes}</p></div> : null}
+      {invoice.cancelReason ? <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-3"><p className="text-[10px] font-bold uppercase tracking-widest text-amber-800">Cancellation reason</p><p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-amber-900">{invoice.cancelReason}</p>{invoice.cancelledAt ? <p className="mt-1 text-[10px] text-amber-800">Cancelled · {new Date(invoice.cancelledAt).toLocaleString("en-IN")}</p> : null}</div> : null}
       {invoice.terms ? <div className="mt-5"><p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Terms & conditions</p><p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-slate-600">{invoice.terms}</p></div> : null}
       <div className="mt-9 flex flex-wrap items-end justify-between gap-4 border-t border-slate-200 pt-5"><p className="max-w-sm text-xs leading-5 text-slate-500">{settings.footerNote || "Thank you for your business."}</p><div className="min-w-[140px] text-right"><div className="mb-8 h-7 border-b border-dashed border-slate-300" /><p className="text-xs font-semibold">Authorised signatory</p></div></div>
       <p className="mt-6 text-center text-[9px] text-slate-400">Generated using Business Sutra · Verify applicable statutory requirements before issuing.</p>
