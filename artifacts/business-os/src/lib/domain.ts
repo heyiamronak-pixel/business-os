@@ -9,6 +9,8 @@ export type MovementType = "in" | "out" | "adjustment" | "sale";
 export type TargetPeriod = "monthly" | "quarterly" | "annual";
 export type InvoiceTemplate = "modern" | "classic" | "minimal";
 export type InvoiceStatus = "issued" | "cancelled";
+export type InvoicePaymentMethod = "cash" | "upi" | "bank" | "card" | "other";
+export interface InvoicePayment { id: string; amount: number; method: InvoicePaymentMethod; reference?: string; receivedAt: string; }
 export type InvoiceSupplyType = "intra" | "inter";
 export type SubscriptionPlan = "starter" | "growth";
 export type SubscriptionStatus = "trial" | "selected";
@@ -20,7 +22,7 @@ export interface InvoiceRecord {
   customerId?:string; customerName:string; customerGstin?:string; customerAddress?:string; customerState?:string; customerStateCode?:string; customerPhone?:string; customerEmail?:string;
   placeOfSupply:string; placeOfSupplyCode?:string; supplyType:InvoiceSupplyType; reverseCharge:boolean;
   items:InvoiceLineItem[]; subtotal:number; discountTotal:number; taxableValue:number; cgst:number; sgst:number; igst:number; taxTotal:number; total:number;
-  notes?:string; terms?:string; createdAt:string; updatedAt:string;
+  notes?:string; terms?:string; payments?:InvoicePayment[]; createdAt:string; updatedAt:string;
 }
 export const DEFAULT_INVOICE_SETTINGS:InvoiceDesignSettings = {prefix:"INV",template:"modern",accentColor:"#176B73",showLogo:true,defaultDueDays:0,footerNote:"Thank you for your business.",terms:""};
 
