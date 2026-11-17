@@ -774,6 +774,19 @@ export function ReportsScreen() {
         </div>
       </section>
 
+      <section className="mb-5">
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="text-sm font-semibold">Purchases & supplier balances</h2>
+          <Badge tone={supplierOutstanding > 0 ? "warn" : "good"}>{openPurchases} open purchases</Badge>
+        </div>
+        <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+          <Card><Stat label="Purchase value" value={money(purchaseValue, currency)} /></Card>
+          <Card><Stat label="Paid to suppliers" value={money(supplierPaid, currency)} /></Card>
+          <Card><Stat label="Outstanding payables" value={money(supplierOutstanding, currency)} tone={supplierOutstanding > 0 ? "bad" : "good"} /></Card>
+          <Card><Stat label="Purchase records" value={String(purchases.length)} /></Card>
+        </div>
+      </section>
+
       <PlanFeatureGate feature="advancedReports" title="Advanced reports are included in Growth" description="Starter keeps standard financial, sales and purchase summaries. Upgrade to Growth to unlock detailed marketing performance and product profitability reports.">
       <section className="mb-5">
         <div className="mb-2 flex items-center justify-between">
@@ -790,18 +803,7 @@ export function ReportsScreen() {
         </div>
       </section>
 
-      <section className="mb-5">
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold">Purchases & supplier balances</h2>
-          <Badge tone={supplierOutstanding > 0 ? "warn" : "good"}>{openPurchases} open purchases</Badge>
-        </div>
-        <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-          <Card><Stat label="Purchase value" value={money(purchaseValue, currency)} /></Card>
-          <Card><Stat label="Paid to suppliers" value={money(supplierPaid, currency)} /></Card>
-          <Card><Stat label="Outstanding payables" value={money(supplierOutstanding, currency)} tone={supplierOutstanding > 0 ? "bad" : "good"} /></Card>
-          <Card><Stat label="Purchase records" value={String(purchases.length)} /></Card>
-        </div>
-      </section>
+
 
       <section>
         <h2 className="mb-2 text-sm font-semibold">Top products by profit</h2>
