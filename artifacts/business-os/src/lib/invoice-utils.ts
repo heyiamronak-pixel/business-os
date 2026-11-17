@@ -50,3 +50,9 @@ export function addInvoicePayment(invoice: InvoiceRecord, payment: import("@/lib
  if (!payment.receivedAt.trim()) throw new Error("Payment date is missing.");
  return { ...invoice, payments: [...(invoice.payments ?? []), { ...payment, amount: round2(payment.amount) }], updatedAt: payment.receivedAt };
 }
+
+export function normaliseInvoiceCancellationReason(reason: string): string {
+  const value = reason.trim();
+  if (value.length < 3) throw new Error("Add a cancellation reason (at least 3 characters).");
+  return value;
+}
