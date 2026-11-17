@@ -237,8 +237,9 @@ export function ReportsScreen() {
   }, [business?.id]);
 
   if (!business) return null;
-  const businessId = business.id;
-  const businessName = business.name;
+  const activeBusiness = business;
+  const businessId = activeBusiness.id;
+  const businessName = activeBusiness.name;
 
   const range = getRange(period, customFrom, customTo);
   const validRange =
@@ -409,7 +410,7 @@ export function ReportsScreen() {
   }
 
   function saveCurrentView() {
-    if (!businessHasFeature(business, "savedViews")) return;
+    if (!businessHasFeature(activeBusiness, "savedViews")) return;
     const name = saveViewName.trim();
     if (!name) return;
     const view: SavedReportView = {
