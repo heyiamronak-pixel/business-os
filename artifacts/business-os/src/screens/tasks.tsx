@@ -1,6 +1,7 @@
 import * as React from "react";
 import { toast } from "sonner";
 import { AppPage, ConfirmBar, PageHeader } from "@/components/app-shell";
+import { SavedViewControls } from "@/components/saved-view-controls";
 import { BottomSheet } from "@/components/sheet";
 import { Badge, Button, EmptyState, Field, Input, Segmented, Select, Textarea } from "@/components/ui";
 import type { TaskItem, TaskPriority, TaskRecurrence, TaskStatus } from "@/lib/domain";
@@ -39,6 +40,7 @@ export function TasksScreen() {
         subtitle="What the team needs to finish"
         action={<Button size="sm" onClick={() => setEditing("new")}>Add</Button>}
       />
+      <SavedViewControls businessId={business.id} moduleKey="tasks" filters={{ filter }} onApply={(saved) => setFilter((saved.filter as Filter) ?? "open")} />
       <div className="mb-3">
         <Segmented
           value={filter}
