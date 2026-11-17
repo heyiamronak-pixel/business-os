@@ -16,6 +16,7 @@ import { Route as AdvisorRouteImport } from './routes/advisor'
 import { Route as CustomersRouteImport } from './routes/customers'
 import { Route as ExpensesRouteImport } from './routes/expenses'
 import { Route as InboxRouteImport } from './routes/inbox'
+import { Route as LeadsRouteImport } from './routes/leads'
 import { Route as InvoicesRouteImport } from './routes/invoices'
 import { Route as InventoryRouteImport } from './routes/inventory'
 import { Route as MarketingRouteImport } from './routes/marketing'
@@ -65,6 +66,11 @@ const ExpensesRoute = ExpensesRouteImport.update({
 const InboxRoute = InboxRouteImport.update({
   id: '/inbox',
   path: '/inbox',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LeadsRoute = LeadsRouteImport.update({
+  id: '/leads',
+  path: '/leads',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InvoicesRoute = InvoicesRouteImport.update({
@@ -151,6 +157,7 @@ export interface FileRoutesByFullPath {
   '/customers': typeof CustomersRoute
   '/expenses': typeof ExpensesRoute
   '/inbox': typeof InboxRoute
+  '/leads': typeof LeadsRoute
   '/invoices': typeof InvoicesRoute
   '/inventory': typeof InventoryRoute
   '/marketing': typeof MarketingRoute
@@ -226,6 +233,7 @@ export interface FileRouteTypes {
     | '/customers'
     | '/expenses'
     | '/inbox'
+    | '/leads'
     | '/invoices'
     | '/inventory'
     | '/marketing'
@@ -297,6 +305,7 @@ export interface RootRouteChildren {
   CustomersRoute: typeof CustomersRoute
   ExpensesRoute: typeof ExpensesRoute
   InboxRoute: typeof InboxRoute
+  LeadsRoute: typeof LeadsRoute
   InvoicesRoute: typeof InvoicesRoute
   InventoryRoute: typeof InventoryRoute
   MarketingRoute: typeof MarketingRoute
@@ -363,6 +372,13 @@ declare module '@tanstack/react-router' {
       path: '/inbox'
       fullPath: '/inbox'
       preLoaderRoute: typeof InboxRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/leads': {
+      id: '/leads'
+      path: '/leads'
+      fullPath: '/leads'
+      preLoaderRoute: typeof LeadsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/invoices': {
@@ -481,6 +497,7 @@ const rootRouteChildren: RootRouteChildren = {
   CustomersRoute: CustomersRoute,
   ExpensesRoute: ExpensesRoute,
   InboxRoute: InboxRoute,
+  LeadsRoute: LeadsRoute,
   InvoicesRoute: InvoicesRoute,
   InventoryRoute: InventoryRoute,
   MarketingRoute: MarketingRoute,
