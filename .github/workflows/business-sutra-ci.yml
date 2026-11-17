@@ -89,7 +89,7 @@ jobs:
       - name: Run feature-branch regression tests when present
         run: |
           test_files=()
-          for file in ./src/task-utils.test.ts ./src/subscription.test.ts ./src/lead-utils.test.ts ./src/lead-assistant.test.ts; do
+          for file in ./src/task-utils.test.ts ./src/subscription.test.ts ./src/branch-management.test.ts ./src/lead-utils.test.ts ./src/lead-assistant.test.ts; do
             if [ -f "$file" ]; then test_files+=("$file"); fi
           done
           if [ "${#test_files[@]}" -gt 0 ]; then
