@@ -1,9 +1,11 @@
 import * as React from "react";
+import { Download } from "lucide-react";
 import { toast } from "sonner";
 import { AppPage, ConfirmBar, PageHeader } from "@/components/app-shell";
 import { BottomSheet } from "@/components/sheet";
 import { Button, Card, EmptyState, Field, Input, Select, Stat } from "@/components/ui";
 import type { Expense } from "@/lib/domain";
+import { downloadCsv } from "@/lib/csv";
 import { formatDate, money } from "@/lib/format";
 import { addExpenseCategory, deleteExpense, upsertExpense } from "@/lib/services";
 import { useAppStore, useBusiness } from "@/lib/store";
@@ -52,6 +54,13 @@ export function ExpensesScreen() {
     setOpen(true);
   }
 
+  function exportExpenses() {
+    downloadCsv("business-sutra-expenses.csv",
+      ["Date", "Category", "Amount", "Vendor", "Notes"],
+      expenses.map((expense) => [expense.date, expense.category, expense.amount, expense.vendor, expense.notes]));
+    toast.success("Exported " + expenses.length + " expenses");
+  }
+
   function save() {
     if (!business) return;
     try {
@@ -78,7 +87,7 @@ export function ExpensesScreen() {
       <PageHeader
         title="Expenses"
         subtitle={range.label}
-        action={<Button size="sm" onClick={startNew}>Add</Button>}
+        action={<div className="flex gap-2"><Button size="sm" variant="secondary" onClick={exportExpenses} disabled={!expenses.length}><Download className="size-4" />Export</Button><Button size="sm" onClick={startNew}>Add</Button></div>}
       />
       <div className="mb-4 grid grid-cols-2 gap-2">
         <Card>
