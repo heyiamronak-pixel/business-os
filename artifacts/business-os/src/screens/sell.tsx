@@ -48,7 +48,7 @@ export function SellScreen() {
 
   if (!business) return null;
   const products = db.products.filter((p) => p.businessId === business.id && !p.archived);
-  const customers = db.customers.filter((c) => c.businessId === business.id);
+  const customers = db.customers.filter((c) => c.businessId === business.id && !c.archived);
   const filtered = products.filter((p) => {
     const s = q.toLowerCase();
     return !s || p.name.toLowerCase().includes(s) || p.sku.toLowerCase().includes(s) || p.barcode?.includes(s);

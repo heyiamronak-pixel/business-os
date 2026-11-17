@@ -12,6 +12,8 @@ import {
   reverseSale,
   recordPayment,
   upsertCustomer,
+  upsertExpense,
+  upsertProduct,
   updatePurchasePayment,
   upsertSupplier,
 } from "../../artifacts/business-os/src/lib/services.ts";
@@ -232,4 +234,49 @@ test("sale reversal restores stock once, preserves the sale, and requires a reas
   assert.equal(reversed.activity[0].refId, created.sale.id);
   assert.throws(() => reverseSale(reversed, created.sale.id, "Duplicate reversal"), /already been reversed/);
   assert.throws(() => recordPayment(reversed, created.sale.id, 1), /cannot receive another payment/);
+});
+
+
+test("expense dates and amounts are validated and expense updates stay within the business", () => {
+  const valid = upsertExpense(emptyDb(), {
+    businessId: "business-1",
+    category: "Travel",
+    amount: 125.5,
+    date: "2026-11-17",
+  });
+  assert.equal(valid.expenses[0].amount, 125.5);
+  assert.throws(() => upsertExpense(valid, {
+    businessId: "business-1",
+    category: "Travel",
+    amount: Number.POSITIVE_INFINITY,
+    date: "2026-11-17",
+  }), /valid number/);
+  assert.throws(() => upsertExpense(valid, {
+    businessId: "business-1",
+    category: "Travel",
+    amount: 10,
+    date: "not-a-date",
+  }), /valid expense date/);
+  assert.throws(() => upsertExpense(valid, {
+    id: valid.expenses[0].id,
+    businessId: "business-2",
+    category: "Travel",
+    amount: 10,
+    date: "2026-11-17",
+  }), /not found in this business/);
+});
+
+test("editing a product cannot bypass the inventory movement ledger", () => {
+  const { db } = setup();
+  assert.throws(() => upsertProduct(db, {
+    id: product.id,
+    businessId: "business-1",
+    name: product.name,
+    sku: product.sku,
+    costPrice: product.costPrice,
+    sellingPrice: product.sellingPrice,
+    stock: 4,
+    minStock: product.minStock,
+    unit: product.unit,
+  }), /Use Inventory to change stock/);
 });

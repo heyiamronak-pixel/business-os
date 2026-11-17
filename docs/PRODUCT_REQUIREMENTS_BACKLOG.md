@@ -53,9 +53,10 @@ Acceptance: totals must reconcile with source records and selected date range. D
 
 - [x] Product create/edit, SKU generation, category, price, unit and opening stock are present.
 - [x] Stock movements and low-stock/out-of-stock alerts are present.
-- [ ] Complete archive/restore and safe deletion rules for records with transaction history.
+- [x] Complete archive/restore and safe deletion rules for products and customers with linked business records.
 - [ ] Add barcode/QR generation and camera/device scanning.
-- [ ] Add reason-required stock adjustments, stock-in/out, transfers between branches and movement audit history.
+- [x] Add reason-required stock-in/out/adjustment movements with business ownership validation and movement history; stock changes are blocked in product editing and must use Inventory.
+- [ ] Add transfers between branches and complete branch-level movement audit history.
 - [ ] Add reorder levels, supplier-based reorder recommendations and inventory valuation.
 - [ ] Track listed price, negotiated price, discount and actual selling price separately.
 - [ ] Verify all stock calculations against sales, purchases, returns and reversals.
@@ -67,7 +68,8 @@ Acceptance: totals must reconcile with source records and selected date range. D
 - [x] Partial sale payment collection exists.
 - [ ] Complete barcode scan, customer lookup, quantity changes, discounts and checkout validation.
 - [ ] Add payment collection history with method, transaction reference and date.
-- [ ] Add sale edit/reversal with stock and customer-history reconciliation.
+- [x] Add reason-required sale reversal that restores stock, retains the original sale and writes a reversal activity/movement.
+- [ ] Add controlled sale edits and full customer payment-method/reference history.
 - [ ] Add returns, refunds, exchange and credit-note workflows with original transaction references.
 - [ ] Ensure a reversed or returned transaction cannot remain counted as normal revenue/profit.
 - [ ] Add printable sales receipts and clear payment status.

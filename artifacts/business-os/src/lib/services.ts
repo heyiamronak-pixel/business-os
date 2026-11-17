@@ -859,7 +859,7 @@ export function upsertExpense(
 ): WorkspaceDB {
   if (!input.category.trim()) throw new ServiceError("Choose a category.");
   if (!Number.isFinite(input.amount) || input.amount <= 0) throw new ServiceError("Amount must be a valid number greater than zero.");
-  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(input.date) || Number.isNaN(new Date(input.date + "T00:00:00").getTime())) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date) || Number.isNaN(new Date(input.date + "T00:00:00").getTime())) {
     throw new ServiceError("Enter a valid expense date.");
   }
   const now = nowIso();
