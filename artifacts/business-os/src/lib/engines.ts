@@ -13,6 +13,7 @@ import type {
   WorkspaceDB,
 } from "@/lib/domain";
 import { createId, nowIso, roundMoney, startOfDay } from "@/lib/utils";
+import { isLeadFollowUpDue } from "@/lib/lead-utils";
 
 export interface DateRange {
   from: Date;
@@ -324,7 +325,7 @@ export function buildContext(db: WorkspaceDB, business: Business, now = new Date
   const monthSales = salesIn(db, business.id, range);
   const customers = db.customers.filter((c) => c.businessId === business.id);
   const stats = customers.map((c) => customerStats(db, c, now)).sort((a, b) => b.spend - a.spend);
-  const followUpLeads = db.leads.filter((lead) => lead.businessId === business.id && lead.followUpAt && new Date(lead.followUpAt).getTime() <= now.getTime() && lead.stage !== "won" && lead.stage !== "lost");
+  const followUpLeads = db.leads.filter((lead) => lead.businessId === business.id && isLeadFollowUpDue(lead, now));
   const expenseBreakdownMap = new Map<string, number>();
   for (const e of expensesIn(db, business.id, range)) {
     expenseBreakdownMap.set(e.category, roundMoney((expenseBreakdownMap.get(e.category) ?? 0) + e.amount));
