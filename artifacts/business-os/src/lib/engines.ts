@@ -58,7 +58,15 @@ export function financeSnapshot(db: WorkspaceDB, businessId: string, range?: Dat
   const sales = salesIn(db, businessId, range);
   const expenses = expensesIn(db, businessId, range);
   const revenue = roundMoney(sales.reduce((s, x) => s + x.total, 0));
-  const cashIn = roundMoney(sales.reduce((s, x) => s + x.paidAmount, 0));
+  const cashMovementSales = db.sales.filter((sale) => sale.businessId === businessId);
+  const cashIn = roundMoney(cashMovementSales.reduce((sum, sale) => {
+    const legacyPayments = sale.payments ?? (sale.paidAmount > 0 ? [{ amount: sale.paidAmount, receivedAt: sale.createdAt }] : []);
+    const received = legacyPayments.filter((payment) => !range || inRange(payment.receivedAt, range))
+      .reduce((value, payment) => value + payment.amount, 0);
+    const refunded = (sale.refunds ?? []).filter((refund) => !range || inRange(refund.refundedAt, range))
+      .reduce((value, refund) => value + refund.amount, 0);
+    return sum + received - refunded;
+  }, 0));
   const outstanding = roundMoney(sales.reduce((s, x) => s + x.outstanding, 0));
   const expenseTotal = roundMoney(expenses.reduce((s, x) => s + x.amount, 0));
   const grossProfit = roundMoney(sales.reduce((s, x) => s + x.grossProfit, 0));

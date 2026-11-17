@@ -5,7 +5,7 @@ import { AppPage, PageHeader, SearchField } from "@/components/app-shell";
 import { SavedViewControls } from "@/components/saved-view-controls";
 import { BottomSheet } from "@/components/sheet";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, Stat, Textarea } from "@/components/ui";
-import type { Purchase } from "@/lib/domain";
+import type { Purchase, RecordedPaymentMethod } from "@/lib/domain";
 import { downloadCsv } from "@/lib/csv";
 import { formatDateTime, money } from "@/lib/format";
 import { createPurchase, updatePurchasePayment } from "@/lib/services";
@@ -25,9 +25,13 @@ export function PurchasesScreen() {
   const [supplierId, setSupplierId] = React.useState("");
   const [lines, setLines] = React.useState<PurchaseLine[]>([blankLine()]);
   const [paidAmount, setPaidAmount] = React.useState("0");
+  const [initialPaymentMethod, setInitialPaymentMethod] = React.useState<RecordedPaymentMethod>("bank");
+  const [initialPaymentReference, setInitialPaymentReference] = React.useState("");
   const [note, setNote] = React.useState("");
   const [selected, setSelected] = React.useState<Purchase | null>(null);
   const [payment, setPayment] = React.useState("");
+  const [paymentMethod, setPaymentMethod] = React.useState<RecordedPaymentMethod>("bank");
+  const [paymentReference, setPaymentReference] = React.useState("");
 
   if (!business) return null;
   const businessId = business.id;
@@ -62,6 +66,8 @@ export function PurchasesScreen() {
     setSupplierId(activeSuppliers[0]?.id ?? "");
     setLines([blankLine()]);
     setPaidAmount("0");
+    setInitialPaymentMethod("bank");
+    setInitialPaymentReference("");
     setNote("");
     setCreateOpen(true);
   }
@@ -82,6 +88,8 @@ export function PurchasesScreen() {
         supplierId,
         items: lines.filter((line) => line.productId),
         paidAmount: Number(paidAmount),
+        initialPaymentMethod,
+        initialPaymentReference,
         note,
       });
       apply(result.db);
@@ -96,11 +104,12 @@ export function PurchasesScreen() {
     if (!selected) return;
     try {
       const currentDb = useAppStore.getState().db;
-      const updatedDb = updatePurchasePayment(currentDb, selected.id, Number(payment));
+      const updatedDb = updatePurchasePayment(currentDb, selected.id, Number(payment), paymentMethod, paymentReference);
       apply(updatedDb);
       const updated = updatedDb.purchases.find((purchase) => purchase.id === selected.id) ?? null;
       setSelected(updated);
       setPayment("");
+      setPaymentReference("");
       toast.success("Supplier payment recorded");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not record payment");
@@ -204,6 +213,12 @@ export function PurchasesScreen() {
             <Field label="Amount paid now">
               <Input type="number" min="0" max={subtotal} step="0.01" value={paidAmount} onChange={(event) => setPaidAmount(event.target.value)} />
             </Field>
+            {Number(paidAmount) > 0 ? <>
+              <Field label="Payment method"><Select value={initialPaymentMethod} onChange={(event) => setInitialPaymentMethod(event.target.value as RecordedPaymentMethod)}>
+                <option value="bank">Bank transfer</option><option value="upi">UPI</option><option value="cash">Cash</option><option value="card">Card</option><option value="other">Other</option>
+              </Select></Field>
+              <Field label="Payment reference (optional)"><Input value={initialPaymentReference} onChange={(event) => setInitialPaymentReference(event.target.value)} placeholder="UTR / transaction ID" /></Field>
+            </> : null}
             <div className="grid grid-cols-2 gap-2 rounded-xl bg-muted/50 p-3">
               <div><p className="text-xs text-muted-foreground">Total</p><p className="mt-1 font-semibold tabular">{money(subtotal, business.currency)}</p></div>
               <div><p className="text-xs text-muted-foreground">Balance after payment</p><p className="mt-1 font-semibold tabular">{money(Math.max(0, subtotal - (Number.isFinite(paidPreview) ? paidPreview : 0)), business.currency)}</p></div>
@@ -227,7 +242,11 @@ export function PurchasesScreen() {
               <Field label={`Record supplier payment · ${money(selected.balance, business.currency)} due`}>
                 <Input type="number" min="0.01" max={selected.balance} step="0.01" value={payment} onChange={(event) => setPayment(event.target.value)} placeholder="Payment amount" />
               </Field>
-              <Button className="w-full" onClick={collectPayment}>Record payment</Button>
+              <Field label="Payment method"><Select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as RecordedPaymentMethod)}>
+                <option value="bank">Bank transfer</option><option value="upi">UPI</option><option value="cash">Cash</option><option value="card">Card</option><option value="other">Other</option>
+              </Select></Field>
+              <Field label="Payment reference (optional)"><Input value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)} placeholder="UTR / transaction ID" /></Field>
+              <Button className="w-full" onClick={collectPayment} disabled={!payment.trim()}>Record payment</Button>
             </div>
           ) : <Button className="w-full" variant="secondary" onClick={() => setSelected(null)}>Close</Button>
         }
@@ -247,6 +266,15 @@ export function PurchasesScreen() {
               <div className="flex justify-between"><span className="text-muted-foreground">Paid</span><span className="tabular">{money(selected.paidAmount, business.currency)}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Outstanding</span><span className="tabular font-semibold">{money(selected.balance, business.currency)}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Status</span><Badge tone={selected.paymentStatus === "paid" ? "good" : selected.paymentStatus === "partial" ? "warn" : "bad"}>{selected.paymentStatus}</Badge></div>
+            </div>
+            <div className="space-y-2">
+              <p className="text-xs font-semibold">Supplier payment history</p>
+              {(selected.payments ?? []).length ? selected.payments!.map((entry) => (
+                <div key={entry.id} className="flex justify-between gap-3 border-b border-border py-2 text-xs">
+                  <span>{money(entry.amount, business.currency)} · {entry.method.toUpperCase()}{entry.reference ? ` · ${entry.reference}` : ""}</span>
+                  <span className="text-muted-foreground">{formatDateTime(entry.paidAt)}</span>
+                </div>
+              )) : selected.paidAmount > 0 ? <p className="text-xs text-muted-foreground">Previously recorded payment · {money(selected.paidAmount, business.currency)} (method history not available).</p> : <p className="text-xs text-muted-foreground">No supplier payments recorded yet.</p>}
             </div>
             {selected.note ? <p className="text-sm text-muted-foreground">{selected.note}</p> : null}
           </div>

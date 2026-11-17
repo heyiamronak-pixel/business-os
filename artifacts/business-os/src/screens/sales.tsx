@@ -4,8 +4,8 @@ import { toast } from "sonner";
 import { AppPage, ConfirmBar, PageHeader, SearchField } from "@/components/app-shell";
 import { SavedViewControls } from "@/components/saved-view-controls";
 import { BottomSheet } from "@/components/sheet";
-import { Badge, Button, Card, EmptyState, Input, Segmented, Stat } from "@/components/ui";
-import type { Sale } from "@/lib/domain";
+import { Badge, Button, Card, EmptyState, Field, Input, Select, Segmented, Stat } from "@/components/ui";
+import type { RecordedPaymentMethod, Sale } from "@/lib/domain";
 import { formatDateTime, money } from "@/lib/format";
 import { recordPayment, reverseSale } from "@/lib/services";
 import { useAppStore, useBusiness } from "@/lib/store";
@@ -22,8 +22,12 @@ export function SalesScreen() {
   const [paymentFilter, setPaymentFilter] = React.useState<PaymentFilter>("all");
   const [sale, setSale] = React.useState<Sale | null>(null);
   const [payment, setPayment] = React.useState("");
+  const [paymentMethod, setPaymentMethod] = React.useState<RecordedPaymentMethod>("upi");
+  const [paymentReference, setPaymentReference] = React.useState("");
   const [confirm, setConfirm] = React.useState(false);
   const [reverseReason, setReverseReason] = React.useState("");
+  const [refundMethod, setRefundMethod] = React.useState<RecordedPaymentMethod | "">("");
+  const [refundReference, setRefundReference] = React.useState("");
 
   if (!business) return null;
   const currency = business.currency;
@@ -86,11 +90,12 @@ export function SalesScreen() {
   function collectPayment() {
     if (!sale) return;
     try {
-      const updated = recordPayment(useAppStore.getState().db, sale.id, Number(payment));
+      const updated = recordPayment(useAppStore.getState().db, sale.id, Number(payment), paymentMethod, paymentReference);
       apply(updated);
+      setSale(updated.sales.find((item) => item.id === sale.id) ?? null);
       toast.success("Payment recorded");
       setPayment("");
-      setSale(null);
+      setPaymentReference("");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not record payment");
     }
@@ -201,11 +206,15 @@ export function SalesScreen() {
                     onChange={(event) => setPayment(event.target.value)}
                     placeholder={`Collect up to ${money(sale.outstanding, currency)}`}
                   />
+                  <Field label="Payment method"><Select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as RecordedPaymentMethod)}>
+                    <option value="upi">UPI</option><option value="cash">Cash</option><option value="bank">Bank transfer</option><option value="card">Card</option><option value="other">Other</option>
+                  </Select></Field>
+                  <Field label="Reference (optional)"><Input value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)} placeholder="UTR / transaction ID" /></Field>
                   <Button className="w-full" onClick={collectPayment} disabled={!payment.trim()}>Record payment</Button>
                 </>
               ) : null}
               {sale.status !== "reversed" ? (
-                <Button variant="ghost" className="w-full text-danger" onClick={() => { setReverseReason(""); setConfirm(true); }}>
+                <Button variant="ghost" className="w-full text-danger" onClick={() => { setReverseReason(""); setRefundMethod(""); setRefundReference(""); setConfirm(true); }}>
                   Reverse sale
                 </Button>
               ) : <p className="text-sm text-danger">Reversed · {sale.reversalReason ?? "Reason not recorded"}</p>}
@@ -230,6 +239,22 @@ export function SalesScreen() {
               <div className="flex justify-between"><span className="text-muted-foreground">Paid</span><span className="tabular">{money(sale.paidAmount, currency)}</span></div>
               <div className="flex justify-between font-semibold"><span>Outstanding</span><span className="tabular">{money(sale.outstanding, currency)}</span></div>
             </div>
+            <div className="space-y-2">
+              <p className="text-xs font-semibold">Payment history</p>
+              {(sale.payments ?? []).length ? sale.payments!.map((entry) => (
+                <div key={entry.id} className="flex justify-between gap-3 border-b border-border py-2 text-xs">
+                  <span>{money(entry.amount, currency)} · {entry.method.toUpperCase()}{entry.reference ? ` · ${entry.reference}` : ""}</span>
+                  <span className="text-muted-foreground">{formatDateTime(entry.receivedAt)}</span>
+                </div>
+              )) : sale.paidAmount > 0 ? <p className="text-xs text-muted-foreground">Previously recorded payment · {money(sale.paidAmount, currency)} (method history not available).</p> : <p className="text-xs text-muted-foreground">No payments recorded yet.</p>}
+              {(sale.refunds ?? []).length ? <>
+                <p className="pt-2 text-xs font-semibold">Refund history</p>
+                {sale.refunds!.map((entry) => <div key={entry.id} className="flex justify-between gap-3 border-b border-border py-2 text-xs">
+                  <span>{money(entry.amount, currency)} · {entry.method.toUpperCase()}{entry.reference ? ` · ${entry.reference}` : ""}</span>
+                  <span className="text-muted-foreground">{formatDateTime(entry.refundedAt)}</span>
+                </div>)}
+              </> : null}
+            </div>
             {sale.note ? <p className="text-sm text-muted-foreground">{sale.note}</p> : null}
           </div>
         ) : null}
@@ -248,8 +273,11 @@ export function SalesScreen() {
             onConfirm={() => {
               if (!sale) return;
               try {
-                apply(reverseSale(useAppStore.getState().db, sale.id, reverseReason));
-                toast.success("Sale reversed and original record preserved");
+                const refund = sale.paidAmount > 0
+                  ? (refundMethod ? { method: refundMethod, reference: refundReference } : undefined)
+                  : undefined;
+                apply(reverseSale(useAppStore.getState().db, sale.id, reverseReason, refund));
+                toast.success("Sale reversed and refund recorded");
                 setConfirm(false);
                 setSale(null);
                 setReverseReason("");
@@ -261,8 +289,15 @@ export function SalesScreen() {
         }
       >
         <div className="space-y-2">
-          <p className="text-sm text-muted-foreground">Use this for a cancelled or incorrect checkout. Reversals restore stock and are excluded from revenue and profit totals without deleting the original transaction.</p>
+          <p className="text-sm text-muted-foreground">Reversals restore stock and retain the original transaction. This does not transfer money; record refund details only after you have actually refunded the customer.</p>
           <Input value={reverseReason} onChange={(event) => setReverseReason(event.target.value)} placeholder="Reason for reversal (required)" />
+          {sale?.paidAmount ? <>
+            <Field label={`Refund amount · ${money(sale.paidAmount, currency)}`}><Input value={money(sale.paidAmount, currency)} disabled /></Field>
+            <Field label="Refund method (required)"><Select value={refundMethod} onChange={(event) => setRefundMethod(event.target.value as RecordedPaymentMethod | "")}>
+              <option value="">Select refund method</option><option value="upi">UPI</option><option value="cash">Cash</option><option value="bank">Bank transfer</option><option value="card">Card</option><option value="other">Other</option>
+            </Select></Field>
+            <Field label="Refund reference (optional)"><Input value={refundReference} onChange={(event) => setRefundReference(event.target.value)} placeholder="UTR / refund reference" /></Field>
+          </> : null}
         </div>
       </BottomSheet>
     </AppPage>

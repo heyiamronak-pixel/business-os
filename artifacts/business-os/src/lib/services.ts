@@ -19,6 +19,10 @@ import {
   type Product,
   type Purchase,
   type PurchaseItem,
+  type PurchasePayment,
+  type RecordedPaymentMethod,
+  type SalePayment,
+  type SaleRefund,
   type Supplier,
   type SupplierStatus,
   type Sale,
@@ -555,6 +559,8 @@ export function createPurchase(
     supplierId: string;
     items: Array<{ productId: string; quantity: number; unitCost: number }>;
     paidAmount: number;
+    initialPaymentMethod?: RecordedPaymentMethod;
+    initialPaymentReference?: string;
     note?: string;
   },
 ): { db: WorkspaceDB; purchase: Purchase } {
@@ -610,6 +616,13 @@ export function createPurchase(
     paidAmount,
     balance,
     paymentStatus,
+    payments: paidAmount > 0 ? [{
+      id: createId("ppay"),
+      amount: paidAmount,
+      method: input.initialPaymentMethod ?? "bank",
+      reference: input.initialPaymentReference?.trim() || undefined,
+      paidAt: now,
+    }] : [],
     note: input.note?.trim() || undefined,
     createdAt: now,
     updatedAt: now,
@@ -641,25 +654,33 @@ export function createPurchase(
   };
 }
 
-export function updatePurchasePayment(db: WorkspaceDB, purchaseId: string, amount: number): WorkspaceDB {
+export function updatePurchasePayment(
+  db: WorkspaceDB,
+  purchaseId: string,
+  amount: number,
+  method: RecordedPaymentMethod = "bank",
+  reference?: string,
+): WorkspaceDB {
   const purchase = db.purchases.find((item) => item.id === purchaseId);
   if (!purchase) throw new ServiceError("Purchase not found.");
-  if (!Number.isFinite(amount) || amount <= 0) {
-    throw new ServiceError("Enter a payment greater than zero.");
-  }
-  if (amount > purchase.balance) {
-    throw new ServiceError("Payment cannot be greater than the outstanding balance.");
-  }
+  if (!Number.isFinite(amount) || amount <= 0) throw new ServiceError("Enter a payment greater than zero.");
+  if (amount > purchase.balance) throw new ServiceError("Payment cannot be greater than the outstanding balance.");
+  const now = nowIso();
   const paidAmount = roundMoney(purchase.paidAmount + amount);
   const balance = roundMoney(Math.max(0, purchase.total - paidAmount));
   const paymentStatus = balance <= 0 ? "paid" : "partial";
+  const legacyPayments: PurchasePayment[] = purchase.payments ?? (purchase.paidAmount > 0 ? [{
+    id: `legacy-${purchase.id}`, amount: purchase.paidAmount, method: "other",
+    reference: "Previous payment · method not recorded", paidAt: purchase.createdAt,
+  }] : []);
+  const payment: PurchasePayment = {
+    id: createId("ppay"), amount: roundMoney(amount), method,
+    reference: reference?.trim() || undefined, paidAt: now,
+  };
   return {
     ...db,
     purchases: replace(db.purchases, purchaseId, {
-      paidAmount,
-      balance,
-      paymentStatus,
-      updatedAt: nowIso(),
+      paidAmount, balance, paymentStatus, payments: [...legacyPayments, payment], updatedAt: now,
     }),
   };
 }
@@ -731,6 +752,12 @@ export function completeSale(
   const outstanding = roundMoney(Math.max(0, total - paid));
   const paymentStatus = outstanding <= 0 ? "paid" : paid > 0 ? "partial" : "unpaid";
   const now = nowIso();
+  const initialPaymentMethod: RecordedPaymentMethod = input.paymentMethod === "credit" ? "other" : input.paymentMethod;
+  const payments: SalePayment[] = paid > 0 ? [{
+    id: createId("spay"), amount: paid, method: initialPaymentMethod,
+    reference: input.paymentMethod === "credit" ? "Initial amount · method not specified" : undefined,
+    receivedAt: now,
+  }] : [];
   const customer = input.customerId ? db.customers.find((c) => c.id === input.customerId && c.businessId === input.businessId && !c.archived) : undefined;
   if (input.customerId && !customer) throw new ServiceError("Select an active customer from this business.");
   const sale: Sale = {
@@ -748,6 +775,8 @@ export function completeSale(
     paymentStatus,
     paidAmount: paid,
     outstanding,
+    payments,
+    refunds: [],
     note: input.note?.trim() || undefined,
     createdAt: now,
     status: "completed",
@@ -794,7 +823,13 @@ export function completeSale(
   };
 }
 
-export function recordPayment(db: WorkspaceDB, saleId: string, amount: number): WorkspaceDB {
+export function recordPayment(
+  db: WorkspaceDB,
+  saleId: string,
+  amount: number,
+  method: RecordedPaymentMethod = "cash",
+  reference?: string,
+): WorkspaceDB {
   const sale = db.sales.find((item) => item.id === saleId);
   if (!sale) throw new ServiceError("Sale not found.");
   if (sale.status === "reversed") throw new ServiceError("A reversed sale cannot receive another payment.");
@@ -802,18 +837,41 @@ export function recordPayment(db: WorkspaceDB, saleId: string, amount: number): 
   const currentPaid = Number.isFinite(sale.paidAmount) ? Math.min(sale.total, Math.max(0, sale.paidAmount)) : 0;
   const currentOutstanding = roundMoney(Math.max(0, sale.total - currentPaid));
   if (amount > currentOutstanding) throw new ServiceError("Payment cannot be greater than the outstanding balance.");
+  const now = nowIso();
   const paid = roundMoney(currentPaid + amount);
   const outstanding = roundMoney(Math.max(0, sale.total - paid));
   const paymentStatus = outstanding <= 0 ? "paid" : "partial";
-  return { ...db, sales: replace(db.sales, saleId, { paidAmount: paid, outstanding, paymentStatus }) };
+  const legacyPayments: SalePayment[] = sale.payments ?? (sale.paidAmount > 0 ? [{
+    id: `legacy-${sale.id}`,
+    amount: sale.paidAmount,
+    method: sale.paymentMethod === "credit" ? "other" : sale.paymentMethod,
+    reference: sale.paymentMethod === "credit" ? "Previous payment · method not recorded" : undefined,
+    receivedAt: sale.createdAt,
+  }] : []);
+  const payment: SalePayment = {
+    id: createId("spay"), amount: roundMoney(amount), method,
+    reference: reference?.trim() || undefined, receivedAt: now,
+  };
+  return {
+    ...db,
+    sales: replace(db.sales, saleId, { paidAmount: paid, outstanding, paymentStatus, payments: [...legacyPayments, payment] }),
+  };
 }
 
-export function reverseSale(db: WorkspaceDB, saleId: string, reason: string): WorkspaceDB {
+export function reverseSale(
+  db: WorkspaceDB,
+  saleId: string,
+  reason: string,
+  refund?: { method: RecordedPaymentMethod; reference?: string },
+): WorkspaceDB {
   const sale = db.sales.find((item) => item.id === saleId);
   if (!sale) throw new ServiceError("Sale not found.");
   if (sale.status === "reversed") throw new ServiceError("This sale has already been reversed.");
   const reversalReason = reason.trim();
   if (reversalReason.length < 3) throw new ServiceError("Add a reversal reason (at least 3 characters).");
+  if (sale.paidAmount > 0 && !refund?.method) {
+    throw new ServiceError("Record the refund method for the amount already collected before reversing this sale.");
+  }
   const now = nowIso();
   let products = db.products;
   let movements = db.movements;
@@ -828,7 +886,20 @@ export function reverseSale(db: WorkspaceDB, saleId: string, reason: string): Wo
       refId: sale.id, createdAt: now,
     }, ...movements];
   }
-  const reversed: Sale = { ...sale, status: "reversed", reversalReason, reversedAt: now };
+  const legacyPayments: SalePayment[] = sale.payments ?? (sale.paidAmount > 0 ? [{
+    id: `legacy-${sale.id}`, amount: sale.paidAmount,
+    method: sale.paymentMethod === "credit" ? "other" : sale.paymentMethod,
+    reference: sale.paymentMethod === "credit" ? "Previous payment · method not recorded" : undefined,
+    receivedAt: sale.createdAt,
+  }] : []);
+  const refundRecords: SaleRefund[] = sale.paidAmount > 0 ? [{
+    id: createId("sref"), amount: roundMoney(sale.paidAmount), method: refund!.method,
+    reference: refund!.reference?.trim() || undefined, refundedAt: now,
+  }] : sale.refunds ?? [];
+  const reversed: Sale = {
+    ...sale, status: "reversed", payments: legacyPayments, refunds: refundRecords,
+    reversalReason, reversedAt: now,
+  };
   const activity: Activity = {
     id: createId("act"), businessId: sale.businessId, customerId: sale.customerId,
     type: "system", message: `Sale ${sale.id.slice(-7).toUpperCase()} reversed: ${reversalReason}`,

@@ -71,6 +71,8 @@ test("purchase receipt increases stock and stores a partial supplier balance", (
   assert.equal(result.purchase.paidAmount, 30);
   assert.equal(result.purchase.balance, 40);
   assert.equal(result.purchase.paymentStatus, "partial");
+  assert.equal(result.purchase.payments?.[0].amount, 30);
+  assert.equal(result.purchase.payments?.[0].method, "bank");
   assert.equal(result.db.products[0].stock, 7);
   assert.equal(result.db.movements[0].type, "in");
   assert.equal(result.db.movements[0].quantity, 2);
@@ -85,12 +87,15 @@ test("supplier payments reduce the outstanding balance and reject overpayment", 
     items: [{ productId: product.id, quantity: 1, unitCost: 50 }],
     paidAmount: 20,
   });
-  const paid = updatePurchasePayment(result.db, result.purchase.id, 30);
+  const paid = updatePurchasePayment(result.db, result.purchase.id, 30, "upi", "UTR-123");
   const purchase = paid.purchases[0];
 
   assert.equal(purchase.paidAmount, 50);
   assert.equal(purchase.balance, 0);
   assert.equal(purchase.paymentStatus, "paid");
+  assert.equal(purchase.payments?.length, 2);
+  assert.equal(purchase.payments?.[1].method, "upi");
+  assert.equal(purchase.payments?.[1].reference, "UTR-123");
   assert.throws(
     () => updatePurchasePayment(result.db, result.purchase.id, 31),
     /greater than the outstanding balance/,
@@ -279,4 +284,29 @@ test("editing a product cannot bypass the inventory movement ledger", () => {
     minStock: product.minStock,
     unit: product.unit,
   }), /Use Inventory to change stock/);
+});
+
+
+test("sale collections keep method/reference and reversal requires refund details", () => {
+  const { db } = setup();
+  const created = completeSale(db, {
+    businessId: "business-1",
+    lines: [{ productId: product.id, qty: 2, unitPrice: 80, discount: 0 }],
+    cartDiscount: 0,
+    paymentMethod: "credit",
+    paidAmount: 20,
+  });
+  const collected = recordPayment(created.db, created.sale.id, 30, "upi", "UTR-SALE-2");
+  const sale = collected.sales.find((item) => item.id === created.sale.id)!;
+  assert.equal(sale.paidAmount, 50);
+  assert.equal(sale.payments?.length, 2);
+  assert.equal(sale.payments?.[1].method, "upi");
+  assert.equal(sale.payments?.[1].reference, "UTR-SALE-2");
+  assert.throws(() => reverseSale(collected, sale.id, "Customer cancellation"), /refund method/);
+  const reversed = reverseSale(collected, sale.id, "Customer cancellation", { method: "bank", reference: "REF-777" });
+  const reversedSale = reversed.sales.find((item) => item.id === sale.id)!;
+  assert.equal(reversedSale.status, "reversed");
+  assert.equal(reversedSale.refunds?.[0].amount, 50);
+  assert.equal(reversedSale.refunds?.[0].method, "bank");
+  assert.equal(reversedSale.refunds?.[0].reference, "REF-777");
 });

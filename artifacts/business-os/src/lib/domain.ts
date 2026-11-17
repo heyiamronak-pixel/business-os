@@ -4,6 +4,10 @@ export type Role = "owner" | "admin" | "manager" | "employee";
 export type TaskStatus = "todo" | "doing" | "done";
 export type TaskPriority = "low" | "medium" | "high" | "urgent";
 export type PaymentMethod = "cash" | "card" | "upi" | "bank" | "credit" | "other";
+export type RecordedPaymentMethod = Exclude<PaymentMethod, "credit">;
+export interface SalePayment { id: string; amount: number; method: RecordedPaymentMethod; reference?: string; receivedAt: string; }
+export interface SaleRefund { id: string; amount: number; method: RecordedPaymentMethod; reference?: string; refundedAt: string; }
+export interface PurchasePayment { id: string; amount: number; method: RecordedPaymentMethod; reference?: string; paidAt: string; }
 export type PaymentStatus = "paid" | "partial" | "unpaid";
 export type MovementType = "in" | "out" | "adjustment" | "sale";
 export type TargetPeriod = "monthly" | "quarterly" | "annual";
@@ -209,6 +213,8 @@ export interface Sale {
   paidAmount: number;
   outstanding: number;
   note?: string;
+  payments?: SalePayment[];
+  refunds?: SaleRefund[];
   createdAt: string;
   status?: "completed" | "reversed";
   reversalReason?: string;
@@ -253,6 +259,7 @@ export interface Purchase {
   paidAmount: number;
   balance: number;
   paymentStatus: PurchasePaymentStatus;
+  payments?: PurchasePayment[];
   note?: string;
   createdAt: string;
   updatedAt: string;
