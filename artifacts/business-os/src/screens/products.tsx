@@ -1,9 +1,11 @@
 import * as React from "react";
+import { Download } from "lucide-react";
 import { toast } from "sonner";
 import { AppPage, ConfirmBar, PageHeader, SearchField } from "@/components/app-shell";
 import { BottomSheet } from "@/components/sheet";
 import { Badge, Button, EmptyState, Field, Input, Select } from "@/components/ui";
 import { UNITS, type Product } from "@/lib/domain";
+import { downloadCsv } from "@/lib/csv";
 import { money } from "@/lib/format";
 import { generateSku } from "@/lib/sku";
 import { deleteProduct, upsertProduct } from "@/lib/services";
@@ -38,15 +40,23 @@ export function ProductsScreen() {
     return a.name.localeCompare(b.name);
   });
 
+  function exportProducts() {
+    downloadCsv("business-sutra-products.csv",
+      ["Name", "SKU", "Barcode", "Category", "Cost price", "Selling price", "Stock", "Minimum stock", "Unit"],
+      list.map((product) => [product.name, product.sku, product.barcode, product.category, product.costPrice, product.sellingPrice, product.stock, product.minStock, product.unit]));
+    toast.success("Exported " + list.length + " products");
+  }
+
   return (
     <AppPage>
       <PageHeader
         title="Products"
         subtitle={`${products.length} in catalog`}
         action={
-          <Button size="sm" onClick={() => setEditing({ businessId: business.id, unit: "pcs", stock: 0, minStock: 0, costPrice: 0, sellingPrice: 0, name: "", sku: "" })}>
-            Add
-          </Button>
+          <div className="flex gap-2">
+            <Button size="sm" variant="secondary" onClick={exportProducts} disabled={!list.length}><Download className="size-4" />Export</Button>
+            <Button size="sm" onClick={() => setEditing({ businessId: business.id, unit: "pcs", stock: 0, minStock: 0, costPrice: 0, sellingPrice: 0, name: "", sku: "" })}>Add</Button>
+          </div>
         }
       />
       <SearchField value={q} onChange={setQ} placeholder="Search products" />
