@@ -27,6 +27,17 @@ function migrate(raw: unknown): PersistedState {
     purchases: Array.isArray(saved.purchases) ? saved.purchases : [],
     invoices: Array.isArray(saved.invoices) ? saved.invoices : [],
     leads: Array.isArray(saved.leads) ? saved.leads : [],
+    branches: Array.isArray(saved.branches) ? saved.branches : (Array.isArray(saved.businesses) ? saved.businesses.map((business) => ({
+      id: `br-${String(business.id)}-main`,
+      businessId: String(business.id),
+      name: "Main Branch",
+      code: "MAIN",
+      isDefault: true,
+      isActive: true,
+      timezone: typeof business.timezone === "string" ? business.timezone : undefined,
+      createdAt: typeof business.createdAt === "string" ? business.createdAt : new Date(0).toISOString(),
+      updatedAt: typeof business.updatedAt === "string" ? business.updatedAt : new Date(0).toISOString(),
+    })) : []),
     businesses: Array.isArray(saved.businesses) ? saved.businesses.map((entry) => {
       const business = isObject(entry) ? entry : {};
       const enabled = Array.isArray(business.enabledModules) ? business.enabledModules as string[] : [];
