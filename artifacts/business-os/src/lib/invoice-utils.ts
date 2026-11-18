@@ -51,6 +51,25 @@ export function addInvoicePayment(invoice: InvoiceRecord, payment: import("@/lib
  return { ...invoice, payments: [...(invoice.payments ?? []), { ...payment, amount: round2(payment.amount) }], updatedAt: payment.receivedAt };
 }
 
+export type InvoiceDueStatus = "cancelled" | "paid" | "overdue" | "due" | "no_due_date";
+export interface InvoiceDueSummary {
+ status: InvoiceDueStatus;
+ balance: number;
+ overdueDays: number;
+}
+export function getInvoiceDueSummary(invoice: InvoiceRecord, now = new Date()): InvoiceDueSummary {
+ const payment = getInvoicePaymentSummary(invoice.total, invoice.payments);
+ if (invoice.status === "cancelled") return { status: "cancelled", balance: 0, overdueDays: 0 };
+ if (payment.balance <= 0) return { status: "paid", balance: 0, overdueDays: 0 };
+ if (!invoice.dueDate) return { status: "no_due_date", balance: payment.balance, overdueDays: 0 };
+ const today = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+ if (invoice.dueDate >= today) return { status: "due", balance: payment.balance, overdueDays: 0 };
+ const due = new Date(invoice.dueDate + "T00:00:00");
+ const current = new Date(today + "T00:00:00");
+ const overdueDays = Math.max(1, Math.floor((current.getTime() - due.getTime()) / 86400000));
+ return { status: "overdue", balance: payment.balance, overdueDays };
+}
+
 export function normaliseInvoiceCancellationReason(reason: string): string {
   const value = reason.trim();
   if (value.length < 3) throw new Error("Add a cancellation reason (at least 3 characters).");
