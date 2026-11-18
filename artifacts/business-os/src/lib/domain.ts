@@ -282,6 +282,8 @@ export interface Purchase {
   balance: number;
   paymentStatus: PurchasePaymentStatus;
   payments?: PurchasePayment[];
+  supplierReference?: string;
+  dueDate?: string;
   note?: string;
   createdAt: string;
   updatedAt: string;

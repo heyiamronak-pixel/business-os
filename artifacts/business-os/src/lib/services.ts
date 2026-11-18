@@ -563,10 +563,30 @@ export function createPurchase(
     paidAmount: number;
     initialPaymentMethod?: RecordedPaymentMethod;
     initialPaymentReference?: string;
+    supplierReference?: string;
+    dueDate?: string;
     note?: string;
   },
 ): { db: WorkspaceDB; purchase: Purchase } {
   if (!input.items.length) throw new ServiceError("Add at least one product to this purchase.");
+  const supplierReference = input.supplierReference?.trim() || undefined;
+  if (supplierReference && db.purchases.some((purchase) =>
+    purchase.businessId === input.businessId &&
+    purchase.supplierId === input.supplierId &&
+    purchase.supplierReference?.trim().toLowerCase() === supplierReference.toLowerCase()
+  )) {
+    throw new ServiceError("This supplier invoice / document reference has already been recorded. Open the existing purchase instead of receiving the stock twice.");
+  }
+  const dueDate = input.dueDate?.trim() || undefined;
+  if (dueDate) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dueDate);
+    if (!match) throw new ServiceError("Enter a valid supplier payment due date.");
+    const year = Number(match[1]), month = Number(match[2]), day = Number(match[3]);
+    const parsed = new Date(year, month - 1, day);
+    if (parsed.getFullYear() !== year || parsed.getMonth() !== month - 1 || parsed.getDate() !== day) {
+      throw new ServiceError("Enter a valid supplier payment due date.");
+    }
+  }
   const supplier = db.suppliers.find((item) =>
     item.id === input.supplierId && item.businessId === input.businessId
   );
@@ -618,6 +638,8 @@ export function createPurchase(
     paidAmount,
     balance,
     paymentStatus,
+    supplierReference,
+    dueDate,
     payments: paidAmount > 0 ? [{
       id: createId("ppay"),
       amount: paidAmount,
