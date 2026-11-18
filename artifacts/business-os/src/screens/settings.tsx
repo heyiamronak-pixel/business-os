@@ -2,12 +2,12 @@ import * as React from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { AppPage, PageHeader } from "@/components/app-shell";
-import { Button, Card, Field, Input, Select, Switch } from "@/components/ui";
+import { Button, Card, Field, Input, Select, Switch, Textarea } from "@/components/ui";
 import {
+  BUSINESS_TYPES,
   COUNTRIES,
   INDUSTRIES,
   MODULE_CATALOG,
-  recommendModules,
   type Appearance,
   type IndustryId,
   type SubscriptionBillingCycle,
@@ -48,7 +48,11 @@ export function SettingsScreen() {
 
   function patch(p: Parameters<typeof updateBusiness>[2]) {
     if (!business) return;
-    apply(updateBusiness(useAppStore.getState().db, business.id, p));
+    try {
+      apply(updateBusiness(useAppStore.getState().db, business.id, p));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not update workspace profile");
+    }
   }
 
   function addBranch() {
@@ -152,12 +156,21 @@ export function SettingsScreen() {
             onBlur={() => name.trim().length >= 2 && patch({ name: name.trim() })}
           />
         </Field>
+        <Field label="Business description">
+          <Textarea rows={3} maxLength={500} defaultValue={business.description ?? ""} placeholder="What your business offers and who it serves" onBlur={(e) => patch({ description: e.target.value })} />
+        </Field>
+        <Field label="Business type">
+          <Select value={business.businessType} onChange={(e) => patch({ businessType: e.target.value })}>
+            {BUSINESS_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
+          </Select>
+        </Field>
         <Field label="Industry">
           <Select
             value={business.industry}
             onChange={(e) => {
               const industry = e.target.value as IndustryId;
-              patch({ industry, enabledModules: recommendModules(industry), moduleOrder: recommendModules(industry) });
+              // Changing industry must not silently re-enable modules the owner previously disabled.
+              patch({ industry });
             }}
           >
             {INDUSTRIES.map((i) => (
@@ -188,6 +201,9 @@ export function SettingsScreen() {
         </Field>
         <Field label="Email">
           <Input defaultValue={business.email ?? ""} onBlur={(e) => patch({ email: e.target.value })} />
+        </Field>
+        <Field label="Website">
+          <Input defaultValue={business.website ?? ""} placeholder="www.yourbusiness.com" onBlur={(e) => patch({ website: e.target.value })} />
         </Field>
       </Card>
 

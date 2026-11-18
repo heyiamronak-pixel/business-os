@@ -27,9 +27,9 @@ Business Sutra is a multi-industry business operating system—not only a dashbo
 - [x] Business setup flow exists: business name, industry, type, country, currency, timezone and contact details.
 - [x] Logo upload and automatic dominant-colour extraction exist.
 - [x] Theme presets and light/dark/auto appearance exist.
-- [ ] Complete the profile fields and validation for description, website, address, city, state, postal code and tax identity.
+- [x] Complete profile fields for description, website, address, city, state, postal code, contact details and editable business type with service-layer validation for key fields and GST identity.
 - [ ] Verify the accessible palette roles (primary, secondary, accent, surface, background, text, muted text and border) are consistent across all controls, charts, alerts and navigation.
-- [ ] Enable/disable/reorder modules without silently restoring a module the user intentionally disabled.
+- [x] Enable/disable/reorder modules without silently restoring disabled modules when the industry selection changes.
 - [x] Add local branch records, create/delete UI, default branch migration, team branch assignment and plan-cap enforcement.
 - [ ] Extend branch ownership into every transaction, stock record, attendance entry, report and server permission scope.
 - [ ] Complete multi-business switching and workspace-level export/delete/retention flows.

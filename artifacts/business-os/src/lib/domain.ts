@@ -101,6 +101,7 @@ export type IndustryId =
 export interface Business {
   id: string;
   name: string;
+  description?: string;
   logoDataUrl?: string;
   industry: IndustryId;
   businessType: string;

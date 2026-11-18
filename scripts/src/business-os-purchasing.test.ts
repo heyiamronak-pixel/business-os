@@ -19,6 +19,7 @@ import {
   upsertExpense,
   upsertProduct,
   updatePurchasePayment,
+  updateBusiness,
   upsertSupplier,
 } from "../../artifacts/business-os/src/lib/services.ts";
 import { emptyDb, type Product } from "../../artifacts/business-os/src/lib/domain.ts";
@@ -48,6 +49,25 @@ function setup() {
   });
   return { db: { ...created.db, products: [product] }, supplier: created.supplier };
 }
+
+test("business profile updates normalise websites and reject invalid profile values", () => {
+  const db = {
+    ...emptyDb(),
+    businesses: [{
+      id: "business-1", name: "Test Store", industry: "retail" as const, businessType: "Sole proprietor",
+      country: "India", currency: "INR", timezone: "Asia/Kolkata", brandColors: [],
+      themePreset: "professional" as const, appearance: "light" as const, enabledModules: ["products" as const],
+      moduleOrder: ["products" as const], createdAt: "2026-11-01T00:00:00.000Z", updatedAt: "2026-11-01T00:00:00.000Z",
+    }],
+  };
+  const updated = updateBusiness(db, "business-1", { website: "example.com", description: "  Retail store  ", email: "owner@example.com" });
+  assert.equal(updated.businesses[0].website, "https://example.com");
+  assert.equal(updated.businesses[0].description, "Retail store");
+  assert.throws(() => updateBusiness(updated, "business-1", { website: "javascript:alert(1)" }), /valid business website/);
+  assert.throws(() => updateBusiness(updated, "business-1", { email: "not-an-email" }), /valid business email/);
+  assert.throws(() => updateBusiness(updated, "business-1", { description: "x".repeat(501) }), /500 characters/);
+  assert.throws(() => updateBusiness(updated, "missing", { name: "Another" }), /not found/);
+});
 
 test("supplier creation normalises email and blocks duplicate business names", () => {
   const { db, supplier } = setup();

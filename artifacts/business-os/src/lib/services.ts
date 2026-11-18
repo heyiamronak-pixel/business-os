@@ -162,11 +162,78 @@ export function createWorkspace(
   };
 }
 
+
+function normaliseBusinessWebsite(value: string | undefined): string | undefined {
+  const raw = value?.trim();
+  if (!raw) return undefined;
+  const candidate = /^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`;
+  let parsed: URL;
+  try { parsed = new URL(candidate); }
+  catch { throw new ServiceError("Enter a valid business website URL."); }
+  if (!["http:", "https:"].includes(parsed.protocol) || !parsed.hostname.includes(".")) {
+    throw new ServiceError("Enter a valid business website URL.");
+  }
+  return parsed.toString().replace(/\/$/, "");
+}
+
+function validateBusinessProfilePatch(current: Business, patch: Partial<Business>): Partial<Business> {
+  const next = { ...patch };
+  if (patch.name !== undefined) {
+    const name = patch.name.trim();
+    if (name.length < 2 || name.length > 100) throw new ServiceError("Business name must be between 2 and 100 characters.");
+    next.name = name;
+  }
+  if (patch.description !== undefined) {
+    const description = patch.description.trim();
+    if (description.length > 500) throw new ServiceError("Business description must be 500 characters or fewer.");
+    next.description = description || undefined;
+  }
+  if (patch.website !== undefined) next.website = normaliseBusinessWebsite(patch.website);
+  if (patch.email !== undefined) {
+    const email = patch.email.trim();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new ServiceError("Enter a valid business email address.");
+    next.email = email || undefined;
+  }
+  if (patch.phone !== undefined) {
+    const phone = patch.phone.trim();
+    if (phone && !/^[+0-9() .-]{7,24}$/.test(phone)) throw new ServiceError("Enter a valid business phone number.");
+    next.phone = phone || undefined;
+  }
+  if (patch.postalCode !== undefined) {
+    const postalCode = patch.postalCode.trim();
+    if (postalCode && !/^[A-Za-z0-9 -]{3,16}$/.test(postalCode)) throw new ServiceError("Enter a valid postal code.");
+    next.postalCode = postalCode || undefined;
+  }
+  if (patch.stateCode !== undefined) {
+    const stateCode = patch.stateCode.trim();
+    if (stateCode && !/^[0-9]{1,3}$/.test(stateCode)) throw new ServiceError("State code must contain 1 to 3 digits.");
+    next.stateCode = stateCode || undefined;
+  }
+  if (patch.gstin !== undefined) {
+    const gstin = patch.gstin.trim().toUpperCase();
+    if (gstin && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(gstin)) {
+      throw new ServiceError("Enter a valid 15-character GSTIN.");
+    }
+    next.gstin = gstin || undefined;
+  }
+  if (patch.legalName !== undefined) next.legalName = patch.legalName.trim() || undefined;
+  if (patch.address !== undefined) next.address = patch.address.trim() || undefined;
+  if (patch.location !== undefined) next.location = patch.location.trim() || undefined;
+  if (patch.state !== undefined) next.state = patch.state.trim() || undefined;
+  if (patch.businessType !== undefined && !patch.businessType.trim()) throw new ServiceError("Select a business type.");
+  if (patch.currency !== undefined && !/^[A-Z]{3}$/.test(patch.currency.trim().toUpperCase())) throw new ServiceError("Use a valid 3-letter currency code.");
+  if (patch.timezone !== undefined && !patch.timezone.trim()) throw new ServiceError("Select a business timezone.");
+  return next;
+}
+
 export function updateBusiness(db: WorkspaceDB, id: string, patch: Partial<Business>): WorkspaceDB {
+  const current = db.businesses.find((business) => business.id === id);
+  if (!current) throw new ServiceError("Business workspace not found.");
+  const validated = validateBusinessProfilePatch(current, patch);
   const now = nowIso();
   return {
     ...db,
-    businesses: db.businesses.map((b) => (b.id === id ? { ...b, ...patch, id: b.id, updatedAt: now } : b)),
+    businesses: db.businesses.map((b) => (b.id === id ? { ...b, ...validated, id: b.id, updatedAt: now } : b)),
   };
 }
 
