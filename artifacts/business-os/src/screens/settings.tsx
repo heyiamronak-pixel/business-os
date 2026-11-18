@@ -7,6 +7,7 @@ import {
   COUNTRIES,
   INDUSTRIES,
   MODULE_CATALOG,
+  SUBSCRIPTION_PLANS,
   recommendModules,
   type Appearance,
   type IndustryId,
@@ -169,18 +170,33 @@ export function SettingsScreen() {
         <div className="flex items-start justify-between gap-3"><div><h2 className="text-sm font-semibold">Plans & subscription</h2><p className="mt-1 text-xs text-muted-foreground">Choose the plan that fits your team. Online billing will be connected later.</p></div><span className="rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-semibold text-primary">{business.subscriptionStatus==="trial"?"14-day trial":"Plan preference"}</span></div>
         {business.subscriptionStatus==="trial"&&business.trialEndsAt ? <p className="rounded-xl bg-primary/7 px-3 py-2 text-xs text-muted-foreground">Growth trial ends {new Date(business.trialEndsAt).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"})}. No payment is collected in this preview.</p> : null}
         <div className="flex items-center justify-between"><p className="text-xs font-medium text-muted-foreground">Billing display</p><div className="flex rounded-xl bg-muted p-1"><button type="button" onClick={()=>setAnnualBilling(false)} className={annualBilling?"rounded-lg px-3 py-1.5 text-xs text-muted-foreground":"rounded-lg bg-card px-3 py-1.5 text-xs font-semibold shadow-sm"}>Monthly</button><button type="button" onClick={()=>setAnnualBilling(true)} className={annualBilling?"rounded-lg bg-card px-3 py-1.5 text-xs font-semibold shadow-sm":"rounded-lg px-3 py-1.5 text-xs text-muted-foreground"}>Annual · 2 months free</button></div></div>
-        <div className="grid gap-3 md:grid-cols-2">
-          {[{id:"starter" as const,title:"Starter",monthly:699,annual:6990,users:"Up to 2 users",branches:"1 branch",features:["Sales, customers & invoices","Products and inventory","Tasks and business dashboard","Standard reports"]},{id:"growth" as const,title:"Growth",monthly:1999,annual:19990,users:"Up to 5 users",branches:"Up to 3 branches",features:["Everything in Starter","Advanced reports & saved views","Team and operations insights","Automation-ready workflows","Priority support (planned)"]}].map((plan)=>{
-            const selected=business.subscriptionPlan===plan.id,amount=annualBilling?plan.annual:plan.monthly;
-            return <div key={plan.id} className={`relative overflow-hidden rounded-2xl border p-4 transition-all duration-200 hover:-translate-y-1 hover:shadow-lg ${selected?"border-primary bg-primary/[0.045] shadow-md":"border-border bg-card"}`}>
-              {plan.id==="growth"?<span className="absolute right-3 top-3 rounded-full bg-primary/10 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-primary">Recommended</span>:null}
-              <p className="text-sm font-semibold">{plan.title}</p><p className="mt-3 text-3xl font-semibold tracking-tight tabular-nums">₹{amount.toLocaleString("en-IN")}<span className="ml-1 text-xs font-normal text-muted-foreground">/{annualBilling?"year":"month"}</span></p><p className="mt-1 text-xs text-muted-foreground">{plan.users} · {plan.branches}</p>
-              <ul className="mt-4 space-y-2">{plan.features.map((feature)=><li key={feature} className="flex gap-2 text-xs"><span className="text-primary">✓</span><span>{feature}</span></li>)}</ul>
-              <Button className="mt-5 w-full" variant={selected?"secondary":"default"} onClick={()=>{patch({subscriptionPlan:plan.id,subscriptionStatus:"selected"});toast.success(plan.title+" preference saved. Billing will be available later.");}}>{selected?"Selected plan":"Choose "+plan.title}</Button>
-            </div>;
+        <div className="grid gap-3 md:grid-cols-3">
+          {([
+            { id: "starter" as const, title: "Base", description: "For a small business", seats: "1 owner/admin + 1 member", features: ["Core business workspace", "Sales, products and inventory", "Invoices, tasks and reports"] },
+            { id: "growth" as const, title: "Growth", description: "For a growing team", seats: "1 owner/admin + 6 members", features: ["Everything in Base", "Room for a larger team", "All currently available workflows"] },
+            { id: "pro" as const, title: "Pro", description: "For established teams", seats: "1 owner/admin + 9 members", features: ["Everything in Growth", "Expanded team capacity", "All currently available workflows"] },
+          ]).map((plan) => {
+            const pricing = SUBSCRIPTION_PLANS[plan.id];
+            const selected = business.subscriptionPlan === plan.id;
+            const amount = annualBilling ? pricing.annual : pricing.monthly;
+            return (
+              <div key={plan.id} className={`relative flex flex-col overflow-hidden rounded-2xl border p-4 transition-all duration-200 hover:-translate-y-1 hover:shadow-lg ${selected ? "border-primary bg-primary/[0.045] shadow-md" : "border-border bg-card"}`}>
+                {plan.id === "growth" ? <span className="absolute right-3 top-3 rounded-full bg-primary/10 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-primary">Popular</span> : null}
+                <p className="text-sm font-semibold">{plan.title}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{plan.description}</p>
+                <p className="mt-4 text-3xl font-semibold tracking-tight tabular-nums">₹{amount.toLocaleString("en-IN")}<span className="ml-1 text-xs font-normal text-muted-foreground">/{annualBilling ? "year" : "month"}</span></p>
+                <p className="mt-1 text-[11px] font-medium text-muted-foreground">+ applicable taxes</p>
+                {annualBilling ? <p className="mt-2 inline-flex w-fit rounded-full bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">2 months free</p> : null}
+                <p className="mt-3 rounded-lg bg-muted/55 px-2.5 py-2 text-[11px] font-medium">{plan.seats}</p>
+                <ul className="mt-4 flex-1 space-y-2">{plan.features.map((feature) => <li key={feature} className="flex gap-2 text-xs"><span className="text-primary">✓</span><span>{feature}</span></li>)}</ul>
+                <Button className="mt-5 w-full" variant={selected ? "secondary" : "default"} onClick={() => { patch({ subscriptionPlan: plan.id, subscriptionStatus: "selected" }); toast.success(plan.title + " plan preference saved. Billing will be available later."); }}>
+                  {selected ? "Selected plan" : "Choose " + plan.title}
+                </Button>
+              </div>
+            );
           })}
         </div>
-        <p className="text-[11px] leading-5 text-muted-foreground">Indicative launch pricing only. Your plan preference is saved in this browser workspace; no payment method, checkout or charge is connected. AI and WhatsApp usage can be offered as metered add-ons later.</p>
+        <p className="text-[11px] leading-5 text-muted-foreground">All listed prices are before taxes. Annual billing is priced at 10 months. Seat limits include the owner/admin. Your plan preference is saved in this browser workspace; online checkout and payment collection are not connected yet.</p>
       </Card>
 
       <Card className="mb-4 space-y-3">

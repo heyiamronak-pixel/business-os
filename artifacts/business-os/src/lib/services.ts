@@ -1,5 +1,7 @@
 import {
   emptyDb,
+  getSubscriptionMemberLimit,
+  SUBSCRIPTION_PLANS,
   recommendModules,
   SYSTEM_EXPENSE_CATEGORIES,
   type Activity,
@@ -896,6 +898,13 @@ export function upsertMember(
         phone: input.phone?.trim() || undefined,
       }),
     };
+  }
+  const business = db.businesses.find((item) => item.id === input.businessId);
+  const memberLimit = getSubscriptionMemberLimit(business?.subscriptionPlan);
+  const currentMemberCount = db.members.filter((item) => item.businessId === input.businessId).length;
+  if (currentMemberCount >= memberLimit) {
+    const planName = business?.subscriptionPlan ? SUBSCRIPTION_PLANS[business.subscriptionPlan].title : "Base";
+    throw new ServiceError(`${planName} plan includes up to ${memberLimit} seats, including the owner. Upgrade your plan to add another team member.`);
   }
   const member: TeamMember = {
     id: createId("mem"),

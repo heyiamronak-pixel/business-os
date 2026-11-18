@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { AppPage, ConfirmBar, PageHeader } from "@/components/app-shell";
 import { BottomSheet } from "@/components/sheet";
 import { Badge, Button, EmptyState, Field, Input, Select } from "@/components/ui";
-import { canRole, type Role, type TeamMember } from "@/lib/domain";
+import { canRole, getSubscriptionMemberLimit, type Role, type TeamMember } from "@/lib/domain";
 import { deleteMember, upsertMember } from "@/lib/services";
 import { useAppStore, useBusiness } from "@/lib/store";
 
@@ -20,6 +20,8 @@ export function TeamScreen() {
 
   if (!business) return null;
   const members = db.members.filter((m) => m.businessId === business.id);
+  const memberLimit = getSubscriptionMemberLimit(business.subscriptionPlan);
+  const atMemberLimit = members.length >= memberLimit;
 
   function open(m?: TeamMember) {
     if (m) {
@@ -62,8 +64,11 @@ export function TeamScreen() {
       <PageHeader
         title="Team"
         subtitle="Roles control who can see revenue, costs and settings"
-        action={<Button size="sm" onClick={() => open()}>Add</Button>}
+        action={<Button size="sm" disabled={atMemberLimit} onClick={() => open()}>{atMemberLimit ? "Seat limit reached" : "Add member"}</Button>}
       />
+      <p className="mb-4 rounded-xl border border-border bg-muted/40 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
+        {members.length} / {memberLimit} seats used · includes the owner/admin. {atMemberLimit ? "Your current plan is at capacity. Upgrade to add more people." : "Your plan's seat limit is enforced when adding team members."}
+      </p>
       {members.length === 0 ? (
         <EmptyState title="No team members" body="The owner is created during setup. Add people to assign tasks." />
       ) : (

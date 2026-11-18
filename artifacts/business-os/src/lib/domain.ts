@@ -10,7 +10,15 @@ export type TargetPeriod = "monthly" | "quarterly" | "annual";
 export type InvoiceTemplate = "modern" | "classic" | "minimal";
 export type InvoiceStatus = "issued" | "cancelled";
 export type InvoiceSupplyType = "intra" | "inter";
-export type SubscriptionPlan = "starter" | "growth";
+export type SubscriptionPlan = "starter" | "growth" | "pro";
+export const SUBSCRIPTION_PLANS = {
+  starter: { title: "Base", monthly: 199, annual: 1999, memberLimit: 2 },
+  growth: { title: "Growth", monthly: 499, annual: 4999, memberLimit: 7 },
+  pro: { title: "Pro", monthly: 999, annual: 9999, memberLimit: 10 },
+} as const;
+export function getSubscriptionMemberLimit(plan?: SubscriptionPlan): number {
+  return SUBSCRIPTION_PLANS[plan ?? "starter"].memberLimit;
+}
 export type SubscriptionStatus = "trial" | "selected";
 export interface InvoiceDesignSettings { prefix:string; template:InvoiceTemplate; accentColor:string; showLogo:boolean; defaultDueDays:number; footerNote:string; terms:string; }
 export interface InvoiceLineItem { id:string; productId?:string; description:string; hsnSac?:string; quantity:number; unit:string; rate:number; discount:number; taxRate:number; taxableValue:number; taxAmount:number; total:number; }
