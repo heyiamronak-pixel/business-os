@@ -474,6 +474,10 @@ export function ReportsScreen() {
       ["Supplier payables", supplierOutstanding],
       ["Open purchases", openPurchases],
       [],
+      ["Cashbook", "Date", "Direction", "Type", "Party", "Method", "Reference", "Amount"],
+      ...cashbook.map((entry) => [entry.id, entry.date, entry.direction, entry.type, entry.party, entry.method, entry.reference ?? "", entry.amount]),
+      ["Cashbook totals", "Cash in", cashbookIn, "Cash out", cashbookOut, "Net recorded movement", cashbookNet],
+      [],
       ["Top products", "Units sold", "Revenue", "Profit"],
       ...topProducts.map((product) => [product.name, product.qty, product.revenue, product.profit]),
     ];
