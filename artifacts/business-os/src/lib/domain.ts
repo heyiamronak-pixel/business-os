@@ -7,6 +7,30 @@ export type PaymentMethod = "cash" | "card" | "upi" | "bank" | "credit" | "other
 export type PaymentStatus = "paid" | "partial" | "unpaid";
 export type MovementType = "in" | "out" | "adjustment" | "sale";
 export type TargetPeriod = "monthly" | "quarterly" | "annual";
+export type InvoiceTemplate = "modern" | "classic" | "minimal";
+export type InvoiceStatus = "issued" | "cancelled";
+export type InvoiceSupplyType = "intra" | "inter";
+export type SubscriptionPlan = "starter" | "growth" | "pro";
+export const SUBSCRIPTION_PLANS = {
+  starter: { title: "Starter", monthly: 199, annual: 1999, memberLimit: 2 },
+  growth: { title: "Growth", monthly: 499, annual: 4999, memberLimit: 6 },
+  pro: { title: "Pro", monthly: 999, annual: 9999, memberLimit: 10 },
+} as const;
+export function getSubscriptionMemberLimit(plan?: SubscriptionPlan): number {
+  return SUBSCRIPTION_PLANS[plan ?? "starter"].memberLimit;
+}
+export type SubscriptionStatus = "trial" | "selected";
+export interface InvoiceDesignSettings { prefix:string; template:InvoiceTemplate; accentColor:string; showLogo:boolean; defaultDueDays:number; footerNote:string; terms:string; }
+export interface InvoiceLineItem { id:string; productId?:string; description:string; hsnSac?:string; quantity:number; unit:string; rate:number; discount:number; taxRate:number; taxableValue:number; taxAmount:number; total:number; }
+export interface InvoiceRecord {
+  id:string; businessId:string; invoiceNumber:string; status:InvoiceStatus; issueDate:string; dueDate?:string;
+  sellerName:string; sellerLegalName?:string; sellerGstin?:string; sellerAddress?:string; sellerState?:string; sellerStateCode?:string; sellerPhone?:string; sellerEmail?:string;
+  customerId?:string; customerName:string; customerGstin?:string; customerAddress?:string; customerState?:string; customerStateCode?:string; customerPhone?:string; customerEmail?:string;
+  placeOfSupply:string; placeOfSupplyCode?:string; supplyType:InvoiceSupplyType; reverseCharge:boolean;
+  items:InvoiceLineItem[]; subtotal:number; discountTotal:number; taxableValue:number; cgst:number; sgst:number; igst:number; taxTotal:number; total:number;
+  notes?:string; terms?:string; createdAt:string; updatedAt:string;
+}
+export const DEFAULT_INVOICE_SETTINGS:InvoiceDesignSettings = {prefix:"INV",template:"modern",accentColor:"#176B73",showLogo:true,defaultDueDays:0,footerNote:"Thank you for your business.",terms:""};
 
 export type ModuleId =
   | "products"
@@ -21,6 +45,7 @@ export type ModuleId =
   | "marketing"
   | "reports"
   | "suppliers"
+  | "purchases"
   | "bookings"
   | "trips"
   | "vehicles"
@@ -85,7 +110,9 @@ export interface Business {
   phone?: string;
   email?: string;
   website?: string;
-  location?: string;
+  location?: string; address?:string; state?:string; stateCode?:string; postalCode?:string;
+  gstRegistered?:boolean; gstin?:string; legalName?:string; invoiceSettings?:InvoiceDesignSettings;
+  subscriptionPlan?:SubscriptionPlan; subscriptionStatus?:SubscriptionStatus; trialStartedAt?:string; trialEndsAt?:string;
   brandColors: string[];
   themePreset: ThemePreset;
   appearance: Appearance;
@@ -131,6 +158,10 @@ export interface Customer {
   name: string;
   email?: string;
   phone?: string;
+  address?: string;
+  gstin?: string;
+  state?: string;
+  stateCode?: string;
   notes?: string;
   createdAt: string;
   updatedAt: string;
@@ -163,6 +194,49 @@ export interface Sale {
   outstanding: number;
   note?: string;
   createdAt: string;
+}
+
+export type SupplierStatus = "active" | "inactive";
+export type PurchasePaymentStatus = "paid" | "partial" | "pending";
+
+export interface Supplier {
+  id: string;
+  businessId: string;
+  name: string;
+  contactName?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  taxId?: string;
+  notes?: string;
+  status: SupplierStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PurchaseItem {
+  productId: string;
+  name: string;
+  sku: string;
+  quantity: number;
+  unitCost: number;
+  total: number;
+}
+
+export interface Purchase {
+  id: string;
+  businessId: string;
+  supplierId: string;
+  supplierName: string;
+  items: PurchaseItem[];
+  subtotal: number;
+  total: number;
+  paidAmount: number;
+  balance: number;
+  paymentStatus: PurchasePaymentStatus;
+  note?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Expense {
@@ -270,6 +344,8 @@ export interface WorkspaceDB {
   products: Product[];
   movements: StockMovement[];
   customers: Customer[];
+  suppliers: Supplier[];
+  purchases: Purchase[];
   sales: Sale[];
   expenses: Expense[];
   expenseCategories: ExpenseCategory[];
@@ -279,6 +355,7 @@ export interface WorkspaceDB {
   campaigns: Campaign[];
   activity: Activity[];
   notifications: AppNotification[];
+  invoices: InvoiceRecord[];
 }
 
 export const SYSTEM_EXPENSE_CATEGORIES = [
@@ -324,8 +401,11 @@ export const CORE_IMPLEMENTED: ModuleId[] = [
   "targets",
   "tasks",
   "team",
+  "suppliers",
+  "purchases",
   "marketing",
   "reports",
+  "invoices",
 ];
 
 export type AppHref =
@@ -334,6 +414,8 @@ export type AppHref =
   | "/products"
   | "/inventory"
   | "/customers"
+  | "/suppliers"
+  | "/purchases"
   | "/sales"
   | "/expenses"
   | "/targets"
@@ -345,6 +427,9 @@ export type AppHref =
   | "/actions"
   | "/advisor"
   | "/inbox"
+  | "/reports"
+  | "/attendance"
+  | "/invoices"
   | "/onboarding";
 
 export interface ModuleDef {
@@ -366,8 +451,9 @@ export const MODULE_CATALOG: Record<ModuleId, ModuleDef> = {
   tasks: { id: "tasks", label: "Tasks", description: "Work that needs doing", path: "/tasks", implemented: true },
   team: { id: "team", label: "Team", description: "People and roles", path: "/team", implemented: true },
   marketing: { id: "marketing", label: "Marketing", description: "Spend, leads, and ROAS", path: "/marketing", implemented: true },
-  reports: { id: "reports", label: "Reports", description: "Health, insights, cockpit", path: "/", implemented: true },
-  suppliers: { id: "suppliers", label: "Suppliers", description: "Vendor records", path: "/more", implemented: false },
+  reports: { id: "reports", label: "Reports", description: "Financial, sales and marketing analytics", path: "/reports", implemented: true },
+  suppliers: { id: "suppliers", label: "Suppliers", description: "Supplier contacts and purchase history", path: "/suppliers", implemented: true },
+  purchases: { id: "purchases", label: "Purchases", description: "Goods receipts, stock updates and supplier balances", path: "/purchases", implemented: true },
   bookings: { id: "bookings", label: "Bookings", description: "Reservations and trips", path: "/more", implemented: false },
   trips: { id: "trips", label: "Trips", description: "Itineraries", path: "/more", implemented: false },
   vehicles: { id: "vehicles", label: "Vehicles", description: "Fleet", path: "/more", implemented: false },
@@ -382,7 +468,7 @@ export const MODULE_CATALOG: Record<ModuleId, ModuleDef> = {
   clients: { id: "clients", label: "Clients", description: "Retainers", path: "/more", implemented: false },
   services: { id: "services", label: "Services", description: "Service catalog", path: "/more", implemented: false },
   projects: { id: "projects", label: "Projects", description: "Delivery work", path: "/more", implemented: false },
-  invoices: { id: "invoices", label: "Invoices", description: "Billing", path: "/more", implemented: false },
+  invoices: { id: "invoices", label: "Invoices", description: "Custom invoices and customer billing history", path: "/invoices", implemented: true },
   materials: { id: "materials", label: "Raw materials", description: "BOM inputs", path: "/more", implemented: false },
   production: { id: "production", label: "Production", description: "Work orders", path: "/more", implemented: false },
   orders: { id: "orders", label: "Orders", description: "Online orders", path: "/more", implemented: false },
@@ -408,77 +494,77 @@ export const INDUSTRIES: IndustryDef[] = [
     id: "retail",
     label: "Retail",
     description: "Shops, boutiques, and product sellers",
-    recommended: ["products", "inventory", "pos", "customers", "expenses", "marketing", "targets", "tasks", "reports"],
-    extra: ["suppliers", "team"],
+    recommended: ["products", "inventory", "pos", "customers", "suppliers", "purchases", "expenses", "marketing", "targets", "tasks", "reports"],
+    extra: ["team"],
   },
   {
     id: "travel",
     label: "Travel",
     description: "Tours, transport, and travel desks",
-    recommended: ["customers", "sales", "tasks", "team", "expenses", "marketing", "targets", "reports"],
+    recommended: ["customers", "sales", "suppliers", "purchases", "tasks", "team", "expenses", "marketing", "targets", "reports"],
     extra: ["bookings", "trips", "vehicles", "drivers", "fuel", "maintenance"],
   },
   {
     id: "hospitality",
     label: "Hospitality",
     description: "Hotels, homestays, and lodging",
-    recommended: ["customers", "sales", "expenses", "tasks", "team", "marketing", "targets", "reports"],
+    recommended: ["customers", "sales", "suppliers", "purchases", "expenses", "tasks", "team", "marketing", "targets", "reports"],
     extra: ["properties", "rooms", "bookings", "guests", "ota"],
   },
   {
     id: "agency",
     label: "Agency",
     description: "Studios, consultants, and retainers",
-    recommended: ["customers", "sales", "tasks", "team", "expenses", "marketing", "targets", "reports"],
+    recommended: ["customers", "sales", "suppliers", "purchases", "tasks", "team", "expenses", "marketing", "targets", "reports"],
     extra: ["leads", "clients", "services", "projects", "invoices"],
   },
   {
     id: "manufacturing",
     label: "Manufacturing",
     description: "Makers and production units",
-    recommended: ["products", "inventory", "sales", "customers", "expenses", "tasks", "targets", "reports"],
-    extra: ["materials", "suppliers", "production", "team"],
+    recommended: ["products", "inventory", "sales", "customers", "suppliers", "purchases", "expenses", "tasks", "targets", "reports"],
+    extra: ["materials", "production", "team"],
   },
   {
     id: "ecommerce",
     label: "E-commerce",
     description: "Online product businesses",
-    recommended: ["products", "inventory", "sales", "customers", "expenses", "marketing", "targets", "tasks", "reports"],
+    recommended: ["products", "inventory", "sales", "customers", "suppliers", "purchases", "expenses", "marketing", "targets", "tasks", "reports"],
     extra: ["orders", "returns"],
   },
   {
     id: "restaurant",
     label: "Restaurant",
     description: "Cafes, kitchens, and QSR",
-    recommended: ["products", "inventory", "pos", "customers", "expenses", "tasks", "team", "targets", "reports"],
+    recommended: ["products", "inventory", "pos", "customers", "suppliers", "purchases", "expenses", "tasks", "team", "targets", "reports"],
     extra: ["menu", "reservations", "tables"],
   },
   {
     id: "logistics",
     label: "Logistics",
     description: "Freight, last-mile, and fleet",
-    recommended: ["customers", "sales", "tasks", "team", "expenses", "targets", "reports"],
+    recommended: ["customers", "sales", "suppliers", "purchases", "tasks", "team", "expenses", "targets", "reports"],
     extra: ["shipments", "vehicles", "drivers", "fuel", "maintenance"],
   },
   {
     id: "services",
     label: "Services",
     description: "Studios, salons, and local services",
-    recommended: ["customers", "sales", "tasks", "team", "expenses", "marketing", "targets", "reports"],
+    recommended: ["customers", "sales", "suppliers", "purchases", "tasks", "team", "expenses", "marketing", "targets", "reports"],
     extra: ["services", "bookings", "invoices"],
   },
   {
     id: "construction",
     label: "Construction",
     description: "Contractors and builders",
-    recommended: ["customers", "sales", "tasks", "team", "expenses", "targets", "reports"],
+    recommended: ["customers", "sales", "suppliers", "purchases", "tasks", "team", "expenses", "targets", "reports"],
     extra: ["jobs", "sites", "materials", "invoices"],
   },
   {
     id: "other",
     label: "Other",
     description: "Start with the core operating system",
-    recommended: ["products", "inventory", "pos", "customers", "sales", "expenses", "targets", "tasks", "marketing", "reports"],
+    recommended: ["products", "inventory", "pos", "customers", "suppliers", "purchases", "sales", "expenses", "targets", "tasks", "marketing", "reports"],
     extra: ["team"],
   },
 ];
@@ -548,6 +634,8 @@ export function emptyDb(): WorkspaceDB {
     products: [],
     movements: [],
     customers: [],
+    suppliers: [],
+    purchases: [],
     sales: [],
     expenses: [],
     expenseCategories: [],
@@ -557,11 +645,12 @@ export function emptyDb(): WorkspaceDB {
     campaigns: [],
     activity: [],
     notifications: [],
+    invoices: [],
   };
 }
 
 export function recommendModules(industry: IndustryId): ModuleId[] {
   const def = INDUSTRIES.find((i) => i.id === industry) ?? INDUSTRIES[INDUSTRIES.length - 1];
-  const unique = new Set<ModuleId>([...def.recommended, "reports"]);
+  const unique = new Set<ModuleId>([...def.recommended, "reports", "invoices"]);
   return Array.from(unique);
 }

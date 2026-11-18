@@ -18,6 +18,7 @@ import { useAppStore } from "@/lib/store";
 import { createWorkspace } from "@/lib/services";
 import { Button, Field, Input, Select, Switch } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { isValidGstin } from "@/lib/invoice-utils";
 
 const PRESETS: { id: ThemePreset; label: string; blurb: string }[] = [
   { id: "brand", label: "Brand match", blurb: "Built from your logo" },
@@ -47,6 +48,13 @@ export function OnboardingScreen() {
   const [email, setEmail] = React.useState("");
   const [website, setWebsite] = React.useState("");
   const [location, setLocation] = React.useState("");
+  const [address, setAddress] = React.useState("");
+  const [stateName, setStateName] = React.useState("");
+  const [stateCode, setStateCode] = React.useState("");
+  const [postalCode, setPostalCode] = React.useState("");
+  const [gstRegistered, setGstRegistered] = React.useState(false);
+  const [gstin, setGstin] = React.useState("");
+  const [legalName, setLegalName] = React.useState("");
   const [appearance, setAppearance] = React.useState<Appearance>("light");
   const [themePreset, setThemePreset] = React.useState<ThemePreset>("modern");
   const [modules, setModules] = React.useState<ModuleId[]>(recommendModules("retail"));
@@ -99,6 +107,10 @@ export function OnboardingScreen() {
       setError("Give the business a name.");
       return;
     }
+    if (step === 2 && country === "India" && gstRegistered && !isValidGstin(gstin)) {
+      setError("Enter a valid 15-character GSTIN, or switch off GST registration.");
+      return;
+    }
     setStep((s) => Math.min(4, s + 1));
   }
 
@@ -119,6 +131,13 @@ export function OnboardingScreen() {
         email,
         website,
         location,
+        address,
+        state: stateName,
+        stateCode,
+        postalCode,
+        gstRegistered: country === "India" && gstRegistered,
+        gstin,
+        legalName,
         brandColors,
         themePreset,
         appearance,
@@ -243,37 +262,34 @@ export function OnboardingScreen() {
         <div className="flex flex-1 flex-col gap-4">
           <h1 className="font-display text-3xl">Location and contact</h1>
           <Field label="Country">
-            <Select value={country} onChange={(e) => onCountry(e.target.value)}>
-              {COUNTRIES.map((c) => (
-                <option key={c.name} value={c.name}>
-                  {c.name}
-                </option>
-              ))}
+            <Select value={country} onChange={(e) => { onCountry(e.target.value); setGstRegistered(false); setGstin(""); }}>
+              {COUNTRIES.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
             </Select>
           </Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Currency">
-              <Input value={currency} onChange={(e) => setCurrency(e.target.value.toUpperCase())} />
-            </Field>
-            <Field label="Timezone">
-              <Input value={timezone} onChange={(e) => setTimezone(e.target.value)} />
-            </Field>
+            <Field label="Currency"><Input value={currency} onChange={(e) => setCurrency(e.target.value.toUpperCase())} /></Field>
+            <Field label="Timezone"><Input value={timezone} onChange={(e) => setTimezone(e.target.value)} /></Field>
           </div>
-          <Field label="City / area">
-            <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Optional" />
-          </Field>
-          <Field label="Phone">
-            <Input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" />
-          </Field>
-          <Field label="Email">
-            <Input value={email} onChange={(e) => setEmail(e.target.value)} inputMode="email" />
-          </Field>
-          <Field label="Website">
-            <Input value={website} onChange={(e) => setWebsite(e.target.value)} inputMode="url" />
-          </Field>
-          <Button className="mt-auto" size="lg" onClick={next}>
-            Continue
-          </Button>
+          <Field label="Business address"><Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Street, building, area" /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="City / area"><Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="City" /></Field>
+            <Field label="Postal code"><Input value={postalCode} onChange={(e) => setPostalCode(e.target.value)} placeholder="Optional" /></Field>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="State"><Input value={stateName} onChange={(e) => setStateName(e.target.value)} placeholder="State / region" /></Field>
+            <Field label="State code"><Input value={stateCode} onChange={(e) => setStateCode(e.target.value.replace(/[^0-9]/g, "").slice(0, 2))} placeholder="e.g. 08" maxLength={2} /></Field>
+          </div>
+          <Field label="Phone"><Input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" /></Field>
+          <Field label="Email"><Input value={email} onChange={(e) => setEmail(e.target.value)} inputMode="email" /></Field>
+          <Field label="Website"><Input value={website} onChange={(e) => setWebsite(e.target.value)} inputMode="url" /></Field>
+          {country === "India" ? (
+            <section className="rounded-2xl border border-border bg-muted/35 p-4">
+              <div className="flex items-start justify-between gap-3"><div><p className="text-sm font-semibold">GST registration</p><p className="mt-1 text-xs leading-5 text-muted-foreground">Optional. Add or update these details later in Profile & account management.</p></div><Switch checked={gstRegistered} onCheckedChange={setGstRegistered} label="GST registered" /></div>
+              {gstRegistered ? <div className="mt-4 grid gap-3"><Field label="GSTIN"><Input value={gstin} onChange={(e) => setGstin(e.target.value.toUpperCase().replace(/\s/g, ""))} placeholder="15-character GSTIN" maxLength={15} /></Field><Field label="Legal business name"><Input value={legalName} onChange={(e) => setLegalName(e.target.value)} placeholder={name || "Registered legal name"} /></Field></div> : null}
+            </section>
+          ) : null}
+          {error ? <p role="alert" className="text-xs font-semibold text-danger">{error}</p> : null}
+          <Button className="mt-auto" size="lg" onClick={next}>Continue</Button>
         </div>
       ) : null}
 
@@ -373,7 +389,7 @@ export function OnboardingScreen() {
 }
 
 function swatches(preset: ThemePreset): string[] {
-  if (preset === "professional") return ["#1B3A4B", "#E8EEF1", "#1C1917"];
-  if (preset === "contrast") return ["#111111", "#FAFAF8", "#444444"];
-  return ["#0F5C54", "#F4F1EA", "#1C1917"];
+  if (preset === "professional") return ["#2B526B", "#F0F4F8", "#17263A"];
+  if (preset === "contrast") return ["#17263A", "#FAFBFD", "#344357"];
+  return ["#176B73", "#F4F7FB", "#17263A"];
 }

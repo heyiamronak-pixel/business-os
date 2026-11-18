@@ -19,7 +19,25 @@ function isObject(v: unknown): v is Record<string, unknown> {
 
 function migrate(raw: unknown): PersistedState {
   if (!isObject(raw)) return { db: emptyDb(), currentBusinessId: null };
-  const db = isObject(raw.db) ? ({ ...emptyDb(), ...raw.db, version: 1 } as WorkspaceDB) : emptyDb();
+  const saved = isObject(raw.db) ? raw.db : {};
+  const db = {
+    ...emptyDb(),
+    ...saved,
+    suppliers: Array.isArray(saved.suppliers) ? saved.suppliers : [],
+    purchases: Array.isArray(saved.purchases) ? saved.purchases : [],
+    invoices: Array.isArray(saved.invoices) ? saved.invoices : [],
+    businesses: Array.isArray(saved.businesses) ? saved.businesses.map((entry) => {
+      const business = isObject(entry) ? entry : {};
+      const enabled = Array.isArray(business.enabledModules) ? business.enabledModules as string[] : [];
+      const order = Array.isArray(business.moduleOrder) ? business.moduleOrder as string[] : [];
+      return {
+        ...business,
+        enabledModules: Array.from(new Set([...enabled, "invoices"])),
+        moduleOrder: Array.from(new Set([...order, "invoices"])),
+      };
+    }) as WorkspaceDB["businesses"] : [],
+    version: 1,
+  } as WorkspaceDB;
   const currentBusinessId =
     typeof raw.currentBusinessId === "string" ? raw.currentBusinessId : null;
   return { db, currentBusinessId };

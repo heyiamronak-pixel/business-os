@@ -9,7 +9,10 @@ import {
   ContactRound,
   FileBarChart2,
   Megaphone,
+  ListChecks,
   PackageSearch,
+  ShoppingCart,
+  Truck,
   Settings2,
   ShoppingBag,
   Target,
@@ -47,6 +50,22 @@ export const modules: ModuleDefinition[] = [
     label: 'Products',
     description: 'Catalog and offers',
     icon: Boxes,
+    group: 'operations',
+    accent: 'teal',
+  },
+  {
+    slug: 'purchases',
+    label: 'Purchases',
+    description: 'Supplier purchases and stock receipts',
+    icon: ShoppingCart,
+    group: 'operations',
+    accent: 'gold',
+  },
+  {
+    slug: 'suppliers',
+    label: 'Suppliers',
+    description: 'Supplier directory and balances',
+    icon: Truck,
     group: 'operations',
     accent: 'teal',
   },
@@ -123,6 +142,14 @@ export const modules: ModuleDefinition[] = [
     accent: 'slate',
   },
   {
+    slug: 'actions',
+    label: 'Action Center',
+    description: 'Business signals and next steps',
+    icon: ListChecks,
+    group: 'insight',
+    accent: 'gold',
+  },
+  {
     slug: 'ai-advisor',
     label: 'AI advisor',
     description: 'A thinking partner for your business',
@@ -145,6 +172,8 @@ export const moduleLabels: Record<string, string> = {
   dashboard: 'Dashboard',
   sales: 'Sales',
   products: 'Products',
+  purchases: 'Purchases',
+  suppliers: 'Suppliers',
   inventory: 'Inventory',
   customers: 'Customers',
   expenses: 'Expenses',
@@ -155,6 +184,7 @@ export const moduleLabels: Record<string, string> = {
   attendance: 'Attendance',
   reports: 'Reports',
   'ai-advisor': 'AI Advisor',
+  actions: 'Action Center',
   pos: 'POS',
   bookings: 'Bookings',
   vehicles: 'Vehicles',
@@ -173,12 +203,12 @@ export const moduleLabels: Record<string, string> = {
   invoices: 'Invoices',
   'raw-materials': 'Raw Materials',
   production: 'Production',
-  suppliers: 'Suppliers',
   orders: 'Orders',
   returns: 'Returns',
 };
 
 export const moduleDescriptions: Record<string, string> = {
+  purchases: 'Supplier purchases and stock receipts',
   pos: 'Checkout and payment capture',
   bookings: 'Reservations and availability',
   vehicles: 'Fleet and vehicle records',
@@ -203,12 +233,12 @@ export const moduleDescriptions: Record<string, string> = {
 };
 
 export const recommendedModulesByIndustry: Record<string, string[]> = {
-  Retail: ['products', 'inventory', 'pos', 'customers', 'expenses', 'marketing', 'reports'],
+  Retail: ['products', 'inventory', 'purchases', 'suppliers', 'pos', 'customers', 'expenses', 'marketing', 'reports'],
   'Travel & Tourism': ['bookings', 'vehicles', 'drivers', 'trips', 'fuel', 'maintenance', 'customers', 'expenses', 'reports'],
   Hospitality: ['properties', 'rooms', 'bookings', 'guests', 'ota', 'revenue', 'expenses', 'marketing', 'reports'],
   'Agency / Services': ['customers', 'leads', 'projects', 'tasks', 'team', 'services', 'invoices', 'expenses', 'reports'],
-  Manufacturing: ['products', 'raw-materials', 'inventory', 'production', 'suppliers', 'sales', 'expenses', 'reports'],
-  'E-commerce': ['products', 'inventory', 'orders', 'customers', 'marketing', 'returns', 'expenses', 'reports'],
+  Manufacturing: ['products', 'raw-materials', 'inventory', 'purchases', 'production', 'suppliers', 'sales', 'expenses', 'reports'],
+  'E-commerce': ['products', 'inventory', 'purchases', 'suppliers', 'orders', 'customers', 'marketing', 'returns', 'expenses', 'reports'],
   Other: ['products', 'customers', 'expenses', 'tasks', 'reports'],
 };
 

@@ -64,6 +64,9 @@ export function money(value: number, currency = 'INR (₹)') {
   return `${symbol}${value.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
 }
 
-export const isoToday = () => new Date().toISOString().slice(0, 10);
+export const isoToday = () => {
+  const today = new Date();
+  return today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+};
 
 export const inputClass = 'min-h-11 rounded-xl border border-[hsl(var(--input))] bg-[hsl(var(--background))] px-3 text-sm outline-none focus:border-[hsl(var(--accent))] focus:ring-2 focus:ring-[hsl(var(--accent)/0.16)]';

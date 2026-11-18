@@ -12,17 +12,29 @@ import type {
   Sale,
   SaleItem,
   Task,
+  TeamMember,
+  MarketingCampaign,
+  Supplier,
+  Purchase,
   ThemeId,
   ThemeMode,
   WorkspaceSetup,
 } from '@/domain/types';
 import {
+  addSalePayment,
+  applyPurchaseToInventory,
   applySaleToInventory,
+  buildSaleReversalMovements,
+  inventoryMovementDelta,
   calculateMetrics,
+  createPurchaseItems,
   createSaleItems,
   makeId,
+  purchasePaymentSummary,
+  salePaymentSummary,
   saleTotals,
   revertSaleFromInventory,
+  validateProductRecord,
 } from '@/services/business-logic';
 import { createLocalBusinessRepository } from '@/services/business-repository';
 import { themeSuggestions } from '@/services/theme-utils';
@@ -34,6 +46,9 @@ type CustomerInput = Omit<Customer, 'id' | 'createdAt' | 'updatedAt'> & { id?: s
 type ExpenseInput = Omit<Expense, 'id' | 'createdAt' | 'updatedAt'> & { id?: string };
 type TargetInput = Omit<RevenueTarget, 'id' | 'createdAt' | 'updatedAt'> & { id?: string };
 type TaskInput = Omit<Task, 'id' | 'createdAt' | 'updatedAt'> & { id?: string };
+type TeamMemberInput = Omit<TeamMember, 'id' | 'createdAt' | 'updatedAt'> & { id?: string };
+type CampaignInput = Omit<MarketingCampaign, 'id' | 'createdAt' | 'updatedAt'> & { id?: string };
+type SupplierInput = Omit<Supplier, 'id' | 'createdAt' | 'updatedAt'> & { id?: string };
 
 type BusinessContextValue = {
   state: BusinessState;
@@ -41,6 +56,7 @@ type BusinessContextValue = {
   metrics: BusinessMetrics;
   saveWorkspace: (setup: WorkspaceSetup) => void;
   clearWorkspace: () => void;
+  restoreBackup: (backup: BusinessState) => void;
   saveProduct: (product: ProductInput) => void;
   deleteProduct: (id: string) => void;
   saveCustomer: (customer: CustomerInput) => void;
@@ -51,6 +67,15 @@ type BusinessContextValue = {
   deleteRevenueTarget: (id: string) => void;
   saveTask: (task: TaskInput) => void;
   deleteTask: (id: string) => void;
+  setTaskStatus: (id: string, status: Task['status']) => void;
+  saveTeamMember: (member: TeamMemberInput) => void;
+  deleteTeamMember: (id: string) => void;
+  saveCampaign: (campaign: CampaignInput) => void;
+  deleteCampaign: (id: string) => void;
+  saveSupplier: (supplier: SupplierInput) => void;
+  deleteSupplier: (id: string) => void;
+  createPurchase: (input: { supplierId: string; items: Array<{ productId: string; quantity: number; unitCost: number }>; paidAmount: number; note: string }) => void;
+  updatePurchasePayment: (id: string, paidAmount: number) => void;
   recordInventoryMovement: (
     productId: string,
     type: InventoryMovementType,
@@ -61,8 +86,9 @@ type BusinessContextValue = {
     customerId: string;
     items: Array<{ productId: string; quantity: number }>;
     discount: number;
-    paymentStatus: PaymentStatus;
+    paidAmount: number;
   }) => void;
+  recordSalePayment: (id: string, amount: number) => void;
   updateSale: (
     id: string,
     input: Pick<Sale, 'customerId' | 'discount' | 'paymentStatus'>,
@@ -118,7 +144,28 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
     setState((current) => ({ ...current, workspace: null }));
   };
 
+  const restoreBackup = (backup: BusinessState) => {
+    if (!backup || typeof backup !== 'object' || !Array.isArray(backup.products) || !Array.isArray(backup.inventoryMovements) || !Array.isArray(backup.customers) || !Array.isArray(backup.sales) || !Array.isArray(backup.expenses) || !Array.isArray(backup.revenueTargets) || !Array.isArray(backup.tasks)) {
+      throw new Error('Backup file is missing required workspace data.');
+    }
+    setState({
+      workspace: backup.workspace && typeof backup.workspace === 'object' ? backup.workspace : null,
+      products: backup.products,
+      inventoryMovements: backup.inventoryMovements,
+      customers: backup.customers,
+      sales: backup.sales,
+      expenses: backup.expenses,
+      revenueTargets: backup.revenueTargets,
+      tasks: backup.tasks,
+      teamMembers: Array.isArray(backup.teamMembers) ? backup.teamMembers : [],
+      campaigns: Array.isArray(backup.campaigns) ? backup.campaigns : [],
+      suppliers: Array.isArray(backup.suppliers) ? backup.suppliers : [],
+      purchases: Array.isArray(backup.purchases) ? backup.purchases : [],
+    });
+  };
+
   const saveProduct = (product: ProductInput) => {
+    validateProductRecord(product, state.products);
     setState((current) => {
       const next = withDates(product);
       const exists = current.products.some((item) => item.id === next.id);
@@ -132,6 +179,12 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
   };
 
   const deleteProduct = (id: string) => {
+    const hasSales = state.sales.some(sale => sale.items.some(item => item.productId === id));
+    const hasPurchases = state.purchases.some(purchase => purchase.items.some(item => item.productId === id));
+    const hasMovements = state.inventoryMovements.some(movement => movement.productId === id);
+    if (hasSales || hasPurchases || hasMovements) {
+      throw new Error('This product has transaction history and cannot be deleted. Keep it in the catalogue so past sales, purchases and stock movements remain traceable.');
+    }
     setState((current) => ({
       ...current,
       products: current.products.filter((product) => product.id !== id),
@@ -152,10 +205,12 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
   };
 
   const deleteCustomer = (id: string) => {
+    if (state.sales.some(sale => sale.customerId === id)) {
+      throw new Error('This customer has sales history and cannot be deleted. Keep the customer record so past transactions remain traceable.');
+    }
     setState((current) => ({
       ...current,
       customers: current.customers.filter((customer) => customer.id !== id),
-      sales: current.sales.map((sale) => (sale.customerId === id ? { ...sale, customerId: '' } : sale)),
     }));
   };
 
@@ -219,17 +274,102 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
     }));
   };
 
+  const setTaskStatus = (id: string, status: Task['status']) => {
+    setState((current) => ({
+      ...current,
+      tasks: current.tasks.map((task) => task.id === id ? { ...task, status, updatedAt: new Date().toISOString() } : task),
+    }));
+  };
+
+  const saveTeamMember = (member: TeamMemberInput) => {
+    if (!member.name.trim()) throw new Error('Enter a team member name.');
+    if (member.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(member.email)) throw new Error('Enter a valid email address.');
+    setState((current) => {
+      const next = withDates({ ...member, name: member.name.trim(), email: member.email.trim(), phone: member.phone.trim(), department: member.department.trim() });
+      const exists = current.teamMembers.some((item) => item.id === next.id);
+      return { ...current, teamMembers: exists ? current.teamMembers.map((item) => item.id === next.id ? { ...item, ...next } : item) : [next, ...current.teamMembers] };
+    });
+  };
+
+  const deleteTeamMember = (id: string) => {
+    setState((current) => ({ ...current, teamMembers: current.teamMembers.filter((member) => member.id !== id) }));
+  };
+
+  const saveCampaign = (campaign: CampaignInput) => {
+    if (!campaign.name.trim()) throw new Error('Enter a campaign name.');
+    if (campaign.startDate && campaign.endDate && campaign.endDate < campaign.startDate) throw new Error('Campaign end date must be on or after its start date.');
+    const numericFields = [campaign.budget, campaign.spend, campaign.impressions, campaign.clicks, campaign.leads, campaign.conversions, campaign.revenue];
+    if (numericFields.some((value) => !Number.isFinite(value) || value < 0)) throw new Error('Campaign metrics must be valid non-negative numbers.');
+    if (campaign.clicks > campaign.impressions && campaign.impressions > 0) throw new Error('Clicks cannot exceed impressions.');
+    if (campaign.conversions > campaign.leads && campaign.leads > 0) throw new Error('Conversions cannot exceed leads.');
+    setState((current) => {
+      const next = withDates({ ...campaign, name: campaign.name.trim(), channel: campaign.channel.trim(), objective: campaign.objective.trim(), notes: campaign.notes.trim() });
+      const exists = current.campaigns.some((item) => item.id === next.id);
+      return { ...current, campaigns: exists ? current.campaigns.map((item) => item.id === next.id ? { ...item, ...next } : item) : [next, ...current.campaigns] };
+    });
+  };
+
+  const deleteCampaign = (id: string) => {
+    setState((current) => ({ ...current, campaigns: current.campaigns.filter((campaign) => campaign.id !== id) }));
+  };
+
+  const saveSupplier = (supplier: SupplierInput) => {
+    if (!supplier.name.trim()) throw new Error('Enter a supplier name.');
+    if (supplier.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(supplier.email)) throw new Error('Enter a valid email address.');
+    setState((current) => {
+      const next = withDates({ ...supplier, name: supplier.name.trim(), contactName: supplier.contactName.trim(), email: supplier.email.trim(), phone: supplier.phone.trim(), address: supplier.address.trim(), taxId: supplier.taxId.trim(), notes: supplier.notes.trim() });
+      const exists = current.suppliers.some((item) => item.id === next.id);
+      return { ...current, suppliers: exists ? current.suppliers.map((item) => item.id === next.id ? { ...item, ...next } : item) : [next, ...current.suppliers] };
+    });
+  };
+
+  const deleteSupplier = (id: string) => {
+    if (state.purchases.some((purchase) => purchase.supplierId === id)) throw new Error('This supplier has purchase history. Mark the supplier inactive instead of deleting the record.');
+    setState((current) => ({ ...current, suppliers: current.suppliers.filter((supplier) => supplier.id !== id) }));
+  };
+
+  const createPurchase = ({ supplierId, items, paidAmount, note }: { supplierId: string; items: Array<{ productId: string; quantity: number; unitCost: number }>; paidAmount: number; note: string }) => {
+    const supplier = state.suppliers.find((item) => item.id === supplierId);
+    if (!supplier || supplier.status !== 'Active') throw new Error('Select an active supplier.');
+    const purchaseItems = createPurchaseItems(state.products, items);
+    const total = purchaseItems.reduce((sum, item) => sum + item.total, 0);
+    const payment = purchasePaymentSummary(total, paidAmount);
+    const now = new Date().toISOString();
+    const id = makeId('purchase');
+    const purchase: Purchase = { id, supplierId, supplierName: supplier.name, items: purchaseItems, subtotal: total, total, ...payment, note: note.trim(), createdAt: now, updatedAt: now };
+    setState((current) => {
+      const currentSupplier = current.suppliers.find((item) => item.id === supplierId);
+      if (!currentSupplier || currentSupplier.status !== 'Active') return current;
+      const inventory = applyPurchaseToInventory(
+        current.products,
+        purchaseItems,
+        (item) => ({ id: makeId('movement'), productId: item.productId, type: 'stock-in', quantity: item.quantity, note: 'purchase:' + id, createdAt: now }),
+        current.inventoryMovements,
+      );
+      return { ...current, ...inventory, purchases: [purchase, ...current.purchases] };
+    });
+  };
+
+  const updatePurchasePayment = (id: string, paidAmount: number) => {
+    const purchase = state.purchases.find((item) => item.id === id);
+    if (!purchase) return;
+    const payment = purchasePaymentSummary(purchase.total, paidAmount);
+    setState((current) => ({
+      ...current,
+      purchases: current.purchases.map((item) => item.id === id ? { ...item, ...payment, updatedAt: new Date().toISOString() } : item),
+    }));
+  };
+
   const recordInventoryMovement = (
     productId: string,
     type: InventoryMovementType,
     quantity: number,
     note: string,
   ) => {
-    if (!Number.isFinite(quantity) || quantity === 0) throw new Error('Enter a non-zero quantity.');
+    const delta = inventoryMovementDelta(type, quantity);
     setState((current) => {
       const product = current.products.find((item) => item.id === productId);
       if (!product) throw new Error('Select a valid product.');
-      const delta = type === 'stock-in' ? Math.abs(quantity) : type === 'stock-out' ? -Math.abs(quantity) : quantity;
       const nextStock = product.stock + delta;
       if (nextStock < 0) throw new Error('Stock cannot go below zero.');
       const movement: InventoryMovement = {
@@ -252,23 +392,24 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
     customerId,
     items,
     discount,
-    paymentStatus,
+    paidAmount,
   }: {
     customerId: string;
     items: Array<{ productId: string; quantity: number }>;
     discount: number;
-    paymentStatus: PaymentStatus;
+    paidAmount: number;
   }) => {
     setState((current) => {
       const saleItems = createSaleItems(current.products, items);
       if (!saleItems.length) throw new Error('Add at least one product to the sale.');
       const totals = saleTotals(saleItems, discount);
+      const payment = salePaymentSummary(totals.total, paidAmount);
       const sale: Sale = {
         id: makeId('sale'),
         customerId,
         items: saleItems,
         ...totals,
-        paymentStatus,
+        ...payment,
         createdAt: new Date().toISOString(),
       };
       const inventory = applySaleToInventory(
@@ -286,6 +427,17 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
       );
       return { ...current, ...inventory, sales: [sale, ...current.sales] };
     });
+  };
+
+  const recordSalePayment = (id: string, amount: number) => {
+    const sale = state.sales.find(item => item.id === id);
+    if (!sale) throw new Error('Sale record was not found.');
+    if (sale.paymentStatus === 'refunded') throw new Error('A refunded sale cannot accept another payment.');
+    const payment = addSalePayment(sale, amount);
+    setState((current) => ({
+      ...current,
+      sales: current.sales.map(item => item.id === id ? { ...item, ...payment } : item),
+    }));
   };
 
   const updateSale = (
@@ -310,11 +462,15 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
       const sale = current.sales.find((item) => item.id === id);
       if (!sale) return current;
       const restoredProducts = revertSaleFromInventory(current.products, [sale]);
+      const reversalAt = new Date().toISOString();
+      const reversalMovements = buildSaleReversalMovements(sale, () => makeId('movement'), reversalAt);
       return {
         ...current,
         products: restoredProducts,
         sales: current.sales.filter((item) => item.id !== id),
-        inventoryMovements: current.inventoryMovements.filter((movement) => movement.note !== `sale:${id}`),
+        // Keep the original stock-out movements and append compensating stock-in
+        // movements so a deleted sale still has a traceable inventory reversal.
+        inventoryMovements: [...reversalMovements, ...current.inventoryMovements],
       };
     });
   };
@@ -326,6 +482,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
       metrics: calculateMetrics(state),
       saveWorkspace,
       clearWorkspace,
+      restoreBackup,
       saveProduct,
       deleteProduct,
       saveCustomer,
@@ -336,8 +493,18 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
       deleteRevenueTarget,
       saveTask,
       deleteTask,
+      setTaskStatus,
+      saveTeamMember,
+      deleteTeamMember,
+      saveCampaign,
+      deleteCampaign,
+      saveSupplier,
+      deleteSupplier,
+      createPurchase,
+      updatePurchasePayment,
       recordInventoryMovement,
       createSale,
+      recordSalePayment,
       updateSale,
       deleteSale,
       themeOptions: themeSuggestions(state.workspace?.brandColor ?? '#1f2937'),

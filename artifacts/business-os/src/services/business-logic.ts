@@ -2,7 +2,11 @@ import type {
   BusinessMetrics,
   BusinessState,
   InventoryMovement,
+  InventoryMovementType,
+  PaymentStatus,
   Product,
+  PurchaseItem,
+  PurchasePaymentStatus,
   Sale,
   SaleItem,
 } from '@/domain/types';
@@ -14,20 +18,45 @@ export function makeId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function localDateKey(date: Date) {
+  return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
+}
+
+export function inventoryMovementDelta(type: InventoryMovementType, quantity: number): number {
+  if (!Number.isFinite(quantity) || quantity === 0) {
+    throw new Error('Enter a non-zero quantity.');
+  }
+  if (type !== 'adjustment' && quantity < 0) {
+    throw new Error('Use a positive quantity for stock in or stock out. Use adjustment for negative corrections.');
+  }
+  if (type === 'stock-in') return quantity;
+  if (type === 'stock-out') return -quantity;
+  return quantity;
+}
+export function collectedSaleCost(sale: Sale): number {
+  if (sale.paymentStatus === 'refunded' || sale.total <= 0) return 0;
+  const { paidAmount } = salePaymentAmounts(sale);
+  return sale.costTotal * (paidAmount / sale.total);
+}
+
+export function paidRevenueWithinRange(sales: Sale[], startDate: string, endDate: string): number {
+  return sales
+    .filter(sale => sale.createdAt.slice(0, 10) >= startDate && sale.createdAt.slice(0, 10) <= endDate)
+    .reduce((sum, sale) => sum + salePaymentAmounts(sale).paidAmount, 0);
+}
 export function calculateMetrics(state: BusinessState, today = new Date()): BusinessMetrics {
   const revenue = state.sales
-    .filter((sale) => sale.paymentStatus !== 'refunded')
-    .reduce((sum, sale) => sum + sale.total, 0);
+    .reduce((sum, sale) => sum + salePaymentAmounts(sale).paidAmount, 0);
   const expenses = state.expenses.reduce((sum, expense) => sum + expense.amount, 0);
-  const profit = revenue - state.sales
-    .filter((sale) => sale.paymentStatus !== 'refunded')
-    .reduce((sum, sale) => sum + sale.costTotal, 0) - expenses;
+  const profit = revenue - state.sales.reduce((sum, sale) => sum + collectedSaleCost(sale), 0) - expenses;
   const currentTarget = state.revenueTargets.find((target) => {
-    const current = today.toISOString().slice(0, 10);
+    const current = localDateKey(today);
     return target.startDate <= current && target.endDate >= current;
   });
   const revenueTarget = currentTarget?.amount ?? 0;
-  const revenueAchieved = revenue;
+  const revenueAchieved = currentTarget
+    ? paidRevenueWithinRange(state.sales, currentTarget.startDate, currentTarget.endDate)
+    : 0;
   const targetRemaining = Math.max(revenueTarget - revenueAchieved, 0);
   const daysRemaining = currentTarget
     ? Math.max(
@@ -43,7 +72,7 @@ export function calculateMetrics(state: BusinessState, today = new Date()): Busi
   ).length;
   const outOfStockCount = state.products.filter((product) => product.stock <= 0).length;
   const overdueTaskCount = state.tasks.filter(
-    (task) => task.status !== 'Completed' && task.dueDate < today.toISOString().slice(0, 10),
+    (task) => task.status !== 'Completed' && task.dueDate < localDateKey(today),
   ).length;
 
   return {
@@ -54,7 +83,7 @@ export function calculateMetrics(state: BusinessState, today = new Date()): Busi
     revenueTarget,
     revenueAchieved,
     targetRemaining,
-    targetAchievement: revenueTarget ? Math.min((revenue / revenueTarget) * 100, 100) : 0,
+    targetAchievement: revenueTarget ? Math.min((revenueAchieved / revenueTarget) * 100, 100) : 0,
     requiredDailyRevenue: daysRemaining ? targetRemaining / daysRemaining : 0,
     requiredWeeklyRevenue: daysRemaining ? (targetRemaining / daysRemaining) * 7 : 0,
     salesCount: state.sales.length,
@@ -66,6 +95,41 @@ export function calculateMetrics(state: BusinessState, today = new Date()): Busi
   };
 }
 
+export function validateProductRecord(
+  product: Pick<Product, 'name' | 'sku' | 'barcode' | 'costPrice' | 'sellingPrice' | 'stock' | 'minimumStock'> & { id?: string },
+  products: Product[],
+) {
+  if (!product.name.trim()) throw new Error('Enter a product name.');
+  if (![product.costPrice, product.sellingPrice].every(value => Number.isFinite(value) && value >= 0)) {
+    throw new Error('Cost and selling prices must be valid non-negative numbers.');
+  }
+  if (![product.stock, product.minimumStock].every(value => Number.isFinite(value) && value >= 0)) {
+    throw new Error('Stock and minimum stock must be valid non-negative numbers.');
+  }
+  const sku = product.sku.trim().toLowerCase();
+  const barcode = product.barcode.trim().toLowerCase();
+  if (sku && products.some(item => item.id !== product.id && item.sku.trim().toLowerCase() === sku)) {
+    throw new Error('This SKU is already used by another product.');
+  }
+  if (barcode && products.some(item => item.id !== product.id && item.barcode.trim().toLowerCase() === barcode)) {
+    throw new Error('This barcode is already used by another product.');
+  }
+}
+
+export function buildSaleReversalMovements(
+  sale: Sale,
+  idFactory: (item: SaleItem) => string,
+  createdAt: string,
+): InventoryMovement[] {
+  return sale.items.map(item => ({
+    id: idFactory(item),
+    productId: item.productId,
+    type: 'stock-in',
+    quantity: item.quantity,
+    note: 'sale-void:' + sale.id,
+    createdAt,
+  }));
+}
 export function createSaleItems(
   products: Product[],
   cart: Array<{ productId: string; quantity: number }>,
@@ -98,6 +162,36 @@ export function createSaleItems(
   });
 }
 
+export function salePaymentSummary(total: number, paidAmount: number): { paidAmount: number; balance: number; paymentStatus: PaymentStatus } {
+  if (!Number.isFinite(total) || total < 0 || !Number.isFinite(paidAmount) || paidAmount < 0 || paidAmount > total) {
+    throw new Error('Enter an amount received between zero and the sale total.');
+  }
+  if (total === 0) return { paidAmount: 0, balance: 0, paymentStatus: 'paid' };
+  return {
+    paidAmount,
+    balance: total - paidAmount,
+    paymentStatus: paidAmount >= total ? 'paid' : paidAmount > 0 ? 'partial' : 'pending',
+  };
+}
+
+export function salePaymentAmounts(sale: Pick<Sale, 'total' | 'paymentStatus' | 'paidAmount' | 'balance'>): { paidAmount: number; balance: number } {
+  if (sale.paymentStatus === 'refunded') return { paidAmount: 0, balance: 0 };
+  const total = Math.max(0, sale.total);
+  let paidAmount = sale.paidAmount;
+  if (!Number.isFinite(paidAmount)) {
+    if (sale.paymentStatus === 'paid') paidAmount = total;
+    else if (Number.isFinite(sale.balance)) paidAmount = total - Number(sale.balance);
+    else paidAmount = 0;
+  }
+  const received = Math.min(total, Math.max(0, Number(paidAmount)));
+  return { paidAmount: received, balance: Math.max(0, total - received) };
+}
+
+export function addSalePayment(sale: Sale, amount: number): { paidAmount: number; balance: number; paymentStatus: PaymentStatus } {
+  if (!Number.isFinite(amount) || amount <= 0) throw new Error('Enter a payment amount greater than zero.');
+  const current = salePaymentAmounts(sale);
+  return salePaymentSummary(sale.total, current.paidAmount + amount);
+}
 export function saleTotals(items: SaleItem[], discount: number) {
   const subtotal = items.reduce((sum, item) => sum + item.total, 0);
   const safeDiscount = Math.min(Math.max(discount, 0), subtotal);
@@ -139,4 +233,66 @@ export function revertSaleFromInventory(products: Product[], sale: Sale[]) {
       .reduce((sum, item) => sum + item.quantity, 0);
     return quantity ? { ...product, stock: product.stock + quantity, updatedAt: new Date().toISOString() } : product;
   });
+}
+export function createPurchaseItems(
+  products: Product[],
+  cart: Array<{ productId: string; quantity: number; unitCost: number }>,
+): PurchaseItem[] {
+  if (!cart.length) throw new Error('Add at least one product to the purchase.');
+  return cart.map((line) => {
+    if (!line.productId || !Number.isInteger(line.quantity) || line.quantity <= 0) {
+      throw new Error('Select a valid product and a whole quantity greater than zero.');
+    }
+    if (!Number.isFinite(line.unitCost) || line.unitCost < 0) {
+      throw new Error('Enter a valid unit purchase cost.');
+    }
+    const product = products.find((item) => item.id === line.productId);
+    if (!product) throw new Error('One of the selected products no longer exists.');
+    return {
+      productId: product.id,
+      name: product.name,
+      quantity: line.quantity,
+      unitCost: line.unitCost,
+      total: line.quantity * line.unitCost,
+    };
+  });
+}
+
+export function purchasePaymentSummary(total: number, paidAmount: number): {
+  paidAmount: number;
+  balance: number;
+  paymentStatus: PurchasePaymentStatus;
+} {
+  if (!Number.isFinite(total) || total < 0 || !Number.isFinite(paidAmount) || paidAmount < 0 || paidAmount > total) {
+    throw new Error('Enter a valid payment amount between zero and the purchase total.');
+  }
+  return {
+    paidAmount,
+    balance: total - paidAmount,
+    paymentStatus: paidAmount >= total && total > 0 ? 'Paid' : paidAmount > 0 ? 'Partial' : 'Pending',
+  };
+}
+
+export function applyPurchaseToInventory(
+  products: Product[],
+  items: PurchaseItem[],
+  movementFactory: (item: PurchaseItem) => InventoryMovement,
+  movements: InventoryMovement[],
+) {
+  const quantitiesByProduct = new Map<string, number>();
+  for (const item of items) {
+    quantitiesByProduct.set(
+      item.productId,
+      (quantitiesByProduct.get(item.productId) ?? 0) + item.quantity,
+    );
+  }
+  const now = new Date().toISOString();
+  const updatedProducts = products.map((product) => {
+    const quantity = quantitiesByProduct.get(product.id) ?? 0;
+    return quantity ? { ...product, stock: product.stock + quantity, updatedAt: now } : product;
+  });
+  return {
+    products: updatedProducts,
+    inventoryMovements: [...items.map(movementFactory), ...movements],
+  };
 }

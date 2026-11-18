@@ -1,0 +1,16 @@
+[build]
+  command = "PORT=23821 BASE_PATH=/ pnpm build"
+  publish = "artifacts/business-os/dist/public/client"
+
+[build.environment]
+  NODE_VERSION = "22"
+  PORT = "23821"
+  BASE_PATH = "/"
+
+[functions]
+  directory = "netlify/functions"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

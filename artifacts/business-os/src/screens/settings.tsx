@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { AppPage, PageHeader } from "@/components/app-shell";
 import { Button, Card, Field, Input, Select, Switch } from "@/components/ui";
@@ -7,6 +7,7 @@ import {
   COUNTRIES,
   INDUSTRIES,
   MODULE_CATALOG,
+  SUBSCRIPTION_PLANS,
   recommendModules,
   type Appearance,
   type IndustryId,
@@ -15,6 +16,7 @@ import {
 } from "@/lib/domain";
 import { extractLogoColors, fileToDataUrl } from "@/lib/theme";
 import { deleteBusiness, updateBusiness } from "@/lib/services";
+import { isValidGstin } from "@/lib/invoice-utils";
 import { useAppStore, useBusiness } from "@/lib/store";
 
 export function SettingsScreen() {
@@ -24,6 +26,8 @@ export function SettingsScreen() {
   const setCurrent = useAppStore((s) => s.setCurrentBusiness);
   const navigate = useNavigate();
   const [name, setName] = React.useState(business?.name ?? "");
+  const [gstError, setGstError] = React.useState("");
+  const [annualBilling, setAnnualBilling] = React.useState(false);
 
   React.useEffect(() => {
     setName(business?.name ?? "");
@@ -151,6 +155,56 @@ export function SettingsScreen() {
       </Card>
 
       <Card className="mb-4 space-y-3">
+        <div><h2 className="text-sm font-semibold">GST & invoice profile</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">Update your registered business details whenever they change.</p></div>
+        <div className="flex items-center justify-between gap-3 rounded-xl bg-muted/45 p-3"><div><p className="text-sm font-medium">Registered under GST</p><p className="text-xs text-muted-foreground">Keep this off if your business is not GST registered.</p></div><Switch checked={Boolean(business.gstRegistered)} onCheckedChange={(checked) => { setGstError(""); patch({ gstRegistered:checked, gstin:checked?business.gstin:undefined }); }} label="GST registered" /></div>
+        {business.gstRegistered ? <><Field label="GSTIN"><Input key={business.id+(business.gstin??"")} defaultValue={business.gstin??""} maxLength={15} placeholder="15-character GSTIN" onBlur={(e)=>{const value=e.target.value.trim().toUpperCase();if(!isValidGstin(value)){setGstError("Enter a valid 15-character GSTIN.");return;}setGstError("");patch({gstin:value});}} /></Field><Field label="Legal business name"><Input defaultValue={business.legalName??""} placeholder={business.name} onBlur={(e)=>patch({legalName:e.target.value.trim()||undefined})} /></Field></> : null}
+        <Field label="Registered / billing address"><Input defaultValue={business.address??""} placeholder="Street, building, area" onBlur={(e)=>patch({address:e.target.value.trim()||undefined})} /></Field>
+        <div className="grid grid-cols-2 gap-3"><Field label="City / area"><Input defaultValue={business.location??""} onBlur={(e)=>patch({location:e.target.value.trim()||undefined})} /></Field><Field label="Postal code"><Input defaultValue={business.postalCode??""} onBlur={(e)=>patch({postalCode:e.target.value.trim()||undefined})} /></Field></div>
+        <div className="grid grid-cols-2 gap-3"><Field label="State"><Input defaultValue={business.state??""} onBlur={(e)=>patch({state:e.target.value.trim()||undefined})} /></Field><Field label="State code"><Input defaultValue={business.stateCode??""} maxLength={2} onBlur={(e)=>patch({stateCode:e.target.value.replace(/[^0-9]/g,"").slice(0,2)||undefined})} /></Field></div>
+        {gstError ? <p role="alert" className="text-xs font-semibold text-danger">{gstError}</p> : null}
+        <p className="text-[11px] leading-5 text-muted-foreground">Invoice tax fields are enabled only when GST registration is switched on. Confirm tax rates and statutory requirements with your tax adviser before issuing invoices.</p>
+        <Link to="/invoices" className="inline-flex items-center gap-2 text-xs font-semibold text-primary hover:underline">Open invoice format settings →</Link>
+      </Card>
+
+      <Card className="mb-4 space-y-4">
+        <div className="flex items-start justify-between gap-3"><div><h2 className="text-sm font-semibold">Plans & subscription</h2><p className="mt-1 text-xs text-muted-foreground">Choose the plan that fits your team. Online billing will be connected later.</p></div><span className="rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-semibold text-primary">{business.subscriptionStatus==="trial"?"14-day trial":"Plan preference"}</span></div>
+        {business.subscriptionStatus==="trial"&&business.trialEndsAt ? <p className="rounded-xl bg-primary/7 px-3 py-2 text-xs text-muted-foreground">Growth trial ends {new Date(business.trialEndsAt).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"})}. No payment is collected in this preview.</p> : null}
+        <div className="flex items-center justify-between"><p className="text-xs font-medium text-muted-foreground">Billing display</p><div className="flex rounded-xl bg-muted p-1"><button type="button" onClick={()=>setAnnualBilling(false)} className={annualBilling?"rounded-lg px-3 py-1.5 text-xs text-muted-foreground":"rounded-lg bg-card px-3 py-1.5 text-xs font-semibold shadow-sm"}>Monthly</button><button type="button" onClick={()=>setAnnualBilling(true)} className={annualBilling?"rounded-lg bg-card px-3 py-1.5 text-xs font-semibold shadow-sm":"rounded-lg px-3 py-1.5 text-xs text-muted-foreground"}>Annual · 2 months free</button></div></div>
+        <div className="grid gap-3 md:grid-cols-3">
+          {([
+            { id: "starter" as const, title: "Starter", description: "For a small business", seats: "1 owner/admin + 1 other", features: ["Core business workspace", "Sales, products and inventory", "Invoices, tasks and reports"] },
+            { id: "growth" as const, title: "Growth", description: "For a growing team", seats: "1 owner/admin + 5 others", features: ["Everything in Starter", "Room for a larger team", "All currently available workflows"] },
+            { id: "pro" as const, title: "Pro", description: "For established teams", seats: "1 owner/admin + 9 others", features: ["Everything in Growth", "Expanded team capacity", "All currently available workflows"] },
+          ]).map((plan) => {
+            const pricing = SUBSCRIPTION_PLANS[plan.id];
+            const selected = business.subscriptionPlan === plan.id;
+            const amount = annualBilling ? pricing.annual : pricing.monthly;
+            return (
+              <div key={plan.id} className={`relative flex flex-col overflow-hidden rounded-2xl border p-4 transition-all duration-200 hover:-translate-y-1 hover:shadow-lg ${selected ? "border-primary bg-primary/[0.045] shadow-md" : "border-border bg-card"}`}>
+                {plan.id === "growth" ? <span className="absolute right-3 top-3 rounded-full bg-primary/10 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-primary">Popular</span> : null}
+                <p className="text-sm font-semibold">{plan.title}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{plan.description}</p>
+                <p className="mt-4 text-3xl font-semibold tracking-tight tabular-nums">₹{amount.toLocaleString("en-IN")}<span className="ml-1 text-xs font-normal text-muted-foreground">/{annualBilling ? "year" : "month"}</span></p>
+                <p className="mt-1 text-[11px] font-medium text-muted-foreground">+ applicable taxes</p>
+                {annualBilling ? <p className="mt-2 inline-flex w-fit rounded-full bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">2 months free</p> : null}
+                <p className="mt-3 rounded-lg bg-muted/55 px-2.5 py-2 text-[11px] font-medium">{plan.seats}</p>
+                <ul className="mt-4 flex-1 space-y-2">{plan.features.map((feature) => <li key={feature} className="flex gap-2 text-xs"><span className="text-primary">✓</span><span>{feature}</span></li>)}</ul>
+                <Button className="mt-5 w-full" variant={selected ? "secondary" : "default"} onClick={() => { patch({ subscriptionPlan: plan.id, subscriptionStatus: "selected" }); toast.success(plan.title + " plan preference saved. Billing will be available later."); }}>
+                  {selected ? "Selected plan" : "Choose " + plan.title}
+                </Button>
+              </div>
+            );
+          })}
+        </div>
+        <p className="text-[11px] leading-5 text-muted-foreground">All listed prices are before taxes. Annual billing is priced at 10 months. Seat limits include the owner/admin. Your plan preference is saved in this browser workspace; online checkout and payment collection are not connected yet.</p>
+      </Card>
+
+      <Card className="mb-4 space-y-3">
+        <div><h2 className="text-sm font-semibold">Enterprise</h2><p className="mt-1 text-xs text-muted-foreground">Need more members or a customised setup? Talk to our team.</p></div>
+        <a href="https://wa.me/919928728548?text=Hi%20Business%20Sutra%20team%2C%20I%27m%20interested%20in%20the%20Enterprise%20plan." target="_blank" rel="noreferrer" className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-[#25D366] px-4 py-2.5 text-sm font-semibold text-white transition hover:brightness-95">Contact us on WhatsApp</a>
+      </Card>
+
+      <Card className="mb-4 space-y-3">
         <h2 className="text-sm font-semibold">Theme</h2>
         <Field label="Appearance">
           <Select value={business.appearance} onChange={(e) => patch({ appearance: e.target.value as Appearance })}>
@@ -186,6 +240,26 @@ export function SettingsScreen() {
             </div>
           );
         })}
+      </Card>
+
+      <Card className="mb-4 space-y-3">
+        <h2 className="text-sm font-semibold">Available modules</h2>
+        <p className="text-xs text-muted-foreground">Enable additional workflows for this business. They will appear in the More menu.</p>
+        {Object.values(MODULE_CATALOG)
+          .filter((module) => module.implemented && !business.moduleOrder.includes(module.id))
+          .map((module) => (
+            <div key={module.id} className="flex items-center gap-3 py-1">
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium">{module.label}</p>
+                <p className="text-xs text-muted-foreground">{module.description}</p>
+              </div>
+              <Switch
+                checked={business.enabledModules.includes(module.id)}
+                onCheckedChange={() => toggleModule(module.id)}
+                label={`Enable ${module.label}`}
+              />
+            </div>
+          ))}
       </Card>
 
       <Button

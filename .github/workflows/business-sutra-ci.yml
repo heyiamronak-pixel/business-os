@@ -5,9 +5,12 @@ on:
     branches:
       - main
       - foundation/hardening
+      - phase-2/data-foundation
+      - development/phase-completion
   pull_request:
     branches:
       - main
+      - development/phase-completion
   workflow_dispatch:
 
 permissions:
@@ -19,6 +22,20 @@ concurrency:
 
 jobs:
   verify:
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: business_sutra_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d business_sutra_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     name: Typecheck and production build
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -44,8 +61,39 @@ jobs:
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run focused business logic regression tests
-        run: pnpm --filter @workspace/scripts exec tsx --test ./src/business-logic.test.ts
+      - name: Apply tenant foundation migration to clean PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d business_sutra_test -v ON_ERROR_STOP=1 -f lib/db/migrations/0001_business_tenant_foundation.sql
 
+      - name: Verify tenant isolation and audit immutability
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d business_sutra_test -v ON_ERROR_STOP=1 -f lib/db/migrations/tests/0001_rls_smoke_test.sql
+
+      - name: Apply tenant-scoped operational records migration
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d business_sutra_test -v ON_ERROR_STOP=1 -f lib/db/migrations/0002_operational_tenant_records.sql
+
+      - name: Verify operational record tenant isolation
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d business_sutra_test -v ON_ERROR_STOP=1 -f lib/db/migrations/tests/0002_operational_rls_test.sql
+
+      - name: Run focused business logic and API integration tests
+        env:
+          DATABASE_URL: postgresql://business_sutra_api_test:ci-only-password@localhost:5432/business_sutra_test
+        run: pnpm --filter @workspace/scripts exec tsx --test ./src/business-logic.test.ts ./src/advisor-intelligence.test.ts ./src/business-os-purchasing.test.ts ./src/api-auth.test.ts ./src/business-api.integration.test.ts ./src/business-repository.test.ts ./src/assistant-language.test.ts ./src/report-filters.test.ts ./src/invoice-utils.test.ts
+
+      - name: Run feature-branch regression tests when present
+        run: |
+          test_files=()
+          for file in ./src/task-utils.test.ts ./src/subscription.test.ts ./src/lead-utils.test.ts ./src/lead-assistant.test.ts; do
+            if [ -f "$file" ]; then test_files+=("$file"); fi
+          done
+          if [ "${#test_files[@]}" -gt 0 ]; then
+            pnpm --filter @workspace/scripts exec tsx --test "${test_files[@]}"
+          fi
       - name: Run workspace typecheck and production build
         run: pnpm build

@@ -1,9 +1,13 @@
 export type ThemeMode = 'light' | 'dark' | 'auto';
 export type ThemeId = 'brand' | 'professional' | 'modern';
-export type PaymentStatus = 'paid' | 'pending' | 'refunded';
+export type PaymentStatus = 'paid' | 'partial' | 'pending' | 'refunded';
 export type InventoryMovementType = 'stock-in' | 'stock-out' | 'adjustment';
 export type TaskStatus = 'Todo' | 'In Progress' | 'Completed';
 export type TaskPriority = 'Low' | 'Medium' | 'High';
+export type TeamRole = 'Owner' | 'Admin' | 'Manager' | 'Executive' | 'Staff';
+export type CampaignStatus = 'Draft' | 'Active' | 'Completed';
+export type SupplierStatus = 'Active' | 'Inactive';
+export type PurchasePaymentStatus = 'Paid' | 'Partial' | 'Pending';
 
 export type WorkspaceSetup = {
   businessName: string;
@@ -79,6 +83,8 @@ export type Sale = {
   costTotal: number;
   grossProfit: number;
   paymentStatus: PaymentStatus;
+  paidAmount?: number;
+  balance?: number;
   createdAt: string;
 };
 
@@ -119,6 +125,75 @@ export type Task = {
   updatedAt: string;
 };
 
+export type Supplier = {
+  id: string;
+  name: string;
+  contactName: string;
+  email: string;
+  phone: string;
+  address: string;
+  taxId: string;
+  notes: string;
+  status: SupplierStatus;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type PurchaseItem = {
+  productId: string;
+  name: string;
+  quantity: number;
+  unitCost: number;
+  total: number;
+};
+
+export type Purchase = {
+  id: string;
+  supplierId: string;
+  supplierName: string;
+  items: PurchaseItem[];
+  subtotal: number;
+  total: number;
+  paidAmount: number;
+  balance: number;
+  paymentStatus: PurchasePaymentStatus;
+  note: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type TeamMember = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  role: TeamRole;
+  department: string;
+  status: 'Active' | 'Inactive';
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type MarketingCampaign = {
+  id: string;
+  name: string;
+  channel: string;
+  objective: string;
+  status: CampaignStatus;
+  startDate: string;
+  endDate: string;
+  budget: number;
+  spend: number;
+  impressions: number;
+  clicks: number;
+  leads: number;
+  conversions: number;
+  revenue: number;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type BusinessState = {
   workspace: WorkspaceSetup | null;
   products: Product[];
@@ -128,6 +203,10 @@ export type BusinessState = {
   expenses: Expense[];
   revenueTargets: RevenueTarget[];
   tasks: Task[];
+  teamMembers: TeamMember[];
+  campaigns: MarketingCampaign[];
+  suppliers: Supplier[];
+  purchases: Purchase[];
 };
 
 export type BusinessMetrics = {

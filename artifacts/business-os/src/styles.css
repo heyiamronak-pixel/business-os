@@ -15,30 +15,30 @@
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-danger: var(--danger);
-  --font-sans: "Plus Jakarta Sans", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Instrument Serif", "Iowan Old Style", Georgia, serif;
+  --font-sans: "Inter", "Plus Jakarta Sans", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Inter", "Plus Jakarta Sans", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
   --radius-xs: 4px;
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 24px;
-  --radius-2xl: 32px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-xl: 22px;
+  --radius-2xl: 28px;
 }
 
 :root {
-  --background: #f4f1ea;
-  --card: #fffefb;
-  --surface-subtle: #ede8dc;
-  --foreground: #1c1917;
-  --muted-foreground: #57534e;
-  --subtle-foreground: #78716c;
-  --border: color-mix(in oklab, #1c1917 12%, transparent);
-  --primary: #0f5c54;
-  --primary-foreground: #f4f1ea;
-  --success: #2f6f4e;
-  --warning: #8a5a12;
-  --danger: #9f2d2d;
-  --ring: #0f5c54;
+  --background: #f4f7fb;
+  --card: #ffffff;
+  --surface-subtle: #eaf0f6;
+  --foreground: #17263a;
+  --muted-foreground: #53657b;
+  --subtle-foreground: #8190a4;
+  --border: color-mix(in oklab, #24364d 10%, transparent);
+  --primary: #176b73;
+  --primary-foreground: #ffffff;
+  --success: #16835d;
+  --warning: #a66b1d;
+  --danger: #c24e5a;
+  --ring: #176b73;
   --radius-xs: 4px;
   --radius-sm: 8px;
   --radius-md: 12px;
@@ -73,7 +73,7 @@ body {
   font-family: var(--font-sans);
   background: var(--background);
   color: var(--foreground);
-  letter-spacing: -0.01em;
+  letter-spacing: -0.012em;
 }
 
 #app {
@@ -130,4 +130,45 @@ body {
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {
   opacity: 1;
+}
+
+ 
+ ::selection {
+   color: #ffffff;
+   background: color-mix(in srgb, var(--primary) 82%, #17263a);
+ }
+ 
+ :focus-visible {
+   outline-color: var(--ring);
+ }
+ 
+ .app-backdrop {
+   background:
+     radial-gradient(ellipse at 8% 0%, color-mix(in srgb, var(--primary) 7%, transparent), transparent 34rem),
+     var(--background);
+ }
+ 
+ .panel-shadow {
+   box-shadow: 0 12px 34px color-mix(in srgb, var(--foreground) 5%, transparent), 0 1px 2px color-mix(in srgb, var(--foreground) 4%, transparent);
+ }
+ 
+/* Subtle page and card motion: expressive, but calm enough for everyday business work. */
+@keyframes bs-page-enter { from { opacity: 0; transform: translate3d(0,10px,0); } to { opacity: 1; transform: translate3d(0,0,0); } }
+.app-main-enter, .animate-enter { animation: bs-page-enter 420ms var(--ease-out) both; }
+.animate-enter-delay-1 { animation: bs-page-enter 460ms var(--ease-out) 70ms both; }
+.animate-enter-delay-2 { animation: bs-page-enter 500ms var(--ease-out) 130ms both; }
+.card-lift { transition: transform 220ms var(--ease-out), box-shadow 220ms var(--ease-out), border-color 220ms ease; }
+.card-lift:hover { transform: translateY(-3px); box-shadow: 0 14px 30px color-mix(in srgb, var(--foreground) 8%, transparent); border-color: color-mix(in srgb, var(--primary) 24%, var(--border)); }
+@media (prefers-reduced-motion: reduce) {
+  .app-main-enter, .animate-enter, .animate-enter-delay-1, .animate-enter-delay-2 { animation: none !important; }
+  .card-lift:hover { transform: none; }
+}
+@media print {
+  @page { size: A4; margin: 12mm; }
+  html, body { background: #fff !important; }
+  body * { visibility: hidden !important; }
+  #invoice-print-root, #invoice-print-root * { visibility: visible !important; }
+  #invoice-print-root { position: absolute !important; inset: 0 auto auto 0 !important; width: 100% !important; max-width: none !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
+  .no-print { display: none !important; }
+  .invoice-paper { box-shadow: none !important; }
 }
