@@ -21,8 +21,8 @@ import {
   type ReportFilters,
   type ReportRecordType,
 } from "@/lib/report-filters";
-import { financeSnapshot, marketingTotals, productProfits, type DateRange } from "@/lib/engines";
-import { money, pct } from "@/lib/format";
+import { cashbookEntries, financeSnapshot, marketingTotals, productProfits, type DateRange } from "@/lib/engines";
+import { formatDateTime, money, pct } from "@/lib/format";
 import { useAppStore, useBusiness } from "@/lib/store";
 import { createId } from "@/lib/utils";
 import { businessHasFeature } from "@/lib/subscription";
@@ -323,6 +323,10 @@ export function ReportsScreen() {
   const supplierOutstanding = purchases.reduce((sum, purchase) => sum + purchase.balance, 0);
   const openPurchases = purchases.filter((purchase) => purchase.balance > 0).length;
   const finance = financeSnapshot({ ...db, sales, expenses }, business.id);
+  const cashbook = validRange ? cashbookEntries(db, business.id, range) : [];
+  const cashbookIn = cashbook.filter((entry) => entry.direction === "in").reduce((sum, entry) => sum + entry.amount, 0);
+  const cashbookOut = cashbook.filter((entry) => entry.direction === "out").reduce((sum, entry) => sum + entry.amount, 0);
+  const cashbookNet = cashbookIn - cashbookOut;
   const marketing = marketingTotals(campaigns);
   const topProducts = productProfits(sales).slice(0, 5);
   const currency = business.currency;
@@ -763,6 +767,42 @@ export function ReportsScreen() {
           <Card><Stat label="Profit margin" value={pct(finance.margin, 1)} /></Card>
           <Card><Stat label="Average order" value={money(finance.aov, currency)} /></Card>
         </div>
+      </section>
+
+      <section className="mb-5">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-semibold">Cashbook</h2>
+            <p className="mt-1 text-xs text-muted-foreground">Recorded receipts, refunds, supplier payments and expenses for {range.label}. This is net recorded movement, not a live bank balance.</p>
+          </div>
+          <Badge tone={cashbookNet >= 0 ? "good" : "warn"}>{cashbookNet >= 0 ? "Net inflow" : "Net outflow"} · {money(Math.abs(cashbookNet), currency)}</Badge>
+        </div>
+        <div className="mb-3 grid grid-cols-3 gap-2">
+          <Card><Stat label="Cash in" value={money(cashbookIn, currency)} tone="good" /></Card>
+          <Card><Stat label="Cash out" value={money(cashbookOut, currency)} /></Card>
+          <Card><Stat label="Net movement" value={money(cashbookNet, currency)} tone={cashbookNet >= 0 ? "good" : "bad"} /></Card>
+        </div>
+        <Card>
+          {cashbook.length ? (
+            <>
+              <div className="divide-y divide-border">
+                {cashbook.slice(0, 30).map((entry) => (
+                  <div key={entry.id} className="flex items-start justify-between gap-3 py-2.5 text-sm">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{entry.party}</p>
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">{entry.description} · {formatDateTime(entry.date)}</p>
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">{entry.method.toUpperCase()}{entry.reference ? ` · ${entry.reference}` : ""}</p>
+                    </div>
+                    <p className={entry.direction === "in" ? "shrink-0 font-semibold tabular text-primary" : "shrink-0 font-semibold tabular text-foreground"}>
+                      {entry.direction === "in" ? "+" : "−"}{money(entry.amount, currency)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+              {cashbook.length > 30 ? <p className="pt-3 text-xs text-muted-foreground">Showing the latest 30 of {cashbook.length} cash movements. Export the report to see all entries.</p> : null}
+            </>
+          ) : <p className="py-6 text-center text-sm text-muted-foreground">No cash movements recorded in this date range.</p>}
+        </Card>
       </section>
 
       <section className="mb-5">

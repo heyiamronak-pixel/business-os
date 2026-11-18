@@ -78,6 +78,96 @@ export function financeSnapshot(db: WorkspaceDB, businessId: string, range?: Dat
   return { revenue, cashIn, outstanding, expenses: expenseTotal, grossProfit, netProfit, margin, orderCount, aov, unitsSold };
 }
 
+export type CashbookDirection = "in" | "out";
+export type CashbookEntryType = "sale_receipt" | "sale_refund" | "supplier_payment" | "expense";
+export interface CashbookEntry {
+  id: string;
+  date: string;
+  direction: CashbookDirection;
+  type: CashbookEntryType;
+  amount: number;
+  method: string;
+  reference?: string;
+  party: string;
+  description: string;
+}
+export function cashbookEntries(db: WorkspaceDB, businessId: string, range?: DateRange): CashbookEntry[] {
+  const entries: CashbookEntry[] = [];
+  const included = (date: string) => !range || inRange(date, range);
+  for (const sale of db.sales.filter((item) => item.businessId === businessId)) {
+    const payments = sale.payments ?? (sale.paidAmount > 0 ? [{
+      amount: sale.paidAmount,
+      method: sale.paymentMethod === "credit" ? "other" : sale.paymentMethod,
+      receivedAt: sale.createdAt,
+    }] : []);
+    for (const payment of payments) {
+      if (!included(payment.receivedAt)) continue;
+      entries.push({
+        id: `sale-payment:${sale.id}:${payment.receivedAt}:${payment.amount}`,
+        date: payment.receivedAt,
+        direction: "in",
+        type: "sale_receipt",
+        amount: roundMoney(payment.amount),
+        method: payment.method ?? "other",
+        reference: payment.reference,
+        party: sale.customerName || "Walk-in customer",
+        description: `Receipt for sale ${sale.id.slice(-7).toUpperCase()}`,
+      });
+    }
+    for (const refund of sale.refunds ?? []) {
+      if (!included(refund.refundedAt)) continue;
+      entries.push({
+        id: `sale-refund:${sale.id}:${refund.id}`,
+        date: refund.refundedAt,
+        direction: "out",
+        type: "sale_refund",
+        amount: roundMoney(refund.amount),
+        method: refund.method,
+        reference: refund.reference,
+        party: sale.customerName || "Walk-in customer",
+        description: `Refund against sale ${sale.id.slice(-7).toUpperCase()}`,
+      });
+    }
+  }
+  for (const purchase of db.purchases.filter((item) => item.businessId === businessId)) {
+    const payments = purchase.payments ?? (purchase.paidAmount > 0 ? [{
+      amount: purchase.paidAmount,
+      method: "other",
+      paidAt: purchase.createdAt,
+    }] : []);
+    for (const payment of payments) {
+      if (!included(payment.paidAt)) continue;
+      entries.push({
+        id: `purchase-payment:${purchase.id}:${payment.paidAt}:${payment.amount}`,
+        date: payment.paidAt,
+        direction: "out",
+        type: "supplier_payment",
+        amount: roundMoney(payment.amount),
+        method: payment.method ?? "other",
+        reference: payment.reference,
+        party: purchase.supplierName,
+        description: `Supplier payment · ${purchase.supplierReference || purchase.id.slice(-7).toUpperCase()}`,
+      });
+    }
+  }
+  for (const expense of db.expenses.filter((item) => item.businessId === businessId && !item.archived)) {
+    const date = new Date(expense.date + "T00:00:00").toISOString();
+    if (!included(date)) continue;
+    entries.push({
+      id: `expense:${expense.id}`,
+      date,
+      direction: "out",
+      type: "expense",
+      amount: roundMoney(expense.amount),
+      method: expense.paymentMethod ?? "other",
+      reference: expense.reference,
+      party: expense.vendor || expense.category,
+      description: `Expense · ${expense.category}`,
+    });
+  }
+  return entries.sort((a, b) => b.date.localeCompare(a.date));
+}
+
 export interface TargetPace {
   target: Target;
   achieved: number;
