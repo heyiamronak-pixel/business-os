@@ -903,7 +903,7 @@ export function upsertMember(
   const memberLimit = getSubscriptionMemberLimit(business?.subscriptionPlan);
   const currentMemberCount = db.members.filter((item) => item.businessId === input.businessId).length;
   if (currentMemberCount >= memberLimit) {
-    const planName = business?.subscriptionPlan ? SUBSCRIPTION_PLANS[business.subscriptionPlan].title : "Base";
+    const planName = business?.subscriptionPlan ? SUBSCRIPTION_PLANS[business.subscriptionPlan].title : "Starter";
     throw new ServiceError(`${planName} plan includes up to ${memberLimit} seats, including the owner. Upgrade your plan to add another team member.`);
   }
   const member: TeamMember = {

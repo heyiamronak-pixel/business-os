@@ -172,9 +172,9 @@ export function SettingsScreen() {
         <div className="flex items-center justify-between"><p className="text-xs font-medium text-muted-foreground">Billing display</p><div className="flex rounded-xl bg-muted p-1"><button type="button" onClick={()=>setAnnualBilling(false)} className={annualBilling?"rounded-lg px-3 py-1.5 text-xs text-muted-foreground":"rounded-lg bg-card px-3 py-1.5 text-xs font-semibold shadow-sm"}>Monthly</button><button type="button" onClick={()=>setAnnualBilling(true)} className={annualBilling?"rounded-lg bg-card px-3 py-1.5 text-xs font-semibold shadow-sm":"rounded-lg px-3 py-1.5 text-xs text-muted-foreground"}>Annual · 2 months free</button></div></div>
         <div className="grid gap-3 md:grid-cols-3">
           {([
-            { id: "starter" as const, title: "Base", description: "For a small business", seats: "1 owner/admin + 1 member", features: ["Core business workspace", "Sales, products and inventory", "Invoices, tasks and reports"] },
-            { id: "growth" as const, title: "Growth", description: "For a growing team", seats: "1 owner/admin + 6 members", features: ["Everything in Base", "Room for a larger team", "All currently available workflows"] },
-            { id: "pro" as const, title: "Pro", description: "For established teams", seats: "1 owner/admin + 9 members", features: ["Everything in Growth", "Expanded team capacity", "All currently available workflows"] },
+            { id: "starter" as const, title: "Starter", description: "For a small business", seats: "1 owner/admin + 1 other", features: ["Core business workspace", "Sales, products and inventory", "Invoices, tasks and reports"] },
+            { id: "growth" as const, title: "Growth", description: "For a growing team", seats: "1 owner/admin + 5 others", features: ["Everything in Starter", "Room for a larger team", "All currently available workflows"] },
+            { id: "pro" as const, title: "Pro", description: "For established teams", seats: "1 owner/admin + 9 others", features: ["Everything in Growth", "Expanded team capacity", "All currently available workflows"] },
           ]).map((plan) => {
             const pricing = SUBSCRIPTION_PLANS[plan.id];
             const selected = business.subscriptionPlan === plan.id;
@@ -197,6 +197,11 @@ export function SettingsScreen() {
           })}
         </div>
         <p className="text-[11px] leading-5 text-muted-foreground">All listed prices are before taxes. Annual billing is priced at 10 months. Seat limits include the owner/admin. Your plan preference is saved in this browser workspace; online checkout and payment collection are not connected yet.</p>
+      </Card>
+
+      <Card className="mb-4 space-y-3">
+        <div><h2 className="text-sm font-semibold">Enterprise</h2><p className="mt-1 text-xs text-muted-foreground">Need more members or a customised setup? Talk to our team.</p></div>
+        <a href="https://wa.me/919928728548?text=Hi%20Business%20Sutra%20team%2C%20I%27m%20interested%20in%20the%20Enterprise%20plan." target="_blank" rel="noreferrer" className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-[#25D366] px-4 py-2.5 text-sm font-semibold text-white transition hover:brightness-95">Contact us on WhatsApp</a>
       </Card>
 
       <Card className="mb-4 space-y-3">

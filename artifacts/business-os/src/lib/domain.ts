@@ -12,8 +12,8 @@ export type InvoiceStatus = "issued" | "cancelled";
 export type InvoiceSupplyType = "intra" | "inter";
 export type SubscriptionPlan = "starter" | "growth" | "pro";
 export const SUBSCRIPTION_PLANS = {
-  starter: { title: "Base", monthly: 199, annual: 1999, memberLimit: 2 },
-  growth: { title: "Growth", monthly: 499, annual: 4999, memberLimit: 7 },
+  starter: { title: "Starter", monthly: 199, annual: 1999, memberLimit: 2 },
+  growth: { title: "Growth", monthly: 499, annual: 4999, memberLimit: 6 },
   pro: { title: "Pro", monthly: 999, annual: 9999, memberLimit: 10 },
 } as const;
 export function getSubscriptionMemberLimit(plan?: SubscriptionPlan): number {

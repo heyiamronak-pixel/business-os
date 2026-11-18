@@ -1,5 +1,6 @@
 import * as React from "react";
 import { toast } from "sonner";
+import { useNavigate } from "@tanstack/react-router";
 import { AppPage, ConfirmBar, PageHeader } from "@/components/app-shell";
 import { BottomSheet } from "@/components/sheet";
 import { Badge, Button, EmptyState, Field, Input, Select } from "@/components/ui";
@@ -9,6 +10,7 @@ import { useAppStore, useBusiness } from "@/lib/store";
 
 export function TeamScreen() {
   const business = useBusiness();
+  const navigate = useNavigate();
   const db = useAppStore((s) => s.db);
   const apply = useAppStore((s) => s.apply);
   const [editing, setEditing] = React.useState<Partial<TeamMember> | "new" | null>(null);
@@ -64,10 +66,10 @@ export function TeamScreen() {
       <PageHeader
         title="Team"
         subtitle="Roles control who can see revenue, costs and settings"
-        action={<Button size="sm" disabled={atMemberLimit} onClick={() => open()}>{atMemberLimit ? "Seat limit reached" : "Add member"}</Button>}
+        action={<Button size="sm" onClick={() => { if (atMemberLimit) { toast.error("Upgrade your plan to add more team members."); navigate({ to: "/settings" }); return; } open(); }}>Add member</Button>}
       />
       <p className="mb-4 rounded-xl border border-border bg-muted/40 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
-        {members.length} / {memberLimit} seats used · includes the owner/admin. {atMemberLimit ? "Your current plan is at capacity. Upgrade to add more people." : "Your plan's seat limit is enforced when adding team members."}
+        {members.length} / {memberLimit} seats used · includes the owner/admin. {atMemberLimit ? "Upgrade your plan to add more people." : "Your plan's seat limit is enforced when adding team members."}
       </p>
       {members.length === 0 ? (
         <EmptyState title="No team members" body="The owner is created during setup. Add people to assign tasks." />
