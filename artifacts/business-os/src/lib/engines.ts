@@ -98,6 +98,7 @@ export function cashbookEntries(db: WorkspaceDB, businessId: string, range?: Dat
     const payments = sale.payments ?? (sale.paidAmount > 0 ? [{
       amount: sale.paidAmount,
       method: sale.paymentMethod === "credit" ? "other" : sale.paymentMethod,
+      reference: undefined,
       receivedAt: sale.createdAt,
     }] : []);
     for (const payment of payments) {
@@ -133,6 +134,7 @@ export function cashbookEntries(db: WorkspaceDB, businessId: string, range?: Dat
     const payments = purchase.payments ?? (purchase.paidAmount > 0 ? [{
       amount: purchase.paidAmount,
       method: "other",
+      reference: undefined,
       paidAt: purchase.createdAt,
     }] : []);
     for (const payment of payments) {

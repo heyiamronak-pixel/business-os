@@ -105,7 +105,8 @@ Acceptance: totals must reconcile with source records and selected date range. D
 - [x] Add expense editing, archive/restore, payment method and reference details.
 - [ ] Add receipt attachments and recurring expense generation.
 - [ ] Add budgets, category-level budget tracking and approval flow.
-- [ ] Add cashbook, receivables/payables, cash flow and ledger views.
+- [x] Add a date-filtered cashbook event list for receipts, refunds, supplier payments and expenses, with CSV export and cash-in/out/net totals.
+- [ ] Complete receivables/payables ageing, cash-flow forecasting and full ledger views.
 - [ ] Keep cash movement separate from recognised revenue/profit.
 - [ ] Add forecast, period comparison, target variance and scenario views based on actual records.
 
