@@ -116,7 +116,7 @@ export function SalesScreen() {
   }
 
   function submitReturn() {
-    if (!returnSale) return;
+    if (!business || !returnSale) return;
     const items = returnSale.items
       .map((item) => ({ productId: item.productId, quantity: Number(returnQuantities[item.productId] ?? 0) }))
       .filter((item) => item.quantity > 0);
