@@ -173,6 +173,36 @@ test("supplier with purchase history is protected from deletion", () => {
   assert.throws(() => deleteSupplier(purchase.db, supplier.id), /purchase history/);
 });
 
+test("checkout rejects overpayment, negative discounts and combined duplicate-line stock oversell", () => {
+  const { db } = setup();
+  assert.throws(() => completeSale(db, {
+    businessId: "business-1",
+    lines: [{ productId: product.id, qty: 1, unitPrice: 80, discount: 0 }],
+    cartDiscount: 0,
+    paymentMethod: "cash",
+    paidAmount: 81,
+  }), /between zero and the sale total/);
+  assert.throws(() => completeSale(db, {
+    businessId: "business-1",
+    lines: [{ productId: product.id, qty: 1, unitPrice: 80, discount: 0 }],
+    cartDiscount: -1,
+    paymentMethod: "cash",
+    paidAmount: 80,
+  }), /non-negative amount/);
+  assert.throws(() => completeSale(db, {
+    businessId: "business-1",
+    lines: [
+      { productId: product.id, qty: 3, unitPrice: 80, discount: 0 },
+      { productId: product.id, qty: 3, unitPrice: 80, discount: 0 },
+    ],
+    cartDiscount: 0,
+    paymentMethod: "credit",
+    paidAmount: 0,
+  }), /across this cart/);
+  assert.equal(db.products[0].stock, 5);
+  assert.equal(db.sales.length, 0);
+});
+
 test("customer collection rejects amounts above the remaining sale balance", () => {
   const { db } = setup();
   const sale = {

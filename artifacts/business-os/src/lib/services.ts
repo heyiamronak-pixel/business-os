@@ -745,12 +745,15 @@ export function completeSale(
   if (!input.lines.length) throw new ServiceError("Add at least one product.");
   const items: SaleItem[] = [];
   const productMap = new Map(db.products.map((p) => [p.id, p]));
+  const reservedByProduct = new Map<string, number>();
   for (const line of input.lines) {
     const product = productMap.get(line.productId);
     if (!product || product.businessId !== input.businessId) throw new ServiceError("A product in the cart is missing.");
     if (!Number.isFinite(line.qty) || line.qty <= 0) throw new ServiceError(`Enter a valid quantity for ${product.name}.`);
     if (product.archived) throw new ServiceError(`${product.name} is archived and cannot be sold.`);
-    if (product.stock < line.qty) throw new ServiceError(`${product.name} only has ${product.stock} ${product.unit} in stock.`);
+    const reservedQuantity = roundMoney((reservedByProduct.get(product.id) ?? 0) + line.qty);
+    if (product.stock < reservedQuantity) throw new ServiceError(`${product.name} only has ${product.stock} ${product.unit} in stock across this cart.`);
+    reservedByProduct.set(product.id, reservedQuantity);
     if (!Number.isFinite(line.unitPrice) || line.unitPrice < 0) throw new ServiceError("Price must be a valid non-negative amount.");
     if (!Number.isFinite(line.discount) || line.discount < 0 || line.discount > line.unitPrice * line.qty) throw new ServiceError("Line discount must be between zero and the line value.");
     items.push({
@@ -764,15 +767,16 @@ export function completeSale(
     });
   }
   const subtotal = roundMoney(items.reduce((s, i) => s + i.unitPrice * i.qty - i.discount, 0));
-  const discount = roundMoney(Math.max(0, input.cartDiscount || 0));
+  if (!Number.isFinite(input.cartDiscount) || input.cartDiscount < 0) throw new ServiceError("Cart discount must be a valid non-negative amount.");
+  const discount = roundMoney(input.cartDiscount);
   if (discount > subtotal) throw new ServiceError("Discount cannot exceed the subtotal.");
   const total = roundMoney(subtotal - discount);
   const costTotal = roundMoney(items.reduce((s, i) => s + i.costPrice * i.qty, 0));
   const grossProfit = roundMoney(total - costTotal);
-  const paid =
-    input.paymentMethod === "credit"
-      ? roundMoney(Math.max(0, Math.min(total, input.paidAmount || 0)))
-      : roundMoney(Math.max(0, input.paidAmount ?? total));
+  if (!Number.isFinite(input.paidAmount) || input.paidAmount < 0 || input.paidAmount > total) {
+    throw new ServiceError("Initial payment must be a valid amount between zero and the sale total.");
+  }
+  const paid = roundMoney(input.paidAmount);
   const outstanding = roundMoney(Math.max(0, total - paid));
   const paymentStatus = outstanding <= 0 ? "paid" : paid > 0 ? "partial" : "unpaid";
   const now = nowIso();
