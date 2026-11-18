@@ -193,8 +193,8 @@ export function SettingsScreen() {
             ))}
           </Select>
         </Field>
-        <Field label="Currency">
-          <Input value={business.currency} onChange={(e) => patch({ currency: e.target.value.toUpperCase() })} />
+        <Field label="Currency" hint="Use a 3-letter ISO currency code, such as INR or USD.">
+          <Input key={business.id + business.currency} defaultValue={business.currency} maxLength={3} onBlur={(e) => patch({ currency: e.target.value.toUpperCase() })} />
         </Field>
         <Field label="Phone">
           <Input defaultValue={business.phone ?? ""} onBlur={(e) => patch({ phone: e.target.value })} />
