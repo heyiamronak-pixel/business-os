@@ -66,21 +66,21 @@ Acceptance: totals must reconcile with source records and selected date range. D
 - [x] Cart and multi-item sale workflows exist.
 - [x] Sale records reduce stock and update workspace sales/revenue calculations.
 - [x] Partial sale payment collection exists.
-- [ ] Complete barcode scan, customer lookup, quantity changes, discounts and checkout validation.
+- [x] Complete POS product/SKU/barcode search, keyboard-wedge barcode scanning, customer lookup, quantity/discount editing and server-side checkout validation.
 - [x] Add sales payment collection history with method, transaction reference and date; record full reversal refunds separately and reconcile them against cash collected.
 - [x] Add reason-required sale reversal that restores stock, retains the original sale and writes a reversal activity/movement.
 - [ ] Add controlled sale edits and full customer payment-method/reference history.
 - [x] Add linked item-level partial returns, stock restoration, return reasons and recorded refunds with original sale references.
 - [ ] Add exchanges and credit-note workflows with linked source transactions.
 - [x] Ensure reversed and partially/fully returned transactions reduce recognised revenue, cost and gross profit correctly.
-- [ ] Add printable sales receipts and clear payment status.
+- [x] Add printable sales receipts, payment history and clear paid/partial/unpaid status.
 
 ## 5. Customers and leads / CRM
 
 - [x] Customer records, sales linkage and customer history foundations exist.
 - [x] A Leads pipeline branch adds stages (new, contacted, qualified, proposal, won, lost), value, assignee, expected close date, follow-up, notes, search and CSV export.
 - [x] Lead-to-customer conversion and follow-up alerts are included in the integration branch.
-- [ ] Complete customer profile metrics: order count, total spending, last purchase, segments and notes.
+- [x] Complete customer profile metrics: order count, total spending, last purchase, segments, outstanding balance and notes.
 - [ ] Add customer follow-up reminders, repeat-purchase and reactivation segments.
 - [ ] Add lead import/deduplication and configurable sources.
 - [ ] Add CRM activity timeline and follow-up history.

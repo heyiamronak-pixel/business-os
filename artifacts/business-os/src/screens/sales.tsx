@@ -112,9 +112,10 @@ export function SalesScreen() {
       toast.error("Allow pop-ups to print the receipt.");
       return;
     }
-    const escapeHtml = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
+    const htmlEscapeMap: Record<string, string> = {
       "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-    })[character] ?? character);
+    };
+    const escapeHtml = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, (character) => htmlEscapeMap[character] ?? character);
     const businessName = escapeHtml(business.name);
     const address = escapeHtml([business.address, business.location, business.state, business.postalCode].filter(Boolean).join(", "));
     const payments = (record.payments ?? []).map((entry) =>

@@ -134,7 +134,7 @@ export function PurchasesScreen() {
         subtitle="Goods received, supplier payments and stock reconciliation"
         action={<div className="flex gap-2"><Button size="sm" variant="secondary" onClick={exportPurchases} disabled={!list.length}><Download className="size-4" />Export</Button><Button size="sm" onClick={startPurchase}><Plus className="size-4" />Record purchase</Button></div>}
       />
-      <div className="mb-4 grid grid-cols-2 gap-2 lg:grid-cols-3">
+      <div className="mb-4 grid grid-cols-2 gap-2 xl:grid-cols-4">
         <Card><Stat label="Purchase value" value={money(totalValue, business.currency)} /></Card>
         <Card><Stat label="Paid to suppliers" value={money(totalPaid, business.currency)} /></Card>
         <Card className="col-span-2 lg:col-span-1"><Stat label="Outstanding" value={money(totalDue, business.currency)} tone={totalDue > 0 ? "bad" : "good"} /></Card>

@@ -70,10 +70,11 @@ function InvoicesWorkspace({ business }: { business: Business }) {
 
   function exportInvoices() {
     downloadCsv("business-sutra-invoices.csv",
-      ["Invoice number", "Issue date", "Due date", "Customer", "GSTIN", "Total", "Paid", "Balance", "Status", "Cancellation reason"],
+      ["Invoice number", "Issue date", "Due date", "Due status", "Overdue days", "Customer", "GSTIN", "Total", "Paid", "Balance", "Status", "Cancellation reason"],
       filtered.map((invoice) => {
         const payment = getInvoicePaymentSummary(invoice.total, invoice.payments);
-        return [invoice.invoiceNumber, invoice.issueDate, invoice.dueDate, invoice.customerName, invoice.customerGstin, invoice.total, payment.paidAmount, payment.balance, invoice.status, invoice.cancelReason];
+        const due = getInvoiceDueSummary(invoice);
+        return [invoice.invoiceNumber, invoice.issueDate, invoice.dueDate, due.status, due.overdueDays || "", invoice.customerName, invoice.customerGstin, invoice.total, payment.paidAmount, payment.balance, invoice.status, invoice.cancelReason];
       }));
     toast.success("Exported " + filtered.length + " invoices");
   }

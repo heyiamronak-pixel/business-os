@@ -64,9 +64,11 @@ export function getInvoiceDueSummary(invoice: InvoiceRecord, now = new Date()): 
  if (!invoice.dueDate) return { status: "no_due_date", balance: payment.balance, overdueDays: 0 };
  const today = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
  if (invoice.dueDate >= today) return { status: "due", balance: payment.balance, overdueDays: 0 };
- const due = new Date(invoice.dueDate + "T00:00:00");
- const current = new Date(today + "T00:00:00");
- const overdueDays = Math.max(1, Math.floor((current.getTime() - due.getTime()) / 86400000));
+ const [dueYear, dueMonth, dueDay] = invoice.dueDate.split("-").map(Number);
+ const [todayYear, todayMonth, todayDay] = today.split("-").map(Number);
+ const dueUtc = Date.UTC(dueYear, dueMonth - 1, dueDay);
+ const todayUtc = Date.UTC(todayYear, todayMonth - 1, todayDay);
+ const overdueDays = Math.max(1, Math.floor((todayUtc - dueUtc) / 86400000));
  return { status: "overdue", balance: payment.balance, overdueDays };
 }
 
