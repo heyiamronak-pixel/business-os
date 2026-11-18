@@ -176,7 +176,7 @@ function normaliseBusinessWebsite(value: string | undefined): string | undefined
   return parsed.toString().replace(/\/$/, "");
 }
 
-function validateBusinessProfilePatch(current: Business, patch: Partial<Business>): Partial<Business> {
+function validateBusinessProfilePatch(patch: Partial<Business>): Partial<Business> {
   const next = { ...patch };
   if (patch.name !== undefined) {
     const name = patch.name.trim();
@@ -221,7 +221,11 @@ function validateBusinessProfilePatch(current: Business, patch: Partial<Business
   if (patch.location !== undefined) next.location = patch.location.trim() || undefined;
   if (patch.state !== undefined) next.state = patch.state.trim() || undefined;
   if (patch.businessType !== undefined && !patch.businessType.trim()) throw new ServiceError("Select a business type.");
-  if (patch.currency !== undefined && !/^[A-Z]{3}$/.test(patch.currency.trim().toUpperCase())) throw new ServiceError("Use a valid 3-letter currency code.");
+  if (patch.currency !== undefined) {
+    const currency = patch.currency.trim().toUpperCase();
+    if (!/^[A-Z]{3}$/.test(currency)) throw new ServiceError("Use a valid 3-letter currency code.");
+    next.currency = currency;
+  }
   if (patch.timezone !== undefined && !patch.timezone.trim()) throw new ServiceError("Select a business timezone.");
   return next;
 }
@@ -229,7 +233,7 @@ function validateBusinessProfilePatch(current: Business, patch: Partial<Business
 export function updateBusiness(db: WorkspaceDB, id: string, patch: Partial<Business>): WorkspaceDB {
   const current = db.businesses.find((business) => business.id === id);
   if (!current) throw new ServiceError("Business workspace not found.");
-  const validated = validateBusinessProfilePatch(current, patch);
+  const validated = validateBusinessProfilePatch(patch);
   const now = nowIso();
   return {
     ...db,
