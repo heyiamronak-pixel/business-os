@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Download } from "lucide-react";
+import { Download, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { AppPage, ConfirmBar, PageHeader, SearchField } from "@/components/app-shell";
 import { SavedViewControls } from "@/components/saved-view-controls";
@@ -104,6 +104,69 @@ export function SalesScreen() {
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not record payment");
     }
+  }
+
+  function printReceipt(record: Sale) {
+    const printWindow = window.open("", "_blank", "width=420,height=720");
+    if (!printWindow) {
+      toast.error("Allow pop-ups to print the receipt.");
+      return;
+    }
+    const escapeHtml = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+    })[character] ?? character);
+    const businessName = escapeHtml(business.name);
+    const address = escapeHtml([business.address, business.location, business.state, business.postalCode].filter(Boolean).join(", "));
+    const payments = (record.payments ?? []).map((entry) =>
+      "<p>" + escapeHtml(money(entry.amount, currency)) + " · " + escapeHtml(entry.method.toUpperCase()) +
+      (entry.reference ? " · " + escapeHtml(entry.reference) : "") + "</p>"
+    ).join("");
+    const returned = (db.returns ?? []).filter((entry) => entry.saleId === record.id).map((entry) =>
+      "<p>" + escapeHtml(entry.items.map((item) => item.name + " × " + item.quantity).join(", ")) +
+      " — " + escapeHtml(money(entry.amount, currency)) + "</p>"
+    ).join("");
+    const itemRows = record.items.map((item) =>
+      "<tr><td>" + escapeHtml(item.name) + "<small>" + escapeHtml(item.sku) + "</small></td>" +
+      "<td>" + escapeHtml(item.qty) + "</td><td>" + escapeHtml(money(item.unitPrice, currency)) + "</td>" +
+      "<td>" + escapeHtml(money(item.unitPrice * item.qty - item.discount, currency)) + "</td></tr>"
+    ).join("");
+    const documentHtml = `<!doctype html><html><head><meta charset="utf-8"><title>Receipt ${escapeHtml(record.id.slice(-7).toUpperCase())}</title>
+      <style>
+        *{box-sizing:border-box}body{font:13px/1.45 Arial,sans-serif;color:#111;margin:0;padding:24px}
+        .receipt{max-width:360px;margin:0 auto}.center{text-align:center}.muted{color:#666}
+        h1{font-size:19px;margin:0 0 4px}h2{font-size:14px;margin:18px 0 6px}
+        .rule{border-top:1px dashed #999;margin:14px 0}
+        table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;padding:7px 3px;border-bottom:1px solid #ddd}
+        th:last-child,td:last-child{text-align:right}td:nth-child(2),td:nth-child(3){text-align:right}
+        small{display:block;color:#666;font-size:10px}.totals p{display:flex;justify-content:space-between;margin:5px 0}
+        .grand{font-weight:700;font-size:16px;border-top:1px solid #111;padding-top:8px}
+        @media print{body{padding:0}.receipt{max-width:none}}
+      </style></head><body><main class="receipt">
+        <header class="center"><h1>${businessName}</h1>${address ? "<p>" + address + "</p>" : ""}
+          ${business.phone ? "<p>" + escapeHtml(business.phone) + "</p>" : ""}
+          ${business.gstRegistered && business.gstin ? "<p>GSTIN: " + escapeHtml(business.gstin) + "</p>" : ""}
+          <div class="rule"></div><strong>${record.status === "reversed" ? "REVERSED SALE" : "SALES RECEIPT"}</strong>
+          <p class="muted">${escapeHtml(record.id.slice(-7).toUpperCase())}<br>${escapeHtml(formatDateTime(record.createdAt))}</p>
+        </header>
+        <p>Customer: <strong>${escapeHtml(record.customerName ?? "Walk-in")}</strong></p>
+        <table><thead><tr><th>Item</th><th>Qty</th><th>Rate</th><th>Amount</th></tr></thead><tbody>${itemRows || '<tr><td colspan="4">No remaining sale items</td></tr>'}</tbody></table>
+        <section class="totals">
+          <p><span>Subtotal</span><span>${escapeHtml(money(record.subtotal, currency))}</span></p>
+          <p><span>Discount</span><span>${escapeHtml(money(record.discount, currency))}</span></p>
+          <p class="grand"><span>Total</span><span>${escapeHtml(money(record.total, currency))}</span></p>
+          <p><span>Paid</span><span>${escapeHtml(money(record.paidAmount, currency))}</span></p>
+          <p><span>Outstanding</span><span>${escapeHtml(money(record.outstanding, currency))}</span></p>
+        </section>
+        ${payments ? "<h2>Payment history</h2>" + payments : ""}
+        ${returned ? "<h2>Returns</h2>" + returned : ""}
+        ${record.status === "reversed" ? "<p><strong>Reason:</strong> " + escapeHtml(record.reversalReason ?? "Not recorded") + "</p>" : ""}
+        <div class="rule"></div><p class="center">Thank you for your business.</p>
+      </main></body></html>`;
+    printWindow.document.open();
+    printWindow.document.write(documentHtml);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
   }
 
   function openReturn(record: Sale) {
@@ -230,6 +293,7 @@ export function SalesScreen() {
         footer={
           sale ? (
             <div className="space-y-2">
+              <Button variant="secondary" className="w-full" onClick={() => sale && printReceipt(sale)}><Printer className="size-4" />Print / Save receipt</Button>
               {sale.status !== "reversed" && sale.outstanding > 0 ? (
                 <>
                   <Input
