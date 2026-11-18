@@ -61,6 +61,34 @@ test("supplier creation normalises email and blocks duplicate business names", (
   );
 });
 
+test("supplier document references prevent duplicate receipts and due dates are validated", () => {
+  const { db, supplier } = setup();
+  const first = createPurchase(db, {
+    businessId: "business-1",
+    supplierId: supplier.id,
+    items: [{ productId: product.id, quantity: 2, unitCost: 35 }],
+    paidAmount: 0,
+    supplierReference: "NS-2026-104",
+    dueDate: "2026-11-30",
+  });
+  assert.equal(first.purchase.supplierReference, "NS-2026-104");
+  assert.equal(first.purchase.dueDate, "2026-11-30");
+  assert.throws(() => createPurchase(first.db, {
+    businessId: "business-1",
+    supplierId: supplier.id,
+    items: [{ productId: product.id, quantity: 2, unitCost: 35 }],
+    paidAmount: 0,
+    supplierReference: " ns-2026-104 ",
+  }), /already been recorded/);
+  assert.throws(() => createPurchase(db, {
+    businessId: "business-1",
+    supplierId: supplier.id,
+    items: [{ productId: product.id, quantity: 1, unitCost: 10 }],
+    paidAmount: 0,
+    dueDate: "2026-02-31",
+  }), /valid supplier payment due date/);
+});
+
 test("purchase receipt increases stock and stores a partial supplier balance", () => {
   const { db, supplier } = setup();
   const result = createPurchase(db, {

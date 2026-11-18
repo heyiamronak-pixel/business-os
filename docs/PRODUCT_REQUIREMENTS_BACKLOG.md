@@ -92,9 +92,11 @@ Acceptance: totals must reconcile with source records and selected date range. D
 - [x] Purchase receipts update stock and purchase balances.
 - [ ] Complete purchase order → goods receipt → supplier bill → payment workflow.
 - [x] Add supplier payment history with method, transaction reference and date.
-- [ ] Add supplier payment due dates, attachments and payables reporting.
+- [x] Add optional supplier payment due dates, overdue payable totals and recorded document references on purchases.
+- [ ] Add receipt attachments and detailed ageing/payables drill-down reporting.
 - [ ] Support purchase returns and stock reconciliation.
-- [ ] Prevent duplicate stock-in when a purchase receipt has already updated inventory.
+- [x] Block duplicate purchases when the same supplier document reference is recorded again.
+- [ ] Add idempotent goods-receipt confirmation even when the supplier reference is missing.
 
 ## 7. Expenses, finance and targets
 
@@ -151,7 +153,7 @@ Acceptance: totals must reconcile with source records and selected date range. D
 
 - [x] Invoice builder, templates, seller/customer details and line-item/tax calculation foundations exist.
 - [x] Current integration adds payment history, outstanding balance, payment references and reason-required cancellation.
-- [ ] Complete sequential invoice numbering, due-date/overdue state, print/PDF output and customer billing history.
+- [x] Add sequential invoice numbering, payment-due/overdue state, print/PDF output and customer billing history foundations.
 - [ ] Add quotation/estimate creation, share/print, accept/convert-to-invoice and expiry status.
 - [ ] Add credit notes and invoice adjustment/reversal links.
 - [ ] Verify GSTIN/state/place-of-supply/tax calculations and configurable rates against current statutory requirements before any claim of tax compliance.
