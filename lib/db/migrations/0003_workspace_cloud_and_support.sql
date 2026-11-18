@@ -68,11 +68,6 @@ DROP POLICY IF EXISTS support_tickets_insert_own ON public.support_tickets;
 CREATE POLICY support_tickets_insert_own ON public.support_tickets
   FOR INSERT TO authenticated WITH CHECK (user_id = (SELECT auth.uid()));
 
-DROP POLICY IF EXISTS support_tickets_update_own ON public.support_tickets;
-CREATE POLICY support_tickets_update_own ON public.support_tickets
-  FOR UPDATE TO authenticated USING (user_id = (SELECT auth.uid()))
-  WITH CHECK (user_id = (SELECT auth.uid()));
-
 CREATE TABLE IF NOT EXISTS public.support_messages (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   ticket_id uuid NOT NULL REFERENCES public.support_tickets(id) ON DELETE CASCADE,
@@ -108,7 +103,7 @@ CREATE POLICY support_messages_insert_ticket_owner ON public.support_messages
     )
   );
 
-GRANT SELECT, INSERT, UPDATE ON public.support_tickets TO authenticated;
+GRANT SELECT, INSERT ON public.support_tickets TO authenticated;
 GRANT SELECT, INSERT ON public.support_messages TO authenticated;
 
 COMMIT;

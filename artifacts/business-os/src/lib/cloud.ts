@@ -198,8 +198,10 @@ export function mergeCloudSnapshots(local: WorkspaceDB, rows: CloudSnapshotRow[]
     const snapshot = row.snapshot;
     const businessId = row.business_id;
     merged.businesses = [
-      ...merged.businesses.filter((business) => business.id !== businessId),
-      ...(snapshot.businesses ?? []),
+      ...new Map([
+        ...merged.businesses.map((business) => [business.id, business] as const),
+        ...(snapshot.businesses ?? []).map((business) => [business.id, business] as const),
+      ]).values(),
     ];
     for (const key of collections) {
       const localItems = merged[key] as Array<{ id: string; businessId: string }>;
