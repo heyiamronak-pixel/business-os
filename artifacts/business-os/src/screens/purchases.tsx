@@ -27,6 +27,8 @@ export function PurchasesScreen() {
   const [paidAmount, setPaidAmount] = React.useState("0");
   const [initialPaymentMethod, setInitialPaymentMethod] = React.useState<RecordedPaymentMethod>("bank");
   const [initialPaymentReference, setInitialPaymentReference] = React.useState("");
+  const [supplierReference, setSupplierReference] = React.useState("");
+  const [dueDate, setDueDate] = React.useState("");
   const [note, setNote] = React.useState("");
   const [selected, setSelected] = React.useState<Purchase | null>(null);
   const [payment, setPayment] = React.useState("");
@@ -42,13 +44,18 @@ export function PurchasesScreen() {
   const totalValue = purchases.reduce((sum, purchase) => sum + purchase.total, 0);
   const totalPaid = purchases.reduce((sum, purchase) => sum + purchase.paidAmount, 0);
   const totalDue = purchases.reduce((sum, purchase) => sum + purchase.balance, 0);
+  const today = new Date();
+  const todayKey = new Date(today.getTime() - today.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  const overduePayables = purchases.filter((purchase) => purchase.balance > 0 && Boolean(purchase.dueDate) && purchase.dueDate! < todayKey);
+  const overdueAmount = overduePayables.reduce((sum, purchase) => sum + purchase.balance, 0);
   const safeSearch = query.trim().toLowerCase();
   const list = purchases
     .filter((purchase) => filter === "all" || purchase.balance > 0)
     .filter((purchase) =>
       !safeSearch ||
       purchase.supplierName.toLowerCase().includes(safeSearch) ||
-      purchase.id.toLowerCase().includes(safeSearch),
+      purchase.id.toLowerCase().includes(safeSearch) ||
+      purchase.supplierReference?.toLowerCase().includes(safeSearch),
     )
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const subtotal = roundMoney(lines.reduce((sum, line) => sum + Math.max(0, line.quantity) * Math.max(0, line.unitCost), 0));
@@ -57,8 +64,8 @@ export function PurchasesScreen() {
 
   function exportPurchases() {
     downloadCsv("business-sutra-purchases.csv",
-      ["Purchase reference", "Date", "Supplier", "Items", "Subtotal", "Total", "Paid", "Balance", "Payment status", "Note"],
-      list.map((purchase) => [purchase.id, purchase.createdAt, purchase.supplierName, purchase.items.map((item) => item.name + " x " + item.quantity).join("; "), purchase.subtotal, purchase.total, purchase.paidAmount, purchase.balance, purchase.paymentStatus, purchase.note]));
+      ["Purchase reference", "Supplier document reference", "Date", "Due date", "Supplier", "Items", "Subtotal", "Total", "Paid", "Balance", "Payment status", "Note"],
+      list.map((purchase) => [purchase.id, purchase.supplierReference, purchase.createdAt, purchase.dueDate, purchase.supplierName, purchase.items.map((item) => item.name + " x " + item.quantity).join("; "), purchase.subtotal, purchase.total, purchase.paidAmount, purchase.balance, purchase.paymentStatus, purchase.note]));
     toast.success("Exported " + list.length + " purchases");
   }
 
@@ -68,6 +75,8 @@ export function PurchasesScreen() {
     setPaidAmount("0");
     setInitialPaymentMethod("bank");
     setInitialPaymentReference("");
+    setSupplierReference("");
+    setDueDate("");
     setNote("");
     setCreateOpen(true);
   }
@@ -90,6 +99,8 @@ export function PurchasesScreen() {
         paidAmount: Number(paidAmount),
         initialPaymentMethod,
         initialPaymentReference,
+        supplierReference,
+        dueDate,
         note,
       });
       apply(result.db);
@@ -127,6 +138,7 @@ export function PurchasesScreen() {
         <Card><Stat label="Purchase value" value={money(totalValue, business.currency)} /></Card>
         <Card><Stat label="Paid to suppliers" value={money(totalPaid, business.currency)} /></Card>
         <Card className="col-span-2 lg:col-span-1"><Stat label="Outstanding" value={money(totalDue, business.currency)} tone={totalDue > 0 ? "bad" : "good"} /></Card>
+        <Card className="col-span-2 lg:col-span-1"><Stat label="Overdue payables" value={money(overdueAmount, business.currency)} tone={overdueAmount > 0 ? "bad" : "good"} /></Card>
       </div>
       <SearchField value={query} onChange={setQuery} placeholder="Search supplier or purchase reference" />
       <SavedViewControls businessId={businessId} moduleKey="purchases" filters={{ query, filter }} onApply={(saved) => {
@@ -154,7 +166,11 @@ export function PurchasesScreen() {
                   <div className="min-w-0">
                     <p className="truncate font-semibold">{purchase.supplierName}</p>
                     <p className="mt-1 text-xs text-muted-foreground">{purchase.id.slice(-8).toUpperCase()} · {formatDateTime(purchase.createdAt)} · {purchase.items.length} lines</p>
-                    <div className="mt-2"><Badge tone={purchase.paymentStatus === "paid" ? "good" : purchase.paymentStatus === "partial" ? "warn" : "bad"}>{purchase.paymentStatus}</Badge></div>
+                    {purchase.supplierReference ? <p className="mt-1 truncate text-xs text-muted-foreground">Doc: {purchase.supplierReference}</p> : null}
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      <Badge tone={purchase.paymentStatus === "paid" ? "good" : purchase.paymentStatus === "partial" ? "warn" : "bad"}>{purchase.paymentStatus}</Badge>
+                      {purchase.balance > 0 && purchase.dueDate && purchase.dueDate < todayKey ? <Badge tone="bad">Overdue</Badge> : null}
+                    </div>
                   </div>
                   <div className="text-right">
                     <p className="font-semibold tabular">{money(purchase.total, business.currency)}</p>
@@ -185,6 +201,12 @@ export function PurchasesScreen() {
               <Select value={supplierId} onChange={(event) => setSupplierId(event.target.value)}>
                 {activeSuppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
               </Select>
+            </Field>
+            <Field label="Supplier invoice / document reference" hint="Recommended. Duplicate references for the same supplier are blocked to prevent receiving the same goods twice.">
+              <Input value={supplierReference} onChange={(event) => setSupplierReference(event.target.value)} placeholder="Invoice / challan / bill number" />
+            </Field>
+            <Field label="Payment due date (optional)">
+              <Input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
             </Field>
             {lines.map((line, index) => (
               <Card key={index} className="space-y-3">
@@ -266,6 +288,8 @@ export function PurchasesScreen() {
               <div className="flex justify-between"><span className="text-muted-foreground">Paid</span><span className="tabular">{money(selected.paidAmount, business.currency)}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Outstanding</span><span className="tabular font-semibold">{money(selected.balance, business.currency)}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Status</span><Badge tone={selected.paymentStatus === "paid" ? "good" : selected.paymentStatus === "partial" ? "warn" : "bad"}>{selected.paymentStatus}</Badge></div>
+              {selected.supplierReference ? <div className="flex justify-between gap-3"><span className="text-muted-foreground">Supplier document ref.</span><span className="text-right">{selected.supplierReference}</span></div> : null}
+              {selected.dueDate ? <div className="flex justify-between gap-3"><span className="text-muted-foreground">Payment due</span><span className={selected.balance > 0 && selected.dueDate < todayKey ? "font-semibold text-danger" : ""}>{new Date(selected.dueDate + "T00:00:00").toLocaleDateString("en-IN")}{selected.balance > 0 && selected.dueDate < todayKey ? " · Overdue" : ""}</span></div> : null}
             </div>
             <div className="space-y-2">
               <p className="text-xs font-semibold">Supplier payment history</p>
