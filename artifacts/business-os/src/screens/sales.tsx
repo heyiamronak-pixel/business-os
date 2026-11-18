@@ -107,6 +107,7 @@ export function SalesScreen() {
   }
 
   function printReceipt(record: Sale) {
+    if (!business) return;
     const printWindow = window.open("", "_blank", "width=420,height=720");
     if (!printWindow) {
       toast.error("Allow pop-ups to print the receipt.");
