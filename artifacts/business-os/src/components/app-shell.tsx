@@ -8,6 +8,7 @@ import {
   Ellipsis,
   House,
   ListChecks,
+  LogOut,
   Settings2,
   ShoppingBag,
   Sparkles,
@@ -17,6 +18,7 @@ import { useAppStore, useBusiness } from "@/lib/store";
 import { applyPalette, buildPalette } from "@/lib/theme";
 import { deriveActions, buildContext } from "@/lib/engines";
 import { Button } from "@/components/ui";
+import { CloudAuthScreen } from "@/components/cloud-auth-screen";
 
 const MOBILE_NAV = [
   { to: "/", label: "Home", icon: House, match: (p: string) => p === "/" },
@@ -50,6 +52,8 @@ export function ThemeRuntime() {
 export function HydrateGate({ children }: { children: React.ReactNode }) {
   const hydrated = useAppStore((s) => s.hydrated);
   const hydrate = useAppStore((s) => s.hydrate);
+  const cloudConfigured = useAppStore((s) => s.cloudConfigured);
+  const cloudUser = useAppStore((s) => s.cloudUser);
   React.useEffect(() => {
     hydrate();
   }, [hydrate]);
@@ -62,6 +66,7 @@ export function HydrateGate({ children }: { children: React.ReactNode }) {
       </div>
     );
   }
+  if (cloudConfigured && !cloudUser) return <CloudAuthScreen />;
   return <>{children}</>;
 }
 
@@ -78,6 +83,9 @@ export function AppPage({
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const db = useAppStore((s) => s.db);
+  const cloudUser = useAppStore((s) => s.cloudUser);
+  const cloudSyncStatus = useAppStore((s) => s.cloudSyncStatus);
+  const signOut = useAppStore((s) => s.signOut);
   const unread = db.notifications.filter((n) => n.businessId === business?.id && !n.read).length;
 
   React.useEffect(() => {
@@ -169,6 +177,16 @@ export function AppPage({
             </div>
           </div>
           {action}
+          {cloudUser ? (
+            <div className="hidden items-center gap-2 sm:flex">
+              <span className="max-w-[150px] truncate text-[10px] text-muted-foreground" title={cloudUser.email ?? "Cloud account"}>
+                {cloudSyncStatus === "synced" ? "Cloud synced" : cloudSyncStatus === "syncing" ? "Syncing…" : cloudSyncStatus === "error" ? "Sync issue" : "Cloud connected"}
+              </span>
+              <button type="button" onClick={() => void signOut()} className="grid size-10 place-items-center rounded-xl border border-border bg-card text-muted-foreground hover:bg-muted" aria-label="Sign out" title="Sign out">
+                <LogOut className="size-4" />
+              </button>
+            </div>
+          ) : null}
           <Link
             to="/inbox"
             aria-label={unread > 0 ? `Notifications, ${unread} unread` : "Notifications"}

@@ -90,3 +90,5 @@ export default async (request: Request) => {
   const body = await response.text();
   return new Response(body, { status: response.status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
 };
+
+export const config = { path: "/api/workspace" };
