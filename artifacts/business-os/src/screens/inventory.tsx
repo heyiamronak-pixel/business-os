@@ -1,10 +1,13 @@
 import * as React from "react";
+import { Download } from "lucide-react";
 import { toast } from "sonner";
 import { AppPage, PageHeader, SearchField } from "@/components/app-shell";
+import { SavedViewControls } from "@/components/saved-view-controls";
 import { BottomSheet } from "@/components/sheet";
-import { Badge, Button, EmptyState, Field, Input, Segmented, Select } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, Field, Input, Segmented, Select, Stat } from "@/components/ui";
 import type { MovementType, Product } from "@/lib/domain";
-import { formatDateTime } from "@/lib/format";
+import { downloadCsv } from "@/lib/csv";
+import { formatDateTime, money } from "@/lib/format";
 import { adjustStock } from "@/lib/services";
 import { useAppStore, useBusiness } from "@/lib/store";
 import { Thumb } from "@/screens/sell";
@@ -21,13 +24,25 @@ export function InventoryScreen() {
   const [reason, setReason] = React.useState("");
 
   if (!business) return null;
-  const products = db.products.filter((p) => p.businessId === business.id);
+  const products = db.products.filter((p) => p.businessId === business.id && !p.archived);
+  const inventoryCostValue = products.reduce((sum, product) => sum + product.stock * product.costPrice, 0);
+  const inventoryRetailValue = products.reduce((sum, product) => sum + product.stock * product.sellingPrice, 0);
+  const reorderList = products
+    .filter((product) => product.minStock > product.stock)
+    .sort((a, b) => (a.stock - a.minStock) - (b.stock - b.minStock));
   const list = products.filter((p) => {
     const s = q.toLowerCase();
     const matchesQ = !s || p.name.toLowerCase().includes(s) || p.sku.toLowerCase().includes(s);
     const matchesF = filter === "all" || (filter === "low" && p.stock > 0 && p.stock <= p.minStock) || (filter === "out" && p.stock <= 0);
     return matchesQ && matchesF;
   });
+
+  function exportInventory() {
+    downloadCsv("business-sutra-inventory.csv",
+      ["Product", "SKU", "Category", "Current stock", "Minimum stock", "Unit", "Stock status"],
+      list.map((product) => [product.name, product.sku, product.category, product.stock, product.minStock, product.unit, product.stock <= 0 ? "Out of stock" : product.stock <= product.minStock ? "Low stock" : "In stock"]));
+    toast.success("Exported " + list.length + " inventory rows");
+  }
 
   function submit() {
     if (!business || !product) return;
@@ -52,8 +67,16 @@ export function InventoryScreen() {
 
   return (
     <AppPage>
-      <PageHeader title="Inventory" subtitle="Stock in, out, and adjustments" />
+      <PageHeader title="Inventory" subtitle="Stock in, out, and adjustments" action={<Button size="sm" variant="secondary" onClick={exportInventory} disabled={!list.length}><Download className="size-4" />Export</Button>} />
+      <div className="mb-4 grid grid-cols-2 gap-2">
+        <Card><Stat label="Stock at cost" value={money(inventoryCostValue, business.currency)} /></Card>
+        <Card><Stat label="Potential retail value" value={money(inventoryRetailValue, business.currency)} /></Card>
+      </div>
       <SearchField value={q} onChange={setQ} placeholder="Search stock" />
+      <SavedViewControls businessId={business.id} moduleKey="inventory" filters={{ q, filter }} onApply={(saved) => {
+        setQ(saved.q ?? "");
+        setFilter((saved.filter as typeof filter) ?? "all");
+      }} />
       <div className="mb-3">
         <Segmented
           value={filter}
@@ -65,6 +88,35 @@ export function InventoryScreen() {
           ]}
         />
       </div>
+      {reorderList.length > 0 ? (
+        <section className="mb-4 rounded-[var(--radius-xl)] border border-border bg-card p-3">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div><p className="text-sm font-semibold">Reorder suggestions</p><p className="text-xs text-muted-foreground">Quantities bring stock back to each product's minimum level.</p></div>
+            <Badge tone="warn">{reorderList.length} items</Badge>
+          </div>
+          <ul className="space-y-2">
+            {reorderList.map((item) => {
+              const recentPurchase = db.purchases
+                .filter((purchase) => purchase.businessId === business.id && purchase.items.some((line) => line.productId === item.id))
+                .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+              return (
+                <li key={item.id} className="flex items-center justify-between gap-3 border-t border-border pt-2 text-sm">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{item.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {item.stock <= 0 ? "Out of stock" : `${item.stock} ${item.unit} left`} · {recentPurchase ? `Last supplier: ${recentPurchase.supplierName}` : "No supplier history"}
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="font-semibold tabular">Order {Math.max(0, item.minStock - item.stock)} {item.unit}</p>
+                    <p className="text-xs text-muted-foreground">to minimum</p>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ) : null}
       {products.length === 0 ? (
         <EmptyState title="Add your products to start monitoring stock" body="Opening stock is set when you create a product. Sales reduce it automatically." />
       ) : list.length === 0 ? (
@@ -93,7 +145,7 @@ export function InventoryScreen() {
         title={product?.name ?? "Stock"}
         description="Record a movement. Sales already deduct stock on their own."
         footer={
-          <Button className="w-full" onClick={submit}>
+          <Button className="w-full" onClick={submit} disabled={!qty.trim() || reason.trim().length < 3}>
             Save movement
           </Button>
         }
@@ -110,7 +162,7 @@ export function InventoryScreen() {
             <Field label={mode === "adjustment" ? "New quantity" : "Quantity"}>
               <Input type="number" inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} />
             </Field>
-            <Field label="Reason">
+            <Field label="Reason" hint="Required for stock audit history">
               <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Purchase, damage, count…" />
             </Field>
             <p className="text-xs font-medium uppercase tracking-wide text-subtle">Movement history</p>

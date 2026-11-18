@@ -4,6 +4,7 @@ import type {
   Business,
   Campaign,
   Customer,
+  Lead,
   Expense,
   Product,
   Sale,
@@ -12,6 +13,7 @@ import type {
   WorkspaceDB,
 } from "@/lib/domain";
 import { createId, nowIso, roundMoney, startOfDay } from "@/lib/utils";
+import { isLeadFollowUpDue } from "@/lib/lead-utils";
 
 export interface DateRange {
   from: Date;
@@ -32,11 +34,11 @@ export function inRange(iso: string, range: DateRange): boolean {
 }
 
 function salesIn(db: WorkspaceDB, businessId: string, range?: DateRange): Sale[] {
-  return db.sales.filter((s) => s.businessId === businessId && (!range || inRange(s.createdAt, range)));
+  return db.sales.filter((s) => s.businessId === businessId && s.status !== "reversed" && (!range || inRange(s.createdAt, range)));
 }
 
 function expensesIn(db: WorkspaceDB, businessId: string, range?: DateRange): Expense[] {
-  return db.expenses.filter((e) => e.businessId === businessId && (!range || inRange(e.date, range)));
+  return db.expenses.filter((e) => e.businessId === businessId && !e.archived && (!range || inRange(e.date, range)));
 }
 
 export interface FinanceSnapshot {
@@ -56,7 +58,15 @@ export function financeSnapshot(db: WorkspaceDB, businessId: string, range?: Dat
   const sales = salesIn(db, businessId, range);
   const expenses = expensesIn(db, businessId, range);
   const revenue = roundMoney(sales.reduce((s, x) => s + x.total, 0));
-  const cashIn = roundMoney(sales.reduce((s, x) => s + x.paidAmount, 0));
+  const cashMovementSales = db.sales.filter((sale) => sale.businessId === businessId);
+  const cashIn = roundMoney(cashMovementSales.reduce((sum, sale) => {
+    const legacyPayments = sale.payments ?? (sale.paidAmount > 0 ? [{ amount: sale.paidAmount, receivedAt: sale.createdAt }] : []);
+    const received = legacyPayments.filter((payment) => !range || inRange(payment.receivedAt, range))
+      .reduce((value, payment) => value + payment.amount, 0);
+    const refunded = (sale.refunds ?? []).filter((refund) => !range || inRange(refund.refundedAt, range))
+      .reduce((value, refund) => value + refund.amount, 0);
+    return sum + received - refunded;
+  }, 0));
   const outstanding = roundMoney(sales.reduce((s, x) => s + x.outstanding, 0));
   const expenseTotal = roundMoney(expenses.reduce((s, x) => s + x.amount, 0));
   const grossProfit = roundMoney(sales.reduce((s, x) => s + x.grossProfit, 0));
@@ -66,6 +76,112 @@ export function financeSnapshot(db: WorkspaceDB, businessId: string, range?: Dat
   const aov = orderCount ? roundMoney(revenue / orderCount) : 0;
   const unitsSold = sales.reduce((s, x) => s + x.items.reduce((a, i) => a + i.qty, 0), 0);
   return { revenue, cashIn, outstanding, expenses: expenseTotal, grossProfit, netProfit, margin, orderCount, aov, unitsSold };
+}
+
+export type CashbookDirection = "in" | "out";
+export type CashbookEntryType = "sale_receipt" | "sale_refund" | "supplier_payment" | "supplier_refund" | "expense";
+export interface CashbookEntry {
+  id: string;
+  date: string;
+  direction: CashbookDirection;
+  type: CashbookEntryType;
+  amount: number;
+  method: string;
+  reference?: string;
+  party: string;
+  description: string;
+}
+export function cashbookEntries(db: WorkspaceDB, businessId: string, range?: DateRange): CashbookEntry[] {
+  const entries: CashbookEntry[] = [];
+  const included = (date: string) => !range || inRange(date, range);
+  for (const sale of db.sales.filter((item) => item.businessId === businessId)) {
+    const payments = sale.payments ?? (sale.paidAmount > 0 ? [{
+      amount: sale.paidAmount,
+      method: sale.paymentMethod === "credit" ? "other" : sale.paymentMethod,
+      reference: undefined,
+      receivedAt: sale.createdAt,
+    }] : []);
+    for (const payment of payments) {
+      if (!included(payment.receivedAt)) continue;
+      entries.push({
+        id: `sale-payment:${sale.id}:${payment.receivedAt}:${payment.amount}`,
+        date: payment.receivedAt,
+        direction: "in",
+        type: "sale_receipt",
+        amount: roundMoney(payment.amount),
+        method: payment.method ?? "other",
+        reference: payment.reference,
+        party: sale.customerName || "Walk-in customer",
+        description: `Receipt for sale ${sale.id.slice(-7).toUpperCase()}`,
+      });
+    }
+    for (const refund of sale.refunds ?? []) {
+      if (!included(refund.refundedAt)) continue;
+      entries.push({
+        id: `sale-refund:${sale.id}:${refund.id}`,
+        date: refund.refundedAt,
+        direction: "out",
+        type: "sale_refund",
+        amount: roundMoney(refund.amount),
+        method: refund.method,
+        reference: refund.reference,
+        party: sale.customerName || "Walk-in customer",
+        description: `Refund against sale ${sale.id.slice(-7).toUpperCase()}`,
+      });
+    }
+  }
+  for (const purchase of db.purchases.filter((item) => item.businessId === businessId)) {
+    const payments = purchase.payments ?? (purchase.paidAmount > 0 ? [{
+      amount: purchase.paidAmount,
+      method: "other",
+      reference: undefined,
+      paidAt: purchase.createdAt,
+    }] : []);
+    for (const payment of payments) {
+      if (!included(payment.paidAt)) continue;
+      entries.push({
+        id: `purchase-payment:${purchase.id}:${payment.paidAt}:${payment.amount}`,
+        date: payment.paidAt,
+        direction: "out",
+        type: "supplier_payment",
+        amount: roundMoney(payment.amount),
+        method: payment.method ?? "other",
+        reference: payment.reference,
+        party: purchase.supplierName,
+        description: `Supplier payment · ${purchase.supplierReference || purchase.id.slice(-7).toUpperCase()}`,
+      });
+    }
+  }
+  for (const returned of (db.purchaseReturns ?? []).filter((item) => item.businessId === businessId && item.refundAmount > 0 && item.refundMethod)) {
+    if (!included(returned.createdAt)) continue;
+    entries.push({
+      id: `supplier-refund:${returned.id}`,
+      date: returned.createdAt,
+      direction: "in",
+      type: "supplier_refund",
+      amount: roundMoney(returned.refundAmount),
+      method: returned.refundMethod!,
+      reference: returned.refundReference,
+      party: returned.supplierName,
+      description: `Supplier refund against purchase ${returned.purchaseId.slice(-7).toUpperCase()}`,
+    });
+  }
+  for (const expense of db.expenses.filter((item) => item.businessId === businessId && !item.archived)) {
+    const date = new Date(expense.date + "T00:00:00").toISOString();
+    if (!included(date)) continue;
+    entries.push({
+      id: `expense:${expense.id}`,
+      date,
+      direction: "out",
+      type: "expense",
+      amount: roundMoney(expense.amount),
+      method: expense.paymentMethod ?? "other",
+      reference: expense.reference,
+      party: expense.vendor || expense.category,
+      description: `Expense · ${expense.category}`,
+    });
+  }
+  return entries.sort((a, b) => b.date.localeCompare(a.date));
 }
 
 export interface TargetPace {
@@ -213,11 +329,11 @@ export interface CustomerStats {
 }
 
 export function customerStats(db: WorkspaceDB, customer: Customer, now = new Date()): CustomerStats {
-  const sales = db.sales.filter((s) => s.customerId === customer.id);
+  const sales = db.sales.filter((s) => s.customerId === customer.id && s.status !== "reversed");
   const spend = roundMoney(sales.reduce((s, x) => s + x.total, 0));
   const outstanding = roundMoney(sales.reduce((s, x) => s + x.outstanding, 0));
   const lastPurchase = sales[0]?.createdAt;
-  const all = db.sales.filter((s) => s.businessId === customer.businessId);
+  const all = db.sales.filter((s) => s.businessId === customer.businessId && s.status !== "reversed");
   const avg = all.length ? all.reduce((s, x) => s + x.total, 0) / Math.max(1, new Set(all.map((s) => s.customerId).filter(Boolean)).size) : 0;
   const daysSince = lastPurchase ? (now.getTime() - new Date(lastPurchase).getTime()) / 86400000 : 999;
   let segment: CustomerStats["segment"] = "new";
@@ -242,7 +358,7 @@ export function lastNDaysSeries(db: WorkspaceDB, businessId: string, days = 14, 
     d.setDate(d.getDate() - i);
     const key = d.toISOString().slice(0, 10);
     const revenue = db.sales
-      .filter((s) => s.businessId === businessId && s.createdAt.slice(0, 10) === key)
+      .filter((s) => s.businessId === businessId && s.status !== "reversed" && s.createdAt.slice(0, 10) === key)
       .reduce((s, x) => s + x.total, 0);
     const expenses = db.expenses
       .filter((e) => e.businessId === businessId && e.date.slice(0, 10) === key)
@@ -282,6 +398,8 @@ export interface BusinessContext {
   topProducts: ProductProfit[];
   topCustomers: CustomerStats[];
   followUpCustomers: CustomerStats[];
+  followUpLeads: Lead[];
+  activeLeads: Lead[];
   procurement: {
     supplierCount: number;
     purchaseCount: number;
@@ -317,11 +435,13 @@ export function buildContext(db: WorkspaceDB, business: Business, now = new Date
   const today = startOfDay(now).toISOString().slice(0, 10);
   const dueToday = tasks.filter((t) => t.dueDate && t.dueDate.slice(0, 10) === today);
   const overdue = tasks.filter((t) => t.dueDate && t.dueDate.slice(0, 10) < today);
-  const unpaid = db.sales.filter((s) => s.businessId === business.id && s.outstanding > 0);
+  const unpaid = db.sales.filter((s) => s.businessId === business.id && s.status !== "reversed" && s.outstanding > 0);
   const campaigns = db.campaigns.filter((c) => c.businessId === business.id && inRange(c.date, range));
   const monthSales = salesIn(db, business.id, range);
   const customers = db.customers.filter((c) => c.businessId === business.id);
   const stats = customers.map((c) => customerStats(db, c, now)).sort((a, b) => b.spend - a.spend);
+  const followUpLeads = db.leads.filter((lead) => lead.businessId === business.id && isLeadFollowUpDue(lead, now));
+  const activeLeads = db.leads.filter((lead) => lead.businessId === business.id && lead.stage !== "won" && lead.stage !== "lost");
   const expenseBreakdownMap = new Map<string, number>();
   for (const e of expensesIn(db, business.id, range)) {
     expenseBreakdownMap.set(e.category, roundMoney((expenseBreakdownMap.get(e.category) ?? 0) + e.amount));
@@ -350,6 +470,8 @@ export function buildContext(db: WorkspaceDB, business: Business, now = new Date
     followUpCustomers: stats
       .filter((customer) => customer.segment === "follow_up" || customer.segment === "inactive" || customer.outstanding > 0)
       .sort((a, b) => b.outstanding - a.outstanding || b.spend - a.spend),
+    followUpLeads,
+    activeLeads,
     procurement: (() => {
       const suppliers = db.suppliers.filter((supplier) => supplier.businessId === business.id);
       const purchases = db.purchases.filter((purchase) => purchase.businessId === business.id);
@@ -676,6 +798,27 @@ export function deriveNotifications(ctx: BusinessContext): AppNotification[] {
       actionLabel: "Update",
     });
   }
+  for (const lead of ctx.followUpLeads) {
+    push({
+      key: `lead-followup:${lead.id}`,
+      type: "customer_followup",
+      title: `Lead follow-up due: ${lead.name}`,
+      body: lead.company ? `Follow up with ${lead.company}.` : "This lead has a follow-up scheduled.",
+      href: "/leads",
+      actionLabel: "Open lead",
+    });
+  }
+  for (const item of ctx.followUpCustomers.slice(0, 5)) {
+    const customer = item.customer;
+    push({
+      key: `customer-followup:${customer.id}`,
+      type: "customer_followup",
+      title: `Customer follow-up: ${customer.name}`,
+      body: item.outstanding > 0 ? `Outstanding balance: ${fmt(item.outstanding, ctx)}.` : "Review this customer relationship and plan the next touchpoint.",
+      href: "/customers",
+      actionLabel: "View customer",
+    });
+  }
   if (ctx.target && !ctx.target.onTrack && ctx.target.pct < 90) {
     push({
       key: `target:${ctx.target.target.id}:${ctx.period.label}`,
@@ -737,6 +880,8 @@ const ADVISOR_PROMPTS = [
   "How are my marketing campaigns performing?",
   "Show supplier payments and purchase balance",
   "Which customers need follow-up?",
+  "Which leads need follow-up?",
+  "What is the value of my active sales pipeline?",
   "What should I focus on today?",
   "Will I hit my revenue target?",
   "Why is my profit falling?",
@@ -800,6 +945,20 @@ function inventoryAdvice(ctx: BusinessContext, question: string): AdvisorReply {
   }
   if (!recommendations.length) recommendations.push("No stock alerts are active. Review stock levels after each goods receipt and sale.");
   return { question, facts, calculations, recommendations };
+}
+
+function leadAdvice(ctx: BusinessContext, question: string): AdvisorReply {
+  const value = ctx.activeLeads.reduce((sum, lead) => sum + lead.value, 0);
+  const facts = [
+    `${ctx.activeLeads.length} active leads in the pipeline, with a combined potential value of ${fmt(value, ctx)}.`,
+    ctx.followUpLeads.length
+      ? `Follow-up due: ${ctx.followUpLeads.slice(0, 6).map((lead) => lead.name + (lead.company ? ' (' + lead.company + ')' : '')).join(', ')}.`
+      : "No open lead follow-ups are due right now.",
+  ];
+  const recommendations = ctx.followUpLeads.length
+    ? ["Contact leads with due follow-ups first, then record the outcome and set the next follow-up date."]
+    : ["Review New and Proposal stage leads and set a specific next follow-up date for each active opportunity."];
+  return { question, facts, calculations: [], recommendations };
 }
 
 function marketingAdvice(ctx: BusinessContext, question: string): AdvisorReply {
@@ -876,6 +1035,9 @@ export function advise(question: string, ctx: BusinessContext): AdvisorReply {
   }
   if (/(stock|inventory|reorder|restock|out of stock|low stock|maal kitna|stock kitna)/.test(q)) {
     return inventoryAdvice(ctx, question);
+  }
+  if (/(lead follow.?up|which leads|leads need|sales pipeline|prospect|enquir|pipeline value)/.test(q)) {
+    return leadAdvice(ctx, question);
   }
   if (/(marketing|campaign|ads|ad spend|roas|cpl|cac|lead|advertising|facebook|google ad)/.test(q)) {
     return marketingAdvice(ctx, question);

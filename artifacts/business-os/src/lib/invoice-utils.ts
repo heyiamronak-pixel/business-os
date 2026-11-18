@@ -25,3 +25,55 @@ export function calculateInvoiceTotals(drafts:InvoiceLineDraft[],gstRegistered:b
  const cgst=gstRegistered&&supplyType==="intra"?round2(taxTotal/2):0,sgst=gstRegistered&&supplyType==="intra"?round2(taxTotal-cgst):0,igst=gstRegistered&&supplyType==="inter"?taxTotal:0;
  return {items,subtotal,discountTotal,taxableValue,cgst,sgst,igst,taxTotal:round2(cgst+sgst+igst),total:round2(taxableValue+cgst+sgst+igst)};
 }
+
+
+export interface InvoicePaymentSummary {
+ paidAmount: number;
+ balance: number;
+ status: "paid" | "partial" | "unpaid";
+}
+export function getInvoicePaymentSummary(total: number, payments: Array<{ amount: number }> = []): InvoicePaymentSummary {
+ const safeTotal = round2(Math.max(0, Number.isFinite(total) ? total : 0));
+ const paidAmount = round2(Math.min(safeTotal, payments.reduce((sum, payment) => {
+  const amount = Number(payment.amount);
+  return sum + (Number.isFinite(amount) && amount > 0 ? amount : 0);
+ }, 0)));
+ const balance = round2(Math.max(0, safeTotal - paidAmount));
+ return { paidAmount, balance, status: balance === 0 ? "paid" : paidAmount > 0 ? "partial" : "unpaid" };
+}
+export function addInvoicePayment(invoice: InvoiceRecord, payment: import("@/lib/domain").InvoicePayment): InvoiceRecord {
+ if (invoice.status !== "issued") throw new Error("Payments can only be recorded for issued invoices.");
+ if (!Number.isFinite(payment.amount) || payment.amount <= 0) throw new Error("Enter a payment amount greater than zero.");
+ const summary = getInvoicePaymentSummary(invoice.total, invoice.payments);
+ if (payment.amount > summary.balance + 0.009) throw new Error("Payment cannot exceed the outstanding invoice balance.");
+ if (!payment.id.trim()) throw new Error("Payment reference is missing.");
+ if (!payment.receivedAt.trim()) throw new Error("Payment date is missing.");
+ return { ...invoice, payments: [...(invoice.payments ?? []), { ...payment, amount: round2(payment.amount) }], updatedAt: payment.receivedAt };
+}
+
+export type InvoiceDueStatus = "cancelled" | "paid" | "overdue" | "due" | "no_due_date";
+export interface InvoiceDueSummary {
+ status: InvoiceDueStatus;
+ balance: number;
+ overdueDays: number;
+}
+export function getInvoiceDueSummary(invoice: InvoiceRecord, now = new Date()): InvoiceDueSummary {
+ const payment = getInvoicePaymentSummary(invoice.total, invoice.payments);
+ if (invoice.status === "cancelled") return { status: "cancelled", balance: 0, overdueDays: 0 };
+ if (payment.balance <= 0) return { status: "paid", balance: 0, overdueDays: 0 };
+ if (!invoice.dueDate) return { status: "no_due_date", balance: payment.balance, overdueDays: 0 };
+ const today = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+ if (invoice.dueDate >= today) return { status: "due", balance: payment.balance, overdueDays: 0 };
+ const [dueYear, dueMonth, dueDay] = invoice.dueDate.split("-").map(Number);
+ const [todayYear, todayMonth, todayDay] = today.split("-").map(Number);
+ const dueUtc = Date.UTC(dueYear, dueMonth - 1, dueDay);
+ const todayUtc = Date.UTC(todayYear, todayMonth - 1, todayDay);
+ const overdueDays = Math.max(1, Math.floor((todayUtc - dueUtc) / 86400000));
+ return { status: "overdue", balance: payment.balance, overdueDays };
+}
+
+export function normaliseInvoiceCancellationReason(reason: string): string {
+  const value = reason.trim();
+  if (value.length < 3) throw new Error("Add a cancellation reason (at least 3 characters).");
+  return value;
+}

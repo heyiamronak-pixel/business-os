@@ -1,4 +1,6 @@
 import test from 'node:test';
+import { addInvoicePayment, getInvoicePaymentSummary } from '../../artifacts/business-os/src/lib/invoice-utils.ts';
+import type { InvoiceRecord } from '../../artifacts/business-os/src/lib/domain.ts';
 import assert from 'node:assert/strict';
 import {
   applyPurchaseToInventory,
@@ -280,4 +282,39 @@ test('additional customer payments reduce the balance and update sale status', (
 test('collected sale cost is recognised proportionally to cash received', () => {
   const sale = { id: 's-cost', customerId: '', items: [], subtotal: 500, discount: 0, total: 500, costTotal: 200, grossProfit: 300, paymentStatus: 'partial' as const, paidAmount: 125, balance: 375, createdAt: '2026-11-16T10:00:00.000Z' };
   assert.equal(collectedSaleCost(sale), 50);
+});
+
+
+const invoiceForPayment = {
+  id: 'inv-1', businessId: 'biz-1', invoiceNumber: 'INV/26-27/001', status: 'issued',
+  issueDate: '2026-11-17', sellerName: 'Test business', customerName: 'Test customer',
+  placeOfSupply: 'Rajasthan', supplyType: 'intra', reverseCharge: false, items: [],
+  subtotal: 1000, discountTotal: 0, taxableValue: 1000, cgst: 90, sgst: 90,
+  igst: 0, taxTotal: 180, total: 1180, createdAt: '2026-11-17T10:00:00.000Z',
+  updatedAt: '2026-11-17T10:00:00.000Z',
+} as InvoiceRecord;
+
+test('invoice payment summary supports unpaid, partial and fully paid balances', () => {
+  assert.deepEqual(getInvoicePaymentSummary(1180, []), { paidAmount: 0, balance: 1180, status: 'unpaid' });
+  assert.deepEqual(getInvoicePaymentSummary(1180, [{ amount: 500 }]), { paidAmount: 500, balance: 680, status: 'partial' });
+  assert.deepEqual(getInvoicePaymentSummary(1180, [{ amount: 500 }, { amount: 680 }]), { paidAmount: 1180, balance: 0, status: 'paid' });
+});
+
+test('invoice payment records preserve history and reject invalid or excess amounts', () => {
+  const first = addInvoicePayment(invoiceForPayment, {
+    id: 'pay-1', amount: 500, method: 'upi', reference: 'UTR-1', receivedAt: '2026-11-17T11:00:00.000Z',
+  });
+  assert.equal(first.payments?.length, 1);
+  assert.equal(getInvoicePaymentSummary(first.total, first.payments).balance, 680);
+  assert.throws(() => addInvoicePayment(first, {
+    id: 'pay-2', amount: 681, method: 'cash', receivedAt: '2026-11-17T12:00:00.000Z',
+  }), /cannot exceed/);
+  assert.throws(() => addInvoicePayment(first, {
+    id: 'pay-3', amount: 0, method: 'cash', receivedAt: '2026-11-17T12:00:00.000Z',
+  }), /greater than zero/);
+  const fullyPaid = addInvoicePayment(first, {
+    id: 'pay-4', amount: 680, method: 'bank', receivedAt: '2026-11-17T13:00:00.000Z',
+  });
+  assert.equal(getInvoicePaymentSummary(fullyPaid.total, fullyPaid.payments).status, 'paid');
+  assert.equal(invoiceForPayment.payments, undefined);
 });

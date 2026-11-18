@@ -1,9 +1,12 @@
 import * as React from "react";
+import { Download } from "lucide-react";
 import { toast } from "sonner";
 import { AppPage, ConfirmBar, PageHeader, SearchField } from "@/components/app-shell";
+import { SavedViewControls } from "@/components/saved-view-controls";
 import { BottomSheet } from "@/components/sheet";
 import { Badge, Button, Card, EmptyState, Field, Input, Segmented, Select, Stat, Textarea } from "@/components/ui";
 import type { Supplier, SupplierStatus } from "@/lib/domain";
+import { downloadCsv } from "@/lib/csv";
 import { money } from "@/lib/format";
 import { deleteSupplier, upsertSupplier } from "@/lib/services";
 import { useAppStore, useBusiness } from "@/lib/store";
@@ -61,6 +64,16 @@ export function SuppliersScreen() {
     )
     .sort((a, b) => a.name.localeCompare(b.name));
 
+  function exportSuppliers() {
+    downloadCsv("business-sutra-suppliers.csv",
+      ["Supplier", "Contact", "Email", "Phone", "Address", "Tax ID", "Status", "Purchase count", "Purchase value", "Outstanding", "Notes"],
+      list.map((supplier) => {
+        const related = purchases.filter((purchase) => purchase.supplierId === supplier.id);
+        return [supplier.name, supplier.contactName, supplier.email, supplier.phone, supplier.address, supplier.taxId, supplier.status, related.length, related.reduce((sum, item) => sum + item.total, 0), outstandingBySupplier.get(supplier.id) ?? 0, supplier.notes];
+      }));
+    toast.success("Exported " + list.length + " suppliers");
+  }
+
   function startNew() {
     setEditing(null);
     setDraft(blankDraft());
@@ -114,13 +127,17 @@ export function SuppliersScreen() {
       <PageHeader
         title="Suppliers"
         subtitle="Supplier contacts, purchase history and outstanding balances"
-        action={<Button size="sm" onClick={startNew}>Add supplier</Button>}
+        action={<div className="flex gap-2"><Button size="sm" variant="secondary" onClick={exportSuppliers} disabled={!list.length}><Download className="size-4" />Export</Button><Button size="sm" onClick={startNew}>Add supplier</Button></div>}
       />
       <div className="mb-4 grid grid-cols-2 gap-2">
         <Card><Stat label="Total suppliers" value={String(suppliers.length)} /></Card>
         <Card><Stat label="Active suppliers" value={String(suppliers.filter((supplier) => supplier.status === "active").length)} /></Card>
       </div>
       <SearchField value={query} onChange={setQuery} placeholder="Search name, contact, phone or tax ID" />
+      <SavedViewControls businessId={businessId} moduleKey="suppliers" filters={{ query, filter }} onApply={(saved) => {
+        setQuery(saved.query ?? "");
+        setFilter((saved.filter as "all" | SupplierStatus) ?? "all");
+      }} />
       <div className="mb-3">
         <Segmented
           value={filter}

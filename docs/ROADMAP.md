@@ -6,7 +6,7 @@ Build the complete product experience before connecting external services. The a
 
 ## Stage 0 — Stabilise the active workspace app
 
-- [x] Keep the active React/Vite/Wouter application entry point and its current page architecture stable; the alternate TanStack route tree remains unused scaffolding.
+- [x] Keep the active React/Vite/TanStack Router application entry point (`artifacts/business-os/src/main.tsx` → `router.tsx` → `routeTree.gen.ts`) stable. Do not reintroduce the legacy Wouter shell as a second active application.
 - [x] Keep the existing workspace store and local persistence as the development data layer.
 - [x] Expose the current workspace screens: overview, sales, products, inventory, suppliers, purchases, customers, expenses, targets, tasks, team, marketing, attendance, reports, Action Center, settings, and Advisor.
 - [x] Add a dedicated reports route and CSV export.
@@ -71,7 +71,7 @@ Only after Stages 1–5 are accepted:
 
 ## Current implementation notes
 
-- Product-first UI development is being continued on `development/phase-completion`, based on the tenant data-foundation work.
+- Product-first UI development is being integrated on `codex/integrated-development-completion`, based on `development/phase-completion`. The integration branch is not yet validated or merged.
 - Local workspace persistence remains the active product data layer during this build.
 - The PostgreSQL tenant schema/API foundation is separate groundwork; the active Wouter frontend still uses local browser storage and has not been switched to cloud persistence.
 - Do not merge or publish unfinished work to the production branch merely to make intermediate screens visible.

@@ -2,21 +2,24 @@ import * as React from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { AppPage, PageHeader } from "@/components/app-shell";
-import { Button, Card, Field, Input, Select, Switch } from "@/components/ui";
+import { Button, Card, Field, Input, Select, Switch, Textarea } from "@/components/ui";
 import {
+  BUSINESS_TYPES,
   COUNTRIES,
   INDUSTRIES,
   MODULE_CATALOG,
-  recommendModules,
   type Appearance,
   type IndustryId,
+  type SubscriptionBillingCycle,
   type ModuleId,
   type ThemePreset,
 } from "@/lib/domain";
 import { extractLogoColors, fileToDataUrl } from "@/lib/theme";
-import { deleteBusiness, updateBusiness } from "@/lib/services";
+import { deleteBranch, deleteBusiness, updateBusiness, upsertBranch } from "@/lib/services";
 import { isValidGstin } from "@/lib/invoice-utils";
 import { useAppStore, useBusiness } from "@/lib/store";
+import { SUBSCRIPTION_PLANS, getEffectivePlanId, getEffectiveSubscriptionPlan, getSubscriptionPlan, getTrialStatus } from "@/lib/subscription";
+import { createId } from "@/lib/utils";
 
 export function SettingsScreen() {
   const business = useBusiness();
@@ -26,17 +29,56 @@ export function SettingsScreen() {
   const navigate = useNavigate();
   const [name, setName] = React.useState(business?.name ?? "");
   const [gstError, setGstError] = React.useState("");
-  const [annualBilling, setAnnualBilling] = React.useState(false);
+  const [annualBilling, setAnnualBilling] = React.useState(business?.subscriptionBillingCycle === "annual");
+  const [branchName, setBranchName] = React.useState("");
+  const [branchCode, setBranchCode] = React.useState("");
+  const [branchAddress, setBranchAddress] = React.useState("");
 
   React.useEffect(() => {
     setName(business?.name ?? "");
-  }, [business?.id, business?.name]);
+    setAnnualBilling(business?.subscriptionBillingCycle === "annual");
+  }, [business?.id, business?.name, business?.subscriptionBillingCycle]);
 
   if (!business) return null;
+  const currentPlan = getEffectiveSubscriptionPlan(business);
+  const currentPlanId = getEffectivePlanId(business);
+  const trial = getTrialStatus(business.trialEndsAt);
+  const teamUsage = db.members.filter((member) => member.businessId === business.id).length;
+  const branches = db.branches.filter((item) => item.businessId === business.id);
 
   function patch(p: Parameters<typeof updateBusiness>[2]) {
     if (!business) return;
-    apply(updateBusiness(useAppStore.getState().db, business.id, p));
+    try {
+      apply(updateBusiness(useAppStore.getState().db, business.id, p));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not update workspace profile");
+    }
+  }
+
+  function addBranch() {
+    if (!business) return;
+    try {
+      const result = upsertBranch(useAppStore.getState().db, {
+        businessId: business.id, name: branchName, code: branchCode || undefined, address: branchAddress || undefined,
+      });
+      apply(result.db);
+      setBranchName("");
+      setBranchCode("");
+      setBranchAddress("");
+      toast.success("Branch added");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not add branch");
+    }
+  }
+
+  function removeBranch(id: string) {
+    if (!window.confirm("Delete this branch? Team assignments must be cleared first.")) return;
+    try {
+      apply(deleteBranch(useAppStore.getState().db, id));
+      toast.success("Branch deleted");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not delete branch");
+    }
   }
 
   function toggleModule(id: ModuleId) {
@@ -114,12 +156,21 @@ export function SettingsScreen() {
             onBlur={() => name.trim().length >= 2 && patch({ name: name.trim() })}
           />
         </Field>
+        <Field label="Business description">
+          <Textarea rows={3} maxLength={500} defaultValue={business.description ?? ""} placeholder="What your business offers and who it serves" onBlur={(e) => patch({ description: e.target.value })} />
+        </Field>
+        <Field label="Business type">
+          <Select value={business.businessType} onChange={(e) => patch({ businessType: e.target.value })}>
+            {BUSINESS_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
+          </Select>
+        </Field>
         <Field label="Industry">
           <Select
             value={business.industry}
             onChange={(e) => {
               const industry = e.target.value as IndustryId;
-              patch({ industry, enabledModules: recommendModules(industry), moduleOrder: recommendModules(industry) });
+              // Changing industry must not silently re-enable modules the owner previously disabled.
+              patch({ industry });
             }}
           >
             {INDUSTRIES.map((i) => (
@@ -142,14 +193,17 @@ export function SettingsScreen() {
             ))}
           </Select>
         </Field>
-        <Field label="Currency">
-          <Input value={business.currency} onChange={(e) => patch({ currency: e.target.value.toUpperCase() })} />
+        <Field label="Currency" hint="Use a 3-letter ISO currency code, such as INR or USD.">
+          <Input key={business.id + business.currency} defaultValue={business.currency} maxLength={3} onBlur={(e) => patch({ currency: e.target.value.toUpperCase() })} />
         </Field>
         <Field label="Phone">
           <Input defaultValue={business.phone ?? ""} onBlur={(e) => patch({ phone: e.target.value })} />
         </Field>
         <Field label="Email">
           <Input defaultValue={business.email ?? ""} onBlur={(e) => patch({ email: e.target.value })} />
+        </Field>
+        <Field label="Website">
+          <Input defaultValue={business.website ?? ""} placeholder="www.yourbusiness.com" onBlur={(e) => patch({ website: e.target.value })} />
         </Field>
       </Card>
 
@@ -166,21 +220,138 @@ export function SettingsScreen() {
       </Card>
 
       <Card className="mb-4 space-y-4">
-        <div className="flex items-start justify-between gap-3"><div><h2 className="text-sm font-semibold">Plans & subscription</h2><p className="mt-1 text-xs text-muted-foreground">Choose the plan that fits your team. Online billing will be connected later.</p></div><span className="rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-semibold text-primary">{business.subscriptionStatus==="trial"?"14-day trial":"Plan preference"}</span></div>
-        {business.subscriptionStatus==="trial"&&business.trialEndsAt ? <p className="rounded-xl bg-primary/7 px-3 py-2 text-xs text-muted-foreground">Growth trial ends {new Date(business.trialEndsAt).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"})}. No payment is collected in this preview.</p> : null}
-        <div className="flex items-center justify-between"><p className="text-xs font-medium text-muted-foreground">Billing display</p><div className="flex rounded-xl bg-muted p-1"><button type="button" onClick={()=>setAnnualBilling(false)} className={annualBilling?"rounded-lg px-3 py-1.5 text-xs text-muted-foreground":"rounded-lg bg-card px-3 py-1.5 text-xs font-semibold shadow-sm"}>Monthly</button><button type="button" onClick={()=>setAnnualBilling(true)} className={annualBilling?"rounded-lg bg-card px-3 py-1.5 text-xs font-semibold shadow-sm":"rounded-lg px-3 py-1.5 text-xs text-muted-foreground"}>Annual · 2 months free</button></div></div>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold">Plans & subscription</h2>
+            <p className="mt-1 text-xs text-muted-foreground">Compare plans, see the limits and choose the access level for this workspace.</p>
+          </div>
+          <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-semibold text-primary">
+            {business.subscriptionStatus === "trial" ? (trial.expired ? "Trial expired · Starter access" : "Growth trial") : "Selected plan · preview"}
+          </span>
+        </div>
+
+        {business.subscriptionStatus === "trial" && business.trialEndsAt ? (
+          <div className="rounded-xl bg-muted/55 px-3 py-3 text-xs text-muted-foreground">
+            <p className="font-semibold text-foreground">{trial.expired ? "Your Growth trial has ended" : "Your Growth trial ends " + new Date(business.trialEndsAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</p>
+            <p className="mt-1">{trial.expired ? "Starter limits now apply until you choose another plan in this preview." : trial.daysRemaining + " day" + (trial.daysRemaining === 1 ? "" : "s") + " remaining. All Growth features are temporarily available during the trial."}</p>
+          </div>
+        ) : null}
+
+        <div className="grid gap-2 sm:grid-cols-2">
+          <div className="rounded-xl border border-border p-3">
+            <p className="text-[10px] text-muted-foreground">Team members</p>
+            <p className="mt-1 text-lg font-semibold tabular-nums">{teamUsage} / {currentPlan.maxUsers}</p>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary" style={{ width: Math.min(100, (teamUsage / currentPlan.maxUsers) * 100) + "%" }} /></div>
+          </div>
+          <div className="rounded-xl border border-border p-3">
+            <p className="text-[10px] text-muted-foreground">Branches</p>
+            <p className="mt-1 text-lg font-semibold tabular-nums">{branches.length} / {currentPlan.maxBranches}</p>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary" style={{ width: Math.min(100, (branches.length / currentPlan.maxBranches) * 100) + "%" }} /></div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs font-medium text-muted-foreground">Billing display</p>
+          <div className="flex rounded-xl bg-muted p-1">
+            <button type="button" onClick={() => setAnnualBilling(false)} className={annualBilling ? "rounded-lg px-3 py-1.5 text-xs text-muted-foreground" : "rounded-lg bg-card px-3 py-1.5 text-xs font-semibold shadow-sm"}>Monthly</button>
+            <button type="button" onClick={() => setAnnualBilling(true)} className={annualBilling ? "rounded-lg bg-card px-3 py-1.5 text-xs font-semibold shadow-sm" : "rounded-lg px-3 py-1.5 text-xs text-muted-foreground"}>Annual · 2 months free</button>
+          </div>
+        </div>
+
         <div className="grid gap-3 md:grid-cols-2">
-          {[{id:"starter" as const,title:"Starter",monthly:699,annual:6990,users:"Up to 2 users",branches:"1 branch",features:["Sales, customers & invoices","Products and inventory","Tasks and business dashboard","Standard reports"]},{id:"growth" as const,title:"Growth",monthly:1999,annual:19990,users:"Up to 5 users",branches:"Up to 3 branches",features:["Everything in Starter","Advanced reports & saved views","Team and operations insights","Automation-ready workflows","Priority support (planned)"]}].map((plan)=>{
-            const selected=business.subscriptionPlan===plan.id,amount=annualBilling?plan.annual:plan.monthly;
-            return <div key={plan.id} className={`relative overflow-hidden rounded-2xl border p-4 transition-all duration-200 hover:-translate-y-1 hover:shadow-lg ${selected?"border-primary bg-primary/[0.045] shadow-md":"border-border bg-card"}`}>
-              {plan.id==="growth"?<span className="absolute right-3 top-3 rounded-full bg-primary/10 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-primary">Recommended</span>:null}
-              <p className="text-sm font-semibold">{plan.title}</p><p className="mt-3 text-3xl font-semibold tracking-tight tabular-nums">₹{amount.toLocaleString("en-IN")}<span className="ml-1 text-xs font-normal text-muted-foreground">/{annualBilling?"year":"month"}</span></p><p className="mt-1 text-xs text-muted-foreground">{plan.users} · {plan.branches}</p>
-              <ul className="mt-4 space-y-2">{plan.features.map((feature)=><li key={feature} className="flex gap-2 text-xs"><span className="text-primary">✓</span><span>{feature}</span></li>)}</ul>
-              <Button className="mt-5 w-full" variant={selected?"secondary":"default"} onClick={()=>{patch({subscriptionPlan:plan.id,subscriptionStatus:"selected"});toast.success(plan.title+" preference saved. Billing will be available later.");}}>{selected?"Selected plan":"Choose "+plan.title}</Button>
-            </div>;
+          {Object.values(SUBSCRIPTION_PLANS).map((plan) => {
+            const selected = currentPlanId === plan.id;
+            const amount = annualBilling ? plan.annualPrice : plan.monthlyPrice;
+            const overUsers = teamUsage > plan.maxUsers;
+            const overBranches = branches.length > plan.maxBranches;
+            return (
+              <div key={plan.id} className={`relative overflow-hidden rounded-2xl border p-4 transition-all duration-200 ${selected ? "border-primary bg-primary/[0.045] shadow-md" : "border-border bg-card"}`}>
+                {plan.id === "growth" ? <span className="absolute right-3 top-3 rounded-full bg-primary/10 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-primary">Recommended</span> : null}
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-semibold">{plan.title}</p>
+                  {selected ? <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[9px] font-semibold text-primary">Current</span> : null}
+                </div>
+                <p className="mt-3 text-3xl font-semibold tracking-tight tabular-nums">₹{amount.toLocaleString("en-IN")}<span className="ml-1 text-xs font-normal text-muted-foreground">/{annualBilling ? "year" : "month"}</span></p>
+                <p className="mt-1 text-xs text-muted-foreground">Up to {plan.maxUsers} team members · {plan.maxBranches} {plan.maxBranches === 1 ? "branch" : "branches"}</p>
+                <ul className="mt-4 space-y-2">
+                  {plan.features.map((feature) => <li key={feature} className="flex gap-2 text-xs"><span className="text-primary">✓</span><span>{feature}</span></li>)}
+                </ul>
+                <Button className="mt-5 w-full" variant={selected ? "secondary" : "default"} disabled={selected} onClick={() => {
+                  if (overUsers) { toast.error(plan.title + " allows " + plan.maxUsers + " team members. Remove or reassign seats before downgrading."); return; }
+                  if (overBranches) { toast.error(plan.title + " allows " + plan.maxBranches + " branches. Remove or archive extra branches before downgrading."); return; }
+                  const cycle: SubscriptionBillingCycle = annualBilling ? "annual" : "monthly";
+                  const history = [...(business.subscriptionHistory ?? []), {
+                    id: createId("sub"), fromPlan: currentPlanId, toPlan: plan.id,
+                    billingCycle: cycle, changedAt: new Date().toISOString(), source: "selection" as const,
+                  }];
+                  patch({ subscriptionPlan: plan.id, subscriptionStatus: "selected", subscriptionBillingCycle: cycle, subscriptionHistory: history });
+                  toast.success(plan.title + " access selected for this local preview. No payment was collected.");
+                }}>{selected ? "Current plan" : "Choose " + plan.title}</Button>
+              </div>
+            );
           })}
         </div>
-        <p className="text-[11px] leading-5 text-muted-foreground">Indicative launch pricing only. Your plan preference is saved in this browser workspace; no payment method, checkout or charge is connected. AI and WhatsApp usage can be offered as metered add-ons later.</p>
+
+        <div className="overflow-hidden rounded-xl border border-border">
+          <div className="border-b border-border bg-muted/40 px-3 py-2.5">
+            <p className="text-xs font-semibold">Plan comparison</p>
+          </div>
+          <div className="grid grid-cols-[minmax(0,1fr)_76px_76px] items-center gap-2 border-b border-border px-3 py-2 text-[10px] font-semibold text-muted-foreground">
+            <span>Capability</span><span className="text-center">Starter</span><span className="text-center">Growth</span>
+          </div>
+          {[
+            ["Core business modules", "Included", "Included"],
+            ["Standard reports", "Included", "Included"],
+            ["Team members", "2", "5"],
+            ["Branches", "1", "3"],
+            ["Advanced reports", "Locked", "Included"],
+            ["Saved views", "Locked", "Included"],
+            ["Team & operations insights", "Locked", "Included"],
+            ["Workflow automation", "Not included", "Planned"],
+          ].map(([label, starter, growth]) => (
+            <div key={label} className="grid grid-cols-[minmax(0,1fr)_76px_76px] items-center gap-2 border-b border-border/70 px-3 py-2 last:border-b-0">
+              <span className="text-xs">{label}</span>
+              <span className="text-center text-[10px] text-muted-foreground">{starter}</span>
+              <span className="text-center text-[10px] font-medium">{growth}</span>
+            </div>
+          ))}
+        </div>
+
+        {(business.subscriptionHistory ?? []).length ? (
+          <div className="space-y-2 border-t border-border pt-3">
+            <p className="text-xs font-semibold">Plan preference history</p>
+            {[...(business.subscriptionHistory ?? [])].slice(-4).reverse().map((entry) => (
+              <div key={entry.id} className="flex items-center justify-between gap-3 text-xs">
+                <span>{getSubscriptionPlan(entry.toPlan).title} · {entry.billingCycle}</span>
+                <span className="text-muted-foreground">{new Date(entry.changedAt).toLocaleDateString("en-IN")}</span>
+              </div>
+            ))}
+          </div>
+        ) : null}
+        <p className="text-[11px] leading-5 text-muted-foreground">Prices are the current plan values already configured for this project. Plan selection and entitlements are simulated locally for development: no checkout, renewal or charge is connected. No transaction, customer, product or invoice quota has been invented; only the published team and branch caps are enforced. Workflow automation is listed as planned, not live.</p>
+      </Card>
+
+      <Card className="mb-4 space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <div><h2 className="text-sm font-semibold">Branches</h2><p className="mt-1 text-xs text-muted-foreground">Manage locations and assign employees to the right branch.</p></div>
+          <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-semibold tabular-nums">{branches.length} / {currentPlan.maxBranches}</span>
+        </div>
+        {branches.length ? <div className="space-y-2">
+          {branches.map((item) => {
+            const assigned = db.members.filter((member) => member.businessId === business.id && member.branchIds?.includes(item.id)).length;
+            return <div key={item.id} className="flex items-center justify-between gap-3 rounded-xl border border-border p-3">
+              <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="truncate text-sm font-semibold">{item.name}</p>{item.isDefault ? <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">Default</span> : null}{!item.isActive ? <span className="rounded-full bg-muted px-2 py-0.5 text-[10px]">Inactive</span> : null}</div><p className="mt-1 text-xs text-muted-foreground">{item.code} · {assigned} assigned team {assigned === 1 ? "member" : "members"}</p>{item.address ? <p className="mt-1 truncate text-xs text-muted-foreground">{item.address}</p> : null}</div>
+              {!item.isDefault ? <Button size="sm" variant="ghost" className="text-danger" onClick={() => removeBranch(item.id)}>Delete</Button> : null}
+            </div>;
+          })}
+        </div> : <p className="rounded-xl border border-dashed border-border p-4 text-xs text-muted-foreground">No branches yet. Add your first location below.</p>}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Branch name"><Input value={branchName} onChange={(event) => setBranchName(event.target.value)} placeholder="e.g. Jaipur Branch" /></Field>
+          <Field label="Branch code (optional)"><Input value={branchCode} onChange={(event) => setBranchCode(event.target.value.toUpperCase())} placeholder="e.g. JAI" maxLength={12} /></Field>
+        </div>
+        <Field label="Address (optional)"><Input value={branchAddress} onChange={(event) => setBranchAddress(event.target.value)} placeholder="Branch address" /></Field>
+        <Button className="w-full" variant="secondary" onClick={addBranch} disabled={!branchName.trim() || branches.length >= currentPlan.maxBranches}>Add branch</Button>
+        {branches.length >= currentPlan.maxBranches ? <p className="text-[11px] text-muted-foreground">You have reached your {currentPlan.title} branch allowance. Choose a higher plan preference to increase this limit.</p> : null}
       </Card>
 
       <Card className="mb-4 space-y-3">

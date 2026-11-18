@@ -1,11 +1,15 @@
 import * as React from "react";
 import { toast } from "sonner";
-import { ArrowLeft, Check, FileText, Palette, Plus, Printer, Search, Settings2, Trash2 } from "lucide-react";
+import { ArrowLeft, Check, Download, FileText, Palette, Plus, Printer, Search, Settings2, Trash2 } from "lucide-react";
 import { AppPage, PageHeader } from "@/components/app-shell";
+import { BottomSheet } from "@/components/sheet";
+import { SavedViewControls } from "@/components/saved-view-controls";
 import { Badge, Button, Card, Field, Input, Select, Switch, Textarea } from "@/components/ui";
 import { DEFAULT_INVOICE_SETTINGS, type Business, type Customer, type InvoiceDesignSettings, type InvoiceRecord, type InvoiceSupplyType } from "@/lib/domain";
-import { calculateInvoiceTotals, isValidGstin, nextInvoiceNumber, type InvoiceLineDraft } from "@/lib/invoice-utils";
+import { addInvoicePayment, calculateInvoiceTotals, getInvoiceDueSummary, getInvoicePaymentSummary, isValidGstin, nextInvoiceNumber, type InvoiceLineDraft } from "@/lib/invoice-utils";
 import { money } from "@/lib/format";
+import { downloadCsv } from "@/lib/csv";
+import { cancelInvoice } from "@/lib/services";
 import { createId } from "@/lib/utils";
 import { useAppStore, useBusiness } from "@/lib/store";
 
@@ -44,6 +48,11 @@ function InvoicesWorkspace({ business }: { business: Business }) {
   const [notes, setNotes] = React.useState("");
   const [lines, setLines] = React.useState<InvoiceLineDraft[]>([blankLine()]);
   const [formError, setFormError] = React.useState("");
+  const [paymentAmount, setPaymentAmount] = React.useState("");
+  const [paymentMethod, setPaymentMethod] = React.useState<"cash" | "upi" | "bank" | "card" | "other">("upi");
+  const [paymentReference, setPaymentReference] = React.useState("");
+  const [cancelOpen, setCancelOpen] = React.useState(false);
+  const [cancelReason, setCancelReason] = React.useState("");
   const currentSettings = business.invoiceSettings ?? DEFAULT_INVOICE_SETTINGS;
   const [settings, setSettings] = React.useState<InvoiceDesignSettings>(currentSettings);
   const totals = React.useMemo(() => calculateInvoiceTotals(lines, gstRegistered, supplyType), [lines, gstRegistered, supplyType]);
@@ -55,7 +64,20 @@ function InvoicesWorkspace({ business }: { business: Business }) {
   const invoices = db.invoices.filter((x) => x.businessId === business.id).sort((a, b) => b.issueDate.localeCompare(a.issueDate) || b.createdAt.localeCompare(a.createdAt));
   const selectedInvoice = invoices.find((x) => x.id === selectedId) ?? null;
   const filtered = invoices.filter((x) => (!customerFilter || x.customerId === customerFilter) && [x.invoiceNumber, x.customerName, x.customerGstin ?? ""].some((v) => v.toLowerCase().includes(search.toLowerCase())));
+  const overdueInvoices = invoices.map((invoice) => ({ invoice, due: getInvoiceDueSummary(invoice) })).filter((entry) => entry.due.status === "overdue");
+  const overdueAmount = overdueInvoices.reduce((sum, entry) => sum + entry.due.balance, 0);
   const fmt = (value: number) => money(value, business.currency);
+
+  function exportInvoices() {
+    downloadCsv("business-sutra-invoices.csv",
+      ["Invoice number", "Issue date", "Due date", "Due status", "Overdue days", "Customer", "GSTIN", "Total", "Paid", "Balance", "Status", "Cancellation reason"],
+      filtered.map((invoice) => {
+        const payment = getInvoicePaymentSummary(invoice.total, invoice.payments);
+        const due = getInvoiceDueSummary(invoice);
+        return [invoice.invoiceNumber, invoice.issueDate, invoice.dueDate, due.status, due.overdueDays || "", invoice.customerName, invoice.customerGstin, invoice.total, payment.paidAmount, payment.balance, invoice.status, invoice.cancelReason];
+      }));
+    toast.success("Exported " + filtered.length + " invoices");
+  }
 
   function updateLine(id: string, patch: Partial<InvoiceLineDraft>) {
     setLines((current) => current.map((line) => line.id === id ? { ...line, ...patch } : line));
@@ -147,6 +169,38 @@ function InvoicesWorkspace({ business }: { business: Business }) {
     apply({ ...currentDb, customers: nextCustomers, invoices: [invoice, ...currentDb.invoices] });
     setSelectedId(invoice.id); setMode("view"); toast.success("Invoice saved to this workspace");
   }
+  function recordInvoicePayment(invoice: InvoiceRecord) {
+    try {
+      const payment = {
+        id: createId("pay"),
+        amount: Number(paymentAmount),
+        method: paymentMethod,
+        reference: paymentReference.trim() || undefined,
+        receivedAt: new Date().toISOString(),
+      };
+      const updated = addInvoicePayment(invoice, payment);
+      const currentDb = useAppStore.getState().db;
+      apply({ ...currentDb, invoices: currentDb.invoices.map((item) => item.id === invoice.id ? updated : item) });
+      setPaymentAmount("");
+      setPaymentReference("");
+      toast.success("Invoice payment recorded");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not record payment");
+    }
+  }
+
+  function confirmCancelInvoice() {
+    if (!selectedInvoice) return;
+    try {
+      apply(cancelInvoice(useAppStore.getState().db, selectedInvoice.id, cancelReason));
+      setCancelOpen(false);
+      setCancelReason("");
+      toast.success("Invoice cancelled and retained in history");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not cancel invoice");
+    }
+  }
+
   function saveDesign() {
     const prefix = settings.prefix.trim().toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 4);
     if (!prefix) { toast.error("Choose a prefix with 1–4 letters or numbers."); return; }
@@ -161,6 +215,7 @@ function InvoicesWorkspace({ business }: { business: Business }) {
       <PageHeader title="Invoices" subtitle="Create branded invoices and keep every customer's billing history." action={
         <div className="flex flex-wrap gap-2">
           <Button size="sm" variant={mode === "list" ? "secondary" : "ghost"} onClick={() => { setMode("list"); setSelectedId(null); }}>All invoices</Button>
+          {mode === "list" ? <Button size="sm" variant="outline" onClick={exportInvoices} disabled={!filtered.length}><Download className="size-4" />Export</Button> : null}
           <Button size="sm" variant={mode === "template" ? "secondary" : "outline"} onClick={() => setMode("template")}><Palette className="size-4" />Format</Button>
           <Button size="sm" onClick={openCreate}><Plus className="size-4" />New invoice</Button>
         </div>
@@ -168,16 +223,22 @@ function InvoicesWorkspace({ business }: { business: Business }) {
 
       {mode === "list" ? (
         <section className="animate-enter space-y-4">
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <Card className="border-0 bg-gradient-to-br from-[#142E43] to-[#176B73] text-white shadow-[0_14px_36px_rgba(17,63,76,.16)]"><p className="text-[11px] font-medium text-white/70">Invoices saved</p><p className="mt-2 text-3xl font-semibold tabular-nums">{invoices.length}</p><p className="mt-1 text-xs text-white/70">This workspace</p></Card>
             <Card className="card-lift"><p className="text-[11px] text-muted-foreground">Total invoiced</p><p className="mt-2 text-2xl font-semibold tabular-nums">{fmt(invoices.filter((x) => x.status === "issued").reduce((s, x) => s + x.total, 0))}</p><p className="mt-1 text-xs text-muted-foreground">Across saved invoices</p></Card>
             <Card className="card-lift"><p className="text-[11px] text-muted-foreground">Customers billed</p><p className="mt-2 text-2xl font-semibold tabular-nums">{new Set(invoices.map((x) => x.customerId ?? x.customerName)).size}</p><p className="mt-1 text-xs text-muted-foreground">Unique recipients</p></Card>
+            <Card className="card-lift"><p className="text-[11px] text-muted-foreground">Overdue balance</p><p className="mt-2 text-2xl font-semibold tabular-nums">{fmt(overdueAmount)}</p><p className="mt-1 text-xs text-muted-foreground">{overdueInvoices.length} overdue invoice{overdueInvoices.length === 1 ? "" : "s"}</p></Card>
           </div>
           <Card className="animate-enter-delay-1 space-y-4">
             <div className="flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-sm font-semibold">Invoice history</h2><p className="mt-1 text-xs text-muted-foreground">Search and filter by customer, invoice number or GSTIN.</p></div><div className="grid w-full gap-2 sm:max-w-xl sm:grid-cols-[minmax(180px,.8fr)_minmax(220px,1fr)]"><Field label="Customer"><Select value={customerFilter} onChange={(e) => setCustomerFilter(e.target.value)}><option value="">All customers</option>{customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}</Select></Field><Field label="Search"><div className="relative"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" placeholder="Invoice no. / customer / GSTIN" /></div></Field></div></div>
+            <SavedViewControls businessId={business.id} moduleKey="invoices" filters={{ search, customerFilter }} onApply={(saved) => {
+              setSearch(saved.search ?? "");
+              setCustomerFilter(saved.customerFilter ?? "");
+            }} />
             {filtered.length ? <div className="divide-y divide-border">{filtered.map((invoice) => <button type="button" key={invoice.id} onClick={() => { setSelectedId(invoice.id); setMode("view"); }} className="group flex w-full items-center gap-3 py-3 text-left transition-colors hover:bg-muted/35">
               <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><FileText className="size-5" /></span>
-              <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{invoice.customerName}</span><span className="mt-1 block truncate text-xs text-muted-foreground">{invoice.invoiceNumber} · {new Date(invoice.issueDate + "T00:00:00").toLocaleDateString("en-IN")}</span></span>
+              <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{invoice.customerName}</span><span className="mt-1 block truncate text-xs text-muted-foreground">{invoice.invoiceNumber} · {new Date(invoice.issueDate + "T00:00:00").toLocaleDateString("en-IN")}</span>
+                {(() => { const due = getInvoiceDueSummary(invoice); return due.status === "overdue" ? <span className="mt-1 block text-xs font-semibold text-danger">Overdue · {due.overdueDays} days</span> : due.status === "due" ? <span className="mt-1 block text-xs text-muted-foreground">Payment due {invoice.dueDate}</span> : null; })()}</span>
               <span className="hidden sm:block"><Badge tone={invoice.status === "issued" ? "good" : "warn"}>{invoice.status}</Badge></span>
               <span className="shrink-0 text-sm font-semibold tabular-nums">{fmt(invoice.total)}</span><span className="text-muted-foreground transition-transform group-hover:translate-x-1">›</span>
             </button>)}</div> : <div className="rounded-2xl border border-dashed border-border px-5 py-10 text-center"><span className="mx-auto grid size-12 place-items-center rounded-2xl bg-primary/10 text-primary"><FileText className="size-6" /></span><h3 className="mt-4 text-base font-semibold">{search ? "No matching invoices" : "Your invoice book is ready"}</h3><p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">{search ? "Try another invoice number or customer name." : "Set up your invoice format once, then create a customer invoice in a few steps. Saved invoices will appear here."}</p><div className="mt-4 flex justify-center gap-2"><Button variant="outline" onClick={() => setMode("template")}><Settings2 className="size-4" />Customise format</Button><Button onClick={openCreate}><Plus className="size-4" />Create invoice</Button></div></div>}
@@ -238,11 +299,44 @@ function InvoicesWorkspace({ business }: { business: Business }) {
 
       {mode === "view" && selectedInvoice ? (
         <section className="animate-enter space-y-4">
-          <div className="no-print flex flex-wrap items-center justify-between gap-2"><Button size="sm" variant="ghost" onClick={() => setMode("list")}><ArrowLeft className="size-4" />All invoices</Button><div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => setMode("template")}><Palette className="size-4" />Format settings</Button><Button size="sm" onClick={() => window.print()}><Printer className="size-4" />Print / Save PDF</Button></div></div>
+          <div className="no-print flex flex-wrap items-center justify-between gap-2"><Button size="sm" variant="ghost" onClick={() => setMode("list")}><ArrowLeft className="size-4" />All invoices</Button><div className="flex flex-wrap gap-2">
+            {selectedInvoice.status === "issued" ? <Button size="sm" variant="outline" onClick={() => { setCancelReason(""); setCancelOpen(true); }}>Cancel invoice</Button> : <Badge tone="warn">Cancelled</Badge>}
+            <Button size="sm" variant="outline" onClick={() => setMode("template")}><Palette className="size-4" />Format settings</Button>
+            <Button size="sm" onClick={() => window.print()}><Printer className="size-4" />Print / Save PDF</Button>
+          </div></div>
           <InvoicePaper invoice={selectedInvoice} settings={currentSettings} currency={business.currency} logo={business.logoDataUrl} />
+          {selectedInvoice.status === "issued" ? (() => {
+            const paymentSummary = getInvoicePaymentSummary(selectedInvoice.total, selectedInvoice.payments);
+            return <Card className="no-print space-y-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div><h2 className="text-sm font-semibold">Payment tracking</h2><p className="mt-1 text-xs text-muted-foreground">Record payments received against this invoice. This does not process a payment.</p></div>
+                <div className="flex flex-wrap gap-1.5"><Badge tone={paymentSummary.status === "paid" ? "good" : paymentSummary.status === "partial" ? "warn" : "neutral"}>{paymentSummary.status === "paid" ? "Paid" : paymentSummary.status === "partial" ? "Partially paid" : "Unpaid"}</Badge>{(() => { const due = getInvoiceDueSummary(selectedInvoice); return due.status === "overdue" ? <Badge tone="bad">Overdue · {due.overdueDays} days</Badge> : due.status === "due" ? <Badge tone="neutral">Due date not passed</Badge> : null; })()}</div>
+              </div>
+              {selectedInvoice.dueDate ? <p className="text-xs text-muted-foreground">Payment due: {new Date(selectedInvoice.dueDate + "T00:00:00").toLocaleDateString("en-IN")}</p> : <p className="text-xs text-muted-foreground">No payment due date set.</p>}
+              <div className="grid gap-2 sm:grid-cols-3">
+                <div className="rounded-xl bg-muted/45 p-3"><p className="text-[10px] text-muted-foreground">Invoice total</p><p className="mt-1 text-lg font-semibold tabular-nums">{fmt(selectedInvoice.total)}</p></div>
+                <div className="rounded-xl bg-muted/45 p-3"><p className="text-[10px] text-muted-foreground">Received</p><p className="mt-1 text-lg font-semibold tabular-nums">{fmt(paymentSummary.paidAmount)}</p></div>
+                <div className="rounded-xl bg-muted/45 p-3"><p className="text-[10px] text-muted-foreground">Outstanding</p><p className="mt-1 text-lg font-semibold tabular-nums">{fmt(paymentSummary.balance)}</p></div>
+              </div>
+              {selectedInvoice.payments?.length ? <div className="space-y-2"><p className="text-xs font-semibold">Payment history</p>{selectedInvoice.payments.map((payment) => <div key={payment.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-border py-2 text-xs"><span><strong>{fmt(payment.amount)}</strong><span className="ml-2 capitalize text-muted-foreground">{payment.method}</span>{payment.reference ? <span className="ml-2 text-muted-foreground">· {payment.reference}</span> : null}</span><span className="text-muted-foreground">{new Date(payment.receivedAt).toLocaleString("en-IN")}</span></div>)}</div> : <p className="text-xs text-muted-foreground">No payments have been recorded yet.</p>}
+              {paymentSummary.balance > 0 ? <div className="grid items-end gap-3 sm:grid-cols-[1fr_1fr_1.2fr_auto]">
+                <Field label="Amount received"><Input type="number" min="0.01" max={paymentSummary.balance} step="0.01" value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} placeholder={String(paymentSummary.balance)} /></Field>
+                <Field label="Method"><Select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as typeof paymentMethod)}><option value="upi">UPI</option><option value="bank">Bank transfer</option><option value="cash">Cash</option><option value="card">Card</option><option value="other">Other</option></Select></Field>
+                <Field label="Reference (optional)"><Input value={paymentReference} onChange={(e) => setPaymentReference(e.target.value)} placeholder="UTR / transaction ID" /></Field>
+                <Button onClick={() => recordInvoicePayment(selectedInvoice)} disabled={!paymentAmount || Number(paymentAmount) <= 0}>Record payment</Button>
+              </div> : <p className="text-xs font-semibold text-primary">This invoice is fully paid.</p>}
+            </Card>;
+          })() : null}
           <p className="no-print text-center text-[11px] leading-5 text-muted-foreground">Choose “Save as PDF” in your browser's print dialog to create a PDF copy.</p>
         </section>
       ) : null}
+      <BottomSheet open={cancelOpen} onOpenChange={setCancelOpen} title="Cancel invoice?"
+        footer={<div className="flex gap-2"><Button className="flex-1" variant="ghost" onClick={() => setCancelOpen(false)}>Keep invoice</Button><Button className="flex-1" variant="outline" disabled={cancelReason.trim().length < 3} onClick={confirmCancelInvoice}>Confirm cancellation</Button></div>}>
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">The invoice will remain in your history with a cancellation reason. Any payment already recorded remains in the payment history; this action does not issue a refund or reverse a bank transaction.</p>
+          <Field label="Reason for cancellation"><Textarea value={cancelReason} onChange={(event) => setCancelReason(event.target.value)} placeholder="Duplicate invoice, incorrect details, order cancelled…" /></Field>
+        </div>
+      </BottomSheet>
     </AppPage>
   );
 }
@@ -265,6 +359,7 @@ function InvoicePaper({ invoice, settings, currency, logo }: { invoice: InvoiceR
       <div className="mt-7 overflow-x-auto"><table className="w-full border-collapse text-left text-xs"><thead><tr style={{ background: minimal ? "#f8fafc" : accent, color: minimal ? "#334155" : "white" }}>{["Description", "HSN / SAC", "Qty", "Rate", "Taxable", "Tax", "Amount"].map((x) => <th key={x} className="px-2 py-3 font-semibold sm:px-3">{x}</th>)}</tr></thead><tbody>{invoice.items.map((item) => <tr key={item.id} className="border-b border-slate-200"><td className="px-2 py-3 font-semibold sm:px-3">{item.description}</td><td className="px-2 py-3 text-slate-500 sm:px-3">{item.hsnSac || "—"}</td><td className="px-2 py-3 tabular-nums sm:px-3">{item.quantity} {item.unit}</td><td className="px-2 py-3 tabular-nums sm:px-3">{money(item.rate, currency)}</td><td className="px-2 py-3 tabular-nums sm:px-3">{money(item.taxableValue, currency)}</td><td className="px-2 py-3 tabular-nums sm:px-3">{item.taxRate}%</td><td className="px-2 py-3 text-right font-semibold tabular-nums sm:px-3">{money(item.total, currency)}</td></tr>)}</tbody></table></div>
       <div className="mt-6 flex justify-end"><div className="w-full max-w-xs space-y-2 text-xs"><TotalRow label="Subtotal" value={money(invoice.subtotal, currency)} />{invoice.discountTotal > 0 ? <TotalRow label="Discount" value={"−" + money(invoice.discountTotal, currency)} /> : null}<TotalRow label="Taxable value" value={money(invoice.taxableValue, currency)} />{invoice.cgst > 0 ? <TotalRow label="CGST" value={money(invoice.cgst, currency)} /> : null}{invoice.sgst > 0 ? <TotalRow label="SGST" value={money(invoice.sgst, currency)} /> : null}{invoice.igst > 0 ? <TotalRow label="IGST" value={money(invoice.igst, currency)} /> : null}<div className="flex justify-between border-t-2 border-slate-800 pt-3 text-base font-bold"><span>Total</span><span style={{ color: accent }}>{money(invoice.total, currency)}</span></div></div></div>
       {invoice.notes ? <div className="mt-7"><p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Notes</p><p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-slate-600">{invoice.notes}</p></div> : null}
+      {invoice.cancelReason ? <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-3"><p className="text-[10px] font-bold uppercase tracking-widest text-amber-800">Cancellation reason</p><p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-amber-900">{invoice.cancelReason}</p>{invoice.cancelledAt ? <p className="mt-1 text-[10px] text-amber-800">Cancelled · {new Date(invoice.cancelledAt).toLocaleString("en-IN")}</p> : null}</div> : null}
       {invoice.terms ? <div className="mt-5"><p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Terms & conditions</p><p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-slate-600">{invoice.terms}</p></div> : null}
       <div className="mt-9 flex flex-wrap items-end justify-between gap-4 border-t border-slate-200 pt-5"><p className="max-w-sm text-xs leading-5 text-slate-500">{settings.footerNote || "Thank you for your business."}</p><div className="min-w-[140px] text-right"><div className="mb-8 h-7 border-b border-dashed border-slate-300" /><p className="text-xs font-semibold">Authorised signatory</p></div></div>
       <p className="mt-6 text-center text-[9px] text-slate-400">Generated using Business Sutra · Verify applicable statutory requirements before issuing.</p>

@@ -11,6 +11,7 @@ import {
   X,
 } from "lucide-react";
 import { AppPage, PageHeader } from "@/components/app-shell";
+import { PlanFeatureGate } from "@/components/plan-feature-gate";
 import { Badge, Button, Card, EmptyState, Input, Select, Stat } from "@/components/ui";
 import {
   activeReportFilterCount,
@@ -20,10 +21,11 @@ import {
   type ReportFilters,
   type ReportRecordType,
 } from "@/lib/report-filters";
-import { financeSnapshot, marketingTotals, productProfits, type DateRange } from "@/lib/engines";
-import { money, pct } from "@/lib/format";
+import { cashbookEntries, financeSnapshot, marketingTotals, productProfits, type DateRange } from "@/lib/engines";
+import { formatDateTime, money, pct } from "@/lib/format";
 import { useAppStore, useBusiness } from "@/lib/store";
 import { createId } from "@/lib/utils";
+import { businessHasFeature } from "@/lib/subscription";
 
 type Period = "today" | "last7" | "last30" | "month" | "quarter" | "year" | "custom";
 
@@ -235,8 +237,9 @@ export function ReportsScreen() {
   }, [business?.id]);
 
   if (!business) return null;
-  const businessId = business.id;
-  const businessName = business.name;
+  const activeBusiness = business;
+  const businessId = activeBusiness.id;
+  const businessName = activeBusiness.name;
 
   const range = getRange(period, customFrom, customTo);
   const validRange =
@@ -245,10 +248,10 @@ export function ReportsScreen() {
     range.from.getTime() <= range.to.getTime();
 
   const baseSales = validRange
-    ? db.sales.filter((sale) => sale.businessId === business.id && dateIsInRange(sale.createdAt, range))
+    ? db.sales.filter((sale) => sale.businessId === business.id && sale.status !== "reversed" && dateIsInRange(sale.createdAt, range))
     : [];
   const baseExpenses = validRange
-    ? db.expenses.filter((expense) => expense.businessId === business.id && dateIsInRange(expense.date, range))
+    ? db.expenses.filter((expense) => expense.businessId === business.id && !expense.archived && dateIsInRange(expense.date, range))
     : [];
   const basePurchases = validRange
     ? db.purchases.filter((purchase) => purchase.businessId === business.id && dateIsInRange(purchase.createdAt, range))
@@ -320,6 +323,10 @@ export function ReportsScreen() {
   const supplierOutstanding = purchases.reduce((sum, purchase) => sum + purchase.balance, 0);
   const openPurchases = purchases.filter((purchase) => purchase.balance > 0).length;
   const finance = financeSnapshot({ ...db, sales, expenses }, business.id);
+  const cashbook = validRange ? cashbookEntries(db, business.id, range) : [];
+  const cashbookIn = cashbook.filter((entry) => entry.direction === "in").reduce((sum, entry) => sum + entry.amount, 0);
+  const cashbookOut = cashbook.filter((entry) => entry.direction === "out").reduce((sum, entry) => sum + entry.amount, 0);
+  const cashbookNet = cashbookIn - cashbookOut;
   const marketing = marketingTotals(campaigns);
   const topProducts = productProfits(sales).slice(0, 5);
   const currency = business.currency;
@@ -407,6 +414,7 @@ export function ReportsScreen() {
   }
 
   function saveCurrentView() {
+    if (!businessHasFeature(activeBusiness, "savedViews")) return;
     const name = saveViewName.trim();
     if (!name) return;
     const view: SavedReportView = {
@@ -465,6 +473,10 @@ export function ReportsScreen() {
       ["Paid to suppliers", supplierPaid],
       ["Supplier payables", supplierOutstanding],
       ["Open purchases", openPurchases],
+      [],
+      ["Cashbook", "Date", "Direction", "Type", "Party", "Method", "Reference", "Amount"],
+      ...cashbook.map((entry) => [entry.id, entry.date, entry.direction, entry.type, entry.party, entry.method, entry.reference ?? "", entry.amount]),
+      ["Cashbook totals", "Cash in", cashbookIn, "Cash out", cashbookOut, "Net recorded movement", cashbookNet],
       [],
       ["Top products", "Units sold", "Revenue", "Profit"],
       ...topProducts.map((product) => [product.name, product.qty, product.revenue, product.profit]),
@@ -540,6 +552,7 @@ export function ReportsScreen() {
               <p className="mt-0.5 text-xs text-muted-foreground">Choose what you want to see. Results update automatically.</p>
             </div>
           </div>
+          <PlanFeatureGate feature="savedViews" compact title="Saved report views are in Growth" description="Upgrade to Growth to save and reuse report filter combinations.">
           <div className="flex flex-wrap items-center gap-2">
             <Select
               aria-label="Saved report views"
@@ -559,6 +572,7 @@ export function ReportsScreen() {
               <Bookmark className="size-4" />Save view
             </Button>
           </div>
+          </PlanFeatureGate>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 border-t border-border/70 pt-3">
@@ -598,6 +612,7 @@ export function ReportsScreen() {
         ) : null}
 
         {saveViewOpen ? (
+          <PlanFeatureGate feature="savedViews" compact>
           <div className="flex flex-col gap-2 rounded-xl border border-primary/20 bg-primary/[0.035] p-3 sm:flex-row sm:items-center">
             <div className="min-w-0 flex-1">
               <p className="text-xs font-semibold text-foreground">Save this filter setup</p>
@@ -617,6 +632,7 @@ export function ReportsScreen() {
               </Button>
             </div>
           </div>
+          </PlanFeatureGate>
         ) : null}
 
         {chips.length > 0 ? (
@@ -758,27 +774,48 @@ export function ReportsScreen() {
       </section>
 
       <section className="mb-5">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-semibold">Cashbook</h2>
+            <p className="mt-1 text-xs text-muted-foreground">Recorded receipts, refunds, supplier payments and expenses for {range.label}. This is net recorded movement, not a live bank balance.</p>
+          </div>
+          <Badge tone={cashbookNet >= 0 ? "good" : "warn"}>{cashbookNet >= 0 ? "Net inflow" : "Net outflow"} · {money(Math.abs(cashbookNet), currency)}</Badge>
+        </div>
+        <div className="mb-3 grid grid-cols-3 gap-2">
+          <Card><Stat label="Cash in" value={money(cashbookIn, currency)} tone="good" /></Card>
+          <Card><Stat label="Cash out" value={money(cashbookOut, currency)} /></Card>
+          <Card><Stat label="Net movement" value={money(cashbookNet, currency)} tone={cashbookNet >= 0 ? "good" : "bad"} /></Card>
+        </div>
+        <Card>
+          {cashbook.length ? (
+            <>
+              <div className="divide-y divide-border">
+                {cashbook.slice(0, 30).map((entry) => (
+                  <div key={entry.id} className="flex items-start justify-between gap-3 py-2.5 text-sm">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{entry.party}</p>
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">{entry.description} · {formatDateTime(entry.date)}</p>
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">{entry.method.toUpperCase()}{entry.reference ? ` · ${entry.reference}` : ""}</p>
+                    </div>
+                    <p className={entry.direction === "in" ? "shrink-0 font-semibold tabular text-primary" : "shrink-0 font-semibold tabular text-foreground"}>
+                      {entry.direction === "in" ? "+" : "−"}{money(entry.amount, currency)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+              {cashbook.length > 30 ? <p className="pt-3 text-xs text-muted-foreground">Showing the latest 30 of {cashbook.length} cash movements. Export the report to see all entries.</p> : null}
+            </>
+          ) : <p className="py-6 text-center text-sm text-muted-foreground">No cash movements recorded in this date range.</p>}
+        </Card>
+      </section>
+
+      <section className="mb-5">
         <h2 className="mb-2 text-sm font-semibold">Sales overview</h2>
         <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
           <Card><Stat label="Orders" value={String(finance.orderCount)} /></Card>
           <Card><Stat label="Units sold" value={String(finance.unitsSold)} /></Card>
           <Card><Stat label="Customers" value={String(new Set(sales.map((sale) => sale.customerId).filter(Boolean)).size)} /></Card>
           <Card><Stat label="Average order value" value={money(finance.aov, currency)} /></Card>
-        </div>
-      </section>
-
-      <section className="mb-5">
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold">Marketing performance</h2>
-          <Badge tone="neutral">{campaigns.length} campaigns</Badge>
-        </div>
-        <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">
-          <Card><Stat label="Ad spend" value={money(marketing.spend, currency)} /></Card>
-          <Card><Stat label="Leads" value={String(marketing.leads)} /></Card>
-          <Card><Stat label="Customers" value={String(marketing.customers)} /></Card>
-          <Card><Stat label="Cost per lead" value={marketing.cpl == null ? "—" : money(marketing.cpl, currency)} /></Card>
-          <Card><Stat label="Customer acquisition cost" value={marketing.cac == null ? "—" : money(marketing.cac, currency)} /></Card>
-          <Card><Stat label="ROAS" value={marketing.roas == null ? "—" : `${marketing.roas.toFixed(2)}x`} /></Card>
         </div>
       </section>
 
@@ -794,6 +831,24 @@ export function ReportsScreen() {
           <Card><Stat label="Purchase records" value={String(purchases.length)} /></Card>
         </div>
       </section>
+
+      <PlanFeatureGate feature="advancedReports" title="Advanced reports are included in Growth" description="Starter keeps standard financial, sales and purchase summaries. Upgrade to Growth to unlock detailed marketing performance and product profitability reports.">
+      <section className="mb-5">
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="text-sm font-semibold">Marketing performance</h2>
+          <Badge tone="neutral">{campaigns.length} campaigns</Badge>
+        </div>
+        <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">
+          <Card><Stat label="Ad spend" value={money(marketing.spend, currency)} /></Card>
+          <Card><Stat label="Leads" value={String(marketing.leads)} /></Card>
+          <Card><Stat label="Customers" value={String(marketing.customers)} /></Card>
+          <Card><Stat label="Cost per lead" value={marketing.cpl == null ? "—" : money(marketing.cpl, currency)} /></Card>
+          <Card><Stat label="Customer acquisition cost" value={marketing.cac == null ? "—" : money(marketing.cac, currency)} /></Card>
+          <Card><Stat label="ROAS" value={marketing.roas == null ? "—" : `${marketing.roas.toFixed(2)}x`} /></Card>
+        </div>
+      </section>
+
+
 
       <section>
         <h2 className="mb-2 text-sm font-semibold">Top products by profit</h2>
@@ -814,6 +869,7 @@ export function ReportsScreen() {
           </Card>
         ) : <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">Product profit ranking will appear after matching sales are recorded.</p>}
       </section>
+      </PlanFeatureGate>
 
       <p className="mt-5 text-xs text-muted-foreground">All figures use the selected date range and applied report filters. Saved views are stored in this browser for this workspace.</p>
     </AppPage>

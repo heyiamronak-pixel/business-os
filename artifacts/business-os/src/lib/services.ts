@@ -5,16 +5,26 @@ import {
   type Activity,
   type AppNotification,
   type Business,
+  type Branch,
   type Campaign,
   type Customer,
+  type Lead,
+  type LeadStage,
   type Expense,
   type ExpenseCategory,
   type IndustryId,
+  type InvoiceRecord,
   type ModuleId,
   type PaymentMethod,
   type Product,
   type Purchase,
   type PurchaseItem,
+  type PurchasePayment,
+  type PurchaseReturn,
+  type RecordedPaymentMethod,
+  type SalePayment,
+  type SaleRefund,
+  type SaleReturn,
   type Supplier,
   type SupplierStatus,
   type Sale,
@@ -24,12 +34,17 @@ import {
   type TargetPeriod,
   type TaskItem,
   type TaskPriority,
+  type TaskRecurrence,
   type TaskStatus,
   type TeamMember,
   type WorkspaceDB,
 } from "@/lib/domain";
 import { createId, nowIso, roundMoney } from "@/lib/utils";
 import { generateSku } from "@/lib/sku";
+import { normaliseLeadInput } from "@/lib/lead-utils";
+import { normaliseInvoiceCancellationReason } from "@/lib/invoice-utils";
+import { nextTaskDueDate } from "@/lib/task-utils";
+import { getEffectivePlanId, getSubscriptionPlan, hasAvailableBranchSlot, hasAvailableUserSeat } from "@/lib/subscription";
 
 export class ServiceError extends Error {
   constructor(message: string) {
@@ -110,12 +125,23 @@ export function createWorkspace(
     createdAt: now,
     updatedAt: now,
   };
+  const mainBranch: Branch = {
+    id: createId("br"),
+    businessId: business.id,
+    name: "Main Branch",
+    code: "MAIN",
+    isDefault: true,
+    isActive: true,
+    createdAt: now,
+    updatedAt: now,
+  };
   const owner: TeamMember = {
     id: createId("mem"),
     businessId: business.id,
     name: input.ownerName?.trim() || "Owner",
     role: "owner",
     email: input.email?.trim() || undefined,
+    branchIds: [mainBranch.id],
     createdAt: now,
   };
   const cats: ExpenseCategory[] = SYSTEM_EXPENSE_CATEGORIES.map((name) => ({
@@ -128,6 +154,7 @@ export function createWorkspace(
     db: {
       ...db,
       businesses: [...db.businesses, business],
+    branches: [...db.branches, mainBranch],
       members: [...db.members, owner],
       expenseCategories: [...db.expenseCategories, ...cats],
     },
@@ -135,11 +162,82 @@ export function createWorkspace(
   };
 }
 
+
+function normaliseBusinessWebsite(value: string | undefined): string | undefined {
+  const raw = value?.trim();
+  if (!raw) return undefined;
+  const candidate = /^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`;
+  let parsed: URL;
+  try { parsed = new URL(candidate); }
+  catch { throw new ServiceError("Enter a valid business website URL."); }
+  if (!["http:", "https:"].includes(parsed.protocol) || !parsed.hostname.includes(".")) {
+    throw new ServiceError("Enter a valid business website URL.");
+  }
+  return parsed.toString().replace(/\/$/, "");
+}
+
+function validateBusinessProfilePatch(patch: Partial<Business>): Partial<Business> {
+  const next = { ...patch };
+  if (patch.name !== undefined) {
+    const name = patch.name.trim();
+    if (name.length < 2 || name.length > 100) throw new ServiceError("Business name must be between 2 and 100 characters.");
+    next.name = name;
+  }
+  if (patch.description !== undefined) {
+    const description = patch.description.trim();
+    if (description.length > 500) throw new ServiceError("Business description must be 500 characters or fewer.");
+    next.description = description || undefined;
+  }
+  if (patch.website !== undefined) next.website = normaliseBusinessWebsite(patch.website);
+  if (patch.email !== undefined) {
+    const email = patch.email.trim();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new ServiceError("Enter a valid business email address.");
+    next.email = email || undefined;
+  }
+  if (patch.phone !== undefined) {
+    const phone = patch.phone.trim();
+    if (phone && !/^[+0-9() .-]{7,24}$/.test(phone)) throw new ServiceError("Enter a valid business phone number.");
+    next.phone = phone || undefined;
+  }
+  if (patch.postalCode !== undefined) {
+    const postalCode = patch.postalCode.trim();
+    if (postalCode && !/^[A-Za-z0-9 -]{3,16}$/.test(postalCode)) throw new ServiceError("Enter a valid postal code.");
+    next.postalCode = postalCode || undefined;
+  }
+  if (patch.stateCode !== undefined) {
+    const stateCode = patch.stateCode.trim();
+    if (stateCode && !/^[0-9]{1,3}$/.test(stateCode)) throw new ServiceError("State code must contain 1 to 3 digits.");
+    next.stateCode = stateCode || undefined;
+  }
+  if (patch.gstin !== undefined) {
+    const gstin = patch.gstin.trim().toUpperCase();
+    if (gstin && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(gstin)) {
+      throw new ServiceError("Enter a valid 15-character GSTIN.");
+    }
+    next.gstin = gstin || undefined;
+  }
+  if (patch.legalName !== undefined) next.legalName = patch.legalName.trim() || undefined;
+  if (patch.address !== undefined) next.address = patch.address.trim() || undefined;
+  if (patch.location !== undefined) next.location = patch.location.trim() || undefined;
+  if (patch.state !== undefined) next.state = patch.state.trim() || undefined;
+  if (patch.businessType !== undefined && !patch.businessType.trim()) throw new ServiceError("Select a business type.");
+  if (patch.currency !== undefined) {
+    const currency = patch.currency.trim().toUpperCase();
+    if (!/^[A-Z]{3}$/.test(currency)) throw new ServiceError("Use a valid 3-letter currency code.");
+    next.currency = currency;
+  }
+  if (patch.timezone !== undefined && !patch.timezone.trim()) throw new ServiceError("Select a business timezone.");
+  return next;
+}
+
 export function updateBusiness(db: WorkspaceDB, id: string, patch: Partial<Business>): WorkspaceDB {
+  const current = db.businesses.find((business) => business.id === id);
+  if (!current) throw new ServiceError("Business workspace not found.");
+  const validated = validateBusinessProfilePatch(patch);
   const now = nowIso();
   return {
     ...db,
-    businesses: db.businesses.map((b) => (b.id === id ? { ...b, ...patch, id: b.id, updatedAt: now } : b)),
+    businesses: db.businesses.map((b) => (b.id === id ? { ...b, ...validated, id: b.id, updatedAt: now } : b)),
   };
 }
 
@@ -151,9 +249,12 @@ export function deleteBusiness(db: WorkspaceDB, id: string): WorkspaceDB {
     products: drop(db.products),
     movements: drop(db.movements),
     customers: drop(db.customers),
+    leads: drop(db.leads),
     suppliers: drop(db.suppliers),
     purchases: drop(db.purchases),
+    purchaseReturns: drop(db.purchaseReturns ?? []),
     sales: drop(db.sales),
+    returns: drop(db.returns ?? []),
     expenses: drop(db.expenses),
     expenseCategories: drop(db.expenseCategories),
     targets: drop(db.targets),
@@ -163,7 +264,20 @@ export function deleteBusiness(db: WorkspaceDB, id: string): WorkspaceDB {
     activity: drop(db.activity),
     notifications: drop(db.notifications),
     invoices: drop(db.invoices),
+    branches: db.branches.filter((item) => item.businessId !== id),
   };
+}
+
+export function cancelInvoice(db: WorkspaceDB, id: string, reason: string): WorkspaceDB {
+  const invoice = db.invoices.find((item) => item.id === id);
+  if (!invoice) throw new ServiceError("Invoice not found.");
+  if (invoice.status === "cancelled") throw new ServiceError("This invoice is already cancelled.");
+  let cancellationReason: string;
+  try { cancellationReason = normaliseInvoiceCancellationReason(reason); }
+  catch (error) { throw new ServiceError(error instanceof Error ? error.message : 'Invalid cancellation reason.'); }
+  const now = nowIso();
+  const updated: InvoiceRecord = { ...invoice, status: 'cancelled', cancelReason: cancellationReason, cancelledAt: now, updatedAt: now };
+  return { ...db, invoices: replace(db.invoices, id, updated) };
 }
 
 export function upsertProduct(
@@ -204,6 +318,7 @@ export function upsertProduct(
     const prev = db.products.find((p) => p.id === input.id);
     if (!prev) throw new ServiceError("Product not found.");
     const stockDelta = roundMoney(input.stock - prev.stock);
+    if (stockDelta !== 0) throw new ServiceError("Use Inventory to change stock so every movement has a reason and audit entry.");
     const product: Product = {
       ...prev,
       name,
@@ -272,8 +387,22 @@ export function upsertProduct(
   return { db: { ...db, products: [product, ...db.products], movements }, product };
 }
 
+export function archiveProduct(db: WorkspaceDB, id: string, archived = true): WorkspaceDB {
+  const product = db.products.find((item) => item.id === id);
+  if (!product) throw new ServiceError("Product not found.");
+  return { ...db, products: replace(db.products, id, { archived, updatedAt: nowIso() }) };
+}
+
 export function deleteProduct(db: WorkspaceDB, id: string): WorkspaceDB {
-  return { ...db, products: db.products.filter((p) => p.id !== id) };
+  const product = db.products.find((item) => item.id === id);
+  if (!product) return db;
+  const hasHistory =
+    db.movements.some((movement) => movement.productId === id) ||
+    db.sales.some((sale) => sale.items.some((item) => item.productId === id)) ||
+    db.purchases.some((purchase) => purchase.items.some((item) => item.productId === id)) ||
+    db.invoices.some((invoice) => invoice.items.some((item) => item.productId === id));
+  if (hasHistory) throw new ServiceError("This product has transaction history. Archive it to preserve the audit trail.");
+  return { ...db, products: db.products.filter((item) => item.id !== id) };
 }
 
 export function adjustStock(
@@ -286,9 +415,13 @@ export function adjustStock(
     reason?: string;
   },
 ): WorkspaceDB {
-  const product = db.products.find((p) => p.id === input.productId);
-  if (!product) throw new ServiceError("Product not found.");
-  if (input.quantity === 0) throw new ServiceError("Enter a quantity.");
+  const product = db.products.find((p) => p.id === input.productId && p.businessId === input.businessId);
+  if (!product || product.archived) throw new ServiceError("Product not found in this business or is archived.");
+  if (!Number.isFinite(input.quantity) || (input.type !== "adjustment" && input.quantity <= 0) || input.quantity < 0) {
+    throw new ServiceError(input.type === "adjustment" ? "Enter a valid stock quantity." : "Enter a quantity greater than zero.");
+  }
+  const movementReason = input.reason?.trim() ?? "";
+  if (movementReason.length < 3) throw new ServiceError("Add a stock movement reason (at least 3 characters).");
   let next = product.stock;
   if (input.type === "in") next = roundMoney(product.stock + Math.abs(input.quantity));
   else if (input.type === "out") next = roundMoney(product.stock - Math.abs(input.quantity));
@@ -308,7 +441,7 @@ export function adjustStock(
     type: input.type,
     quantity: qty,
     resultingStock: next,
-    reason: input.reason?.trim() || undefined,
+    reason: movementReason,
     createdAt: now,
   };
   return {
@@ -333,8 +466,8 @@ export function upsertCustomer(
   if (!name) throw new ServiceError("Customer name is required.");
   const now = nowIso();
   if (input.id) {
-    const prev = db.customers.find((c) => c.id === input.id);
-    if (!prev) throw new ServiceError("Customer not found.");
+    const prev = db.customers.find((c) => c.id === input.id && c.businessId === input.businessId);
+    if (!prev) throw new ServiceError("Customer not found in this business.");
     const customer: Customer = {
       ...prev,
       name,
@@ -358,8 +491,67 @@ export function upsertCustomer(
   return { db: { ...db, customers: [customer, ...db.customers] }, customer };
 }
 
+export function archiveCustomer(db: WorkspaceDB, id: string, archived = true): WorkspaceDB {
+  const customer = db.customers.find((item) => item.id === id);
+  if (!customer) throw new ServiceError("Customer not found.");
+  return { ...db, customers: replace(db.customers, id, { archived, updatedAt: nowIso() }) };
+}
+
 export function deleteCustomer(db: WorkspaceDB, id: string): WorkspaceDB {
-  return { ...db, customers: db.customers.filter((c) => c.id !== id) };
+  const customer = db.customers.find((item) => item.id === id);
+  if (!customer) return db;
+  const hasHistory =
+    db.sales.some((sale) => sale.customerId === id) ||
+    db.leads.some((lead) => lead.convertedCustomerId === id) ||
+    db.invoices.some((invoice) => invoice.customerId === id) ||
+    db.activity.some((activity) => activity.customerId === id);
+  if (hasHistory) throw new ServiceError("This customer has business history. Archive the customer to preserve linked records.");
+  return { ...db, customers: db.customers.filter((item) => item.id !== id) };
+}
+
+export function upsertLead(
+  db: WorkspaceDB,
+  input: { id?: string; businessId: string; name: string; company?: string; email?: string; phone?: string; source?: string; stage: LeadStage; value: number; expectedCloseDate?: string; followUpAt?: string; assignedTo?: string; notes?: string },
+): WorkspaceDB {
+  const business = db.businesses.find((item) => item.id === input.businessId);
+  if (!business) throw new ServiceError("Business not found.");
+  const existing = input.id ? db.leads.find((lead) => lead.id === input.id && lead.businessId === input.businessId) : undefined;
+  if (input.id && !existing) throw new ServiceError("Lead not found in this business.");
+  if (input.assignedTo && !db.members.some((member) => member.id === input.assignedTo && member.businessId === input.businessId)) {
+    throw new ServiceError("Choose a team member from this business.");
+  }
+  let normalized: ReturnType<typeof normaliseLeadInput>;
+  try { normalized = normaliseLeadInput(input); }
+  catch (error) { throw new ServiceError(error instanceof Error ? error.message : 'Invalid lead details.'); }
+  const now = nowIso();
+  const lead: Lead = {
+    ...(existing ?? {}), id: existing?.id ?? createId('lead'), businessId: input.businessId,
+    ...normalized, company: input.company?.trim() || undefined, phone: input.phone?.trim() || undefined,
+    source: input.source?.trim() || undefined, expectedCloseDate: input.expectedCloseDate || undefined,
+    followUpAt: input.followUpAt || undefined, assignedTo: input.assignedTo || undefined,
+    notes: input.notes?.trim() || undefined, createdAt: existing?.createdAt ?? now, updatedAt: now,
+  };
+  return { ...db, leads: existing ? replace(db.leads, lead.id, lead) : [lead, ...db.leads] };
+}
+
+export function deleteLead(db: WorkspaceDB, id: string): WorkspaceDB {
+  return { ...db, leads: db.leads.filter((lead) => lead.id !== id) };
+}
+
+export function convertLeadToCustomer(db: WorkspaceDB, id: string): { db: WorkspaceDB; customer: Customer } {
+  const lead = db.leads.find((item) => item.id === id);
+  if (!lead) throw new ServiceError("Lead not found.");
+  const linked = lead.convertedCustomerId ? db.customers.find((customer) => customer.id === lead.convertedCustomerId && customer.businessId === lead.businessId) : undefined;
+  if (linked) return { db, customer: linked };
+  const match = db.customers.find((customer) => customer.businessId === lead.businessId && !customer.archived && (
+    (lead.email && customer.email?.toLowerCase() === lead.email.toLowerCase()) ||
+    (lead.phone && customer.phone === lead.phone)
+  ));
+  const result = match ? { db, customer: match } : upsertCustomer(db, {
+    businessId: lead.businessId, name: lead.company || lead.name, email: lead.email, phone: lead.phone, notes: lead.notes,
+  });
+  const updatedLead = { ...lead, stage: 'won' as const, convertedCustomerId: result.customer.id, updatedAt: nowIso() };
+  return { db: { ...result.db, leads: replace(result.db.leads, lead.id, updatedLead) }, customer: result.customer };
 }
 
 export function upsertSupplier(
@@ -442,10 +634,32 @@ export function createPurchase(
     supplierId: string;
     items: Array<{ productId: string; quantity: number; unitCost: number }>;
     paidAmount: number;
+    initialPaymentMethod?: RecordedPaymentMethod;
+    initialPaymentReference?: string;
+    supplierReference?: string;
+    dueDate?: string;
     note?: string;
   },
 ): { db: WorkspaceDB; purchase: Purchase } {
   if (!input.items.length) throw new ServiceError("Add at least one product to this purchase.");
+  const supplierReference = input.supplierReference?.trim() || undefined;
+  if (supplierReference && db.purchases.some((purchase) =>
+    purchase.businessId === input.businessId &&
+    purchase.supplierId === input.supplierId &&
+    purchase.supplierReference?.trim().toLowerCase() === supplierReference.toLowerCase()
+  )) {
+    throw new ServiceError("This supplier invoice / document reference has already been recorded. Open the existing purchase instead of receiving the stock twice.");
+  }
+  const dueDate = input.dueDate?.trim() || undefined;
+  if (dueDate) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dueDate);
+    if (!match) throw new ServiceError("Enter a valid supplier payment due date.");
+    const year = Number(match[1]), month = Number(match[2]), day = Number(match[3]);
+    const parsed = new Date(year, month - 1, day);
+    if (parsed.getFullYear() !== year || parsed.getMonth() !== month - 1 || parsed.getDate() !== day) {
+      throw new ServiceError("Enter a valid supplier payment due date.");
+    }
+  }
   const supplier = db.suppliers.find((item) =>
     item.id === input.supplierId && item.businessId === input.businessId
   );
@@ -497,6 +711,15 @@ export function createPurchase(
     paidAmount,
     balance,
     paymentStatus,
+    supplierReference,
+    dueDate,
+    payments: paidAmount > 0 ? [{
+      id: createId("ppay"),
+      amount: paidAmount,
+      method: input.initialPaymentMethod ?? "bank",
+      reference: input.initialPaymentReference?.trim() || undefined,
+      paidAt: now,
+    }] : [],
     note: input.note?.trim() || undefined,
     createdAt: now,
     updatedAt: now,
@@ -528,29 +751,164 @@ export function createPurchase(
   };
 }
 
-export function updatePurchasePayment(db: WorkspaceDB, purchaseId: string, amount: number): WorkspaceDB {
+export function updatePurchasePayment(
+  db: WorkspaceDB,
+  purchaseId: string,
+  amount: number,
+  method: RecordedPaymentMethod = "bank",
+  reference?: string,
+): WorkspaceDB {
   const purchase = db.purchases.find((item) => item.id === purchaseId);
   if (!purchase) throw new ServiceError("Purchase not found.");
-  if (!Number.isFinite(amount) || amount <= 0) {
-    throw new ServiceError("Enter a payment greater than zero.");
-  }
-  if (amount > purchase.balance) {
-    throw new ServiceError("Payment cannot be greater than the outstanding balance.");
-  }
+  if (!Number.isFinite(amount) || amount <= 0) throw new ServiceError("Enter a payment greater than zero.");
+  if (amount > purchase.balance) throw new ServiceError("Payment cannot be greater than the outstanding balance.");
+  const now = nowIso();
   const paidAmount = roundMoney(purchase.paidAmount + amount);
   const balance = roundMoney(Math.max(0, purchase.total - paidAmount));
   const paymentStatus = balance <= 0 ? "paid" : "partial";
+  const legacyPayments: PurchasePayment[] = purchase.payments ?? (purchase.paidAmount > 0 ? [{
+    id: `legacy-${purchase.id}`, amount: purchase.paidAmount, method: "other",
+    reference: "Previous payment · method not recorded", paidAt: purchase.createdAt,
+  }] : []);
+  const payment: PurchasePayment = {
+    id: createId("ppay"), amount: roundMoney(amount), method,
+    reference: reference?.trim() || undefined, paidAt: now,
+  };
   return {
     ...db,
     purchases: replace(db.purchases, purchaseId, {
-      paidAmount,
-      balance,
-      paymentStatus,
-      updatedAt: nowIso(),
+      paidAmount, balance, paymentStatus, payments: [...legacyPayments, payment], updatedAt: now,
     }),
   };
 }
 
+
+
+export function recordPurchaseReturn(
+  db: WorkspaceDB,
+  purchaseId: string,
+  input: {
+    businessId: string;
+    items: Array<{ productId: string; quantity: number }>;
+    reason: string;
+    refundMethod?: RecordedPaymentMethod;
+    refundReference?: string;
+  },
+): WorkspaceDB {
+  const purchase = db.purchases.find((item) => item.id === purchaseId && item.businessId === input.businessId);
+  if (!purchase) throw new ServiceError("Purchase not found in this business.");
+  if (!input.items.length) throw new ServiceError("Choose at least one item to return.");
+  const reason = input.reason.trim();
+  if (reason.length < 3) throw new ServiceError("Add a supplier return reason (at least 3 characters).");
+
+  const requested = new Map<string, number>();
+  for (const line of input.items) {
+    if (!line.productId || !Number.isFinite(line.quantity) || line.quantity <= 0) {
+      throw new ServiceError("Return quantities must be greater than zero.");
+    }
+    requested.set(line.productId, roundMoney((requested.get(line.productId) ?? 0) + line.quantity));
+  }
+
+  const returnedItems: PurchaseReturn["items"] = [];
+  const remaining = new Map(requested);
+  const nextItems: PurchaseItem[] = [];
+  let returnAmount = 0;
+  for (const item of purchase.items) {
+    const requestedQty = remaining.get(item.productId) ?? 0;
+    if (requestedQty <= 0) {
+      nextItems.push(item);
+      continue;
+    }
+    const quantity = Math.min(item.quantity, requestedQty);
+    const amount = roundMoney(quantity * item.unitCost);
+    returnedItems.push({
+      productId: item.productId,
+      name: item.name,
+      sku: item.sku,
+      quantity,
+      amount,
+    });
+    returnAmount = roundMoney(returnAmount + amount);
+    remaining.set(item.productId, roundMoney(requestedQty - quantity));
+    const nextQty = roundMoney(item.quantity - quantity);
+    if (nextQty > 0) nextItems.push({
+      ...item,
+      quantity: nextQty,
+      total: roundMoney(nextQty * item.unitCost),
+    });
+  }
+  for (const quantity of remaining.values()) {
+    if (quantity > 0) throw new ServiceError("Return quantity is greater than the quantity still recorded on this purchase.");
+  }
+  if (!returnedItems.length) throw new ServiceError("No valid purchase items were selected.");
+
+  const now = nowIso();
+  let products = db.products;
+  let movements = db.movements;
+  for (const item of returnedItems) {
+    const product = products.find((entry) => entry.id === item.productId && entry.businessId === input.businessId);
+    if (!product) throw new ServiceError("A returned product is no longer available in this business.");
+    if (product.stock < item.quantity) {
+      throw new ServiceError(`Cannot return ${item.quantity} ${product.unit} of ${product.name}; only ${product.stock} remains in stock. Reconcile stock before returning to the supplier.`);
+    }
+    const nextStock = roundMoney(product.stock - item.quantity);
+    products = replace(products, product.id, { stock: nextStock, updatedAt: now });
+    movements = [{
+      id: createId("mov"),
+      businessId: input.businessId,
+      productId: product.id,
+      type: "out",
+      quantity: -item.quantity,
+      resultingStock: nextStock,
+      reason: `Supplier return · ${reason}`,
+      refId: purchaseId,
+      createdAt: now,
+    }, ...movements];
+  }
+
+  const nextTotal = roundMoney(Math.max(0, purchase.total - returnAmount));
+  const refundAmount = roundMoney(Math.max(0, purchase.paidAmount - nextTotal));
+  if (refundAmount > 0 && !input.refundMethod) {
+    throw new ServiceError(
+      `The returned goods create a supplier refund due of ${refundAmount.toFixed(2)}. Record the refund method only after the supplier has actually refunded you.`
+    );
+  }
+  const nextPaid = roundMoney(Math.max(0, purchase.paidAmount - refundAmount));
+  const nextBalance = roundMoney(Math.max(0, nextTotal - nextPaid));
+  const paymentStatus = nextBalance <= 0 ? "paid" : nextPaid > 0 ? "partial" : "pending";
+  const returnId = createId("pret");
+  const returnRecord: PurchaseReturn = {
+    id: returnId,
+    businessId: purchase.businessId,
+    purchaseId: purchase.id,
+    supplierId: purchase.supplierId,
+    supplierName: purchase.supplierName,
+    items: returnedItems,
+    amount: returnAmount,
+    refundAmount,
+    reason,
+    refundMethod: refundAmount > 0 ? input.refundMethod : undefined,
+    refundReference: refundAmount > 0 ? input.refundReference?.trim() || undefined : undefined,
+    createdAt: now,
+  };
+  const updatedPurchase: Purchase = {
+    ...purchase,
+    items: nextItems,
+    subtotal: nextTotal,
+    total: nextTotal,
+    paidAmount: nextPaid,
+    balance: nextBalance,
+    paymentStatus,
+    updatedAt: now,
+  };
+  return {
+    ...db,
+    products,
+    movements,
+    purchases: replace(db.purchases, purchase.id, updatedPurchase),
+    purchaseReturns: [returnRecord, ...(db.purchaseReturns ?? [])],
+  };
+}
 export function addCustomerNote(db: WorkspaceDB, businessId: string, customerId: string, note: string): WorkspaceDB {
   const text = note.trim();
   if (!text) throw new ServiceError("Write a note first.");
@@ -587,12 +945,17 @@ export function completeSale(
   if (!input.lines.length) throw new ServiceError("Add at least one product.");
   const items: SaleItem[] = [];
   const productMap = new Map(db.products.map((p) => [p.id, p]));
+  const reservedByProduct = new Map<string, number>();
   for (const line of input.lines) {
     const product = productMap.get(line.productId);
     if (!product || product.businessId !== input.businessId) throw new ServiceError("A product in the cart is missing.");
-    if (line.qty <= 0) throw new ServiceError(`Enter a quantity for ${product.name}.`);
-    if (product.stock < line.qty) throw new ServiceError(`${product.name} only has ${product.stock} ${product.unit} in stock.`);
-    if (line.unitPrice < 0) throw new ServiceError("Price cannot be negative.");
+    if (!Number.isFinite(line.qty) || line.qty <= 0) throw new ServiceError(`Enter a valid quantity for ${product.name}.`);
+    if (product.archived) throw new ServiceError(`${product.name} is archived and cannot be sold.`);
+    const reservedQuantity = roundMoney((reservedByProduct.get(product.id) ?? 0) + line.qty);
+    if (product.stock < reservedQuantity) throw new ServiceError(`${product.name} only has ${product.stock} ${product.unit} in stock across this cart.`);
+    reservedByProduct.set(product.id, reservedQuantity);
+    if (!Number.isFinite(line.unitPrice) || line.unitPrice < 0) throw new ServiceError("Price must be a valid non-negative amount.");
+    if (!Number.isFinite(line.discount) || line.discount < 0 || line.discount > line.unitPrice * line.qty) throw new ServiceError("Line discount must be between zero and the line value.");
     items.push({
       productId: product.id,
       name: product.name,
@@ -604,19 +967,27 @@ export function completeSale(
     });
   }
   const subtotal = roundMoney(items.reduce((s, i) => s + i.unitPrice * i.qty - i.discount, 0));
-  const discount = roundMoney(Math.max(0, input.cartDiscount || 0));
+  if (!Number.isFinite(input.cartDiscount) || input.cartDiscount < 0) throw new ServiceError("Cart discount must be a valid non-negative amount.");
+  const discount = roundMoney(input.cartDiscount);
   if (discount > subtotal) throw new ServiceError("Discount cannot exceed the subtotal.");
   const total = roundMoney(subtotal - discount);
   const costTotal = roundMoney(items.reduce((s, i) => s + i.costPrice * i.qty, 0));
   const grossProfit = roundMoney(total - costTotal);
-  const paid =
-    input.paymentMethod === "credit"
-      ? roundMoney(Math.max(0, Math.min(total, input.paidAmount || 0)))
-      : roundMoney(Math.max(0, input.paidAmount ?? total));
+  if (!Number.isFinite(input.paidAmount) || input.paidAmount < 0 || input.paidAmount > total) {
+    throw new ServiceError("Initial payment must be a valid amount between zero and the sale total.");
+  }
+  const paid = roundMoney(input.paidAmount);
   const outstanding = roundMoney(Math.max(0, total - paid));
   const paymentStatus = outstanding <= 0 ? "paid" : paid > 0 ? "partial" : "unpaid";
   const now = nowIso();
-  const customer = input.customerId ? db.customers.find((c) => c.id === input.customerId) : undefined;
+  const initialPaymentMethod: RecordedPaymentMethod = input.paymentMethod === "credit" ? "other" : input.paymentMethod;
+  const payments: SalePayment[] = paid > 0 ? [{
+    id: createId("spay"), amount: paid, method: initialPaymentMethod,
+    reference: input.paymentMethod === "credit" ? "Initial amount · method not specified" : undefined,
+    receivedAt: now,
+  }] : [];
+  const customer = input.customerId ? db.customers.find((c) => c.id === input.customerId && c.businessId === input.businessId && !c.archived) : undefined;
+  if (input.customerId && !customer) throw new ServiceError("Select an active customer from this business.");
   const sale: Sale = {
     id: createId("sal"),
     businessId: input.businessId,
@@ -632,8 +1003,11 @@ export function completeSale(
     paymentStatus,
     paidAmount: paid,
     outstanding,
+    payments,
+    refunds: [],
     note: input.note?.trim() || undefined,
     createdAt: now,
+    status: "completed",
   };
   let products = db.products;
   let movements = db.movements;
@@ -677,55 +1051,268 @@ export function completeSale(
   };
 }
 
-export function recordPayment(db: WorkspaceDB, saleId: string, amount: number): WorkspaceDB {
-  const sale = db.sales.find((s) => s.id === saleId);
+export function recordPayment(
+  db: WorkspaceDB,
+  saleId: string,
+  amount: number,
+  method: RecordedPaymentMethod = "cash",
+  reference?: string,
+): WorkspaceDB {
+  const sale = db.sales.find((item) => item.id === saleId);
   if (!sale) throw new ServiceError("Sale not found.");
+  if (sale.status === "reversed") throw new ServiceError("A reversed sale cannot receive another payment.");
   if (!Number.isFinite(amount) || amount <= 0) throw new ServiceError("Enter a payment amount greater than zero.");
   const currentPaid = Number.isFinite(sale.paidAmount) ? Math.min(sale.total, Math.max(0, sale.paidAmount)) : 0;
   const currentOutstanding = roundMoney(Math.max(0, sale.total - currentPaid));
   if (amount > currentOutstanding) throw new ServiceError("Payment cannot be greater than the outstanding balance.");
+  const now = nowIso();
   const paid = roundMoney(currentPaid + amount);
   const outstanding = roundMoney(Math.max(0, sale.total - paid));
   const paymentStatus = outstanding <= 0 ? "paid" : "partial";
+  const legacyPayments: SalePayment[] = sale.payments ?? (sale.paidAmount > 0 ? [{
+    id: `legacy-${sale.id}`,
+    amount: sale.paidAmount,
+    method: sale.paymentMethod === "credit" ? "other" : sale.paymentMethod,
+    reference: sale.paymentMethod === "credit" ? "Previous payment · method not recorded" : undefined,
+    receivedAt: sale.createdAt,
+  }] : []);
+  const payment: SalePayment = {
+    id: createId("spay"), amount: roundMoney(amount), method,
+    reference: reference?.trim() || undefined, receivedAt: now,
+  };
   return {
     ...db,
-    sales: replace(db.sales, saleId, { paidAmount: paid, outstanding, paymentStatus }),
+    sales: replace(db.sales, saleId, { paidAmount: paid, outstanding, paymentStatus, payments: [...legacyPayments, payment] }),
   };
 }
 
-export function deleteSale(db: WorkspaceDB, saleId: string): WorkspaceDB {
-  const sale = db.sales.find((s) => s.id === saleId);
-  if (!sale) return db;
+export function reverseSale(
+  db: WorkspaceDB,
+  saleId: string,
+  reason: string,
+  refund?: { method: RecordedPaymentMethod; reference?: string },
+): WorkspaceDB {
+  const sale = db.sales.find((item) => item.id === saleId);
+  if (!sale) throw new ServiceError("Sale not found.");
+  if (sale.status === "reversed") throw new ServiceError("This sale has already been reversed.");
+  const reversalReason = reason.trim();
+  if (reversalReason.length < 3) throw new ServiceError("Add a reversal reason (at least 3 characters).");
+  if (sale.paidAmount > 0 && !refund?.method) {
+    throw new ServiceError("Record the refund method for the amount already collected before reversing this sale.");
+  }
   const now = nowIso();
   let products = db.products;
   let movements = db.movements;
   for (const item of sale.items) {
-    const product = products.find((p) => p.id === item.productId);
+    const product = products.find((entry) => entry.id === item.productId && entry.businessId === sale.businessId);
     if (!product) continue;
     const next = roundMoney(product.stock + item.qty);
     products = replace(products, product.id, { stock: next, updatedAt: now });
-    movements = [
-      {
-        id: createId("mov"),
-        businessId: sale.businessId,
-        productId: product.id,
-        type: "in",
-        quantity: item.qty,
-        resultingStock: next,
-        reason: "Sale reversed",
-        refId: sale.id,
-        createdAt: now,
-      },
-      ...movements,
-    ];
+    movements = [{
+      id: createId("mov"), businessId: sale.businessId, productId: product.id, type: "in",
+      quantity: item.qty, resultingStock: next, reason: `Sale reversal · ${reversalReason}`,
+      refId: sale.id, createdAt: now,
+    }, ...movements];
   }
+  const legacyPayments: SalePayment[] = sale.payments ?? (sale.paidAmount > 0 ? [{
+    id: `legacy-${sale.id}`, amount: sale.paidAmount,
+    method: sale.paymentMethod === "credit" ? "other" : sale.paymentMethod,
+    reference: sale.paymentMethod === "credit" ? "Previous payment · method not recorded" : undefined,
+    receivedAt: sale.createdAt,
+  }] : []);
+  const refundRecords: SaleRefund[] = sale.paidAmount > 0 ? [
+    ...(sale.refunds ?? []),
+    {
+      id: createId("sref"), amount: roundMoney(sale.paidAmount), method: refund!.method,
+      reference: refund!.reference?.trim() || undefined, refundedAt: now,
+    },
+  ] : sale.refunds ?? [];
+  const reversed: Sale = {
+    ...sale, status: "reversed", payments: legacyPayments, refunds: refundRecords,
+    reversalReason, reversedAt: now,
+  };
+  const activity: Activity = {
+    id: createId("act"), businessId: sale.businessId, customerId: sale.customerId,
+    type: "system", message: `Sale ${sale.id.slice(-7).toUpperCase()} reversed: ${reversalReason}`,
+    refId: sale.id, createdAt: now,
+  };
+  return {
+    ...db, products, movements, sales: replace(db.sales, sale.id, reversed),
+    activity: [activity, ...db.activity],
+  };
+}
+
+
+export function recordSaleReturn(
+  db: WorkspaceDB,
+  saleId: string,
+  input: {
+    businessId: string;
+    items: Array<{ productId: string; quantity: number }>;
+    reason: string;
+    refundMethod?: RecordedPaymentMethod;
+    refundReference?: string;
+  },
+): WorkspaceDB {
+  const sale = db.sales.find((item) => item.id === saleId && item.businessId === input.businessId);
+  if (!sale) throw new ServiceError("Sale not found in this business.");
+  if (sale.status === "reversed") throw new ServiceError("A reversed sale cannot receive another return.");
+  if (!input.items.length) throw new ServiceError("Choose at least one item to return.");
+  const reason = input.reason.trim();
+  if (reason.length < 3) throw new ServiceError("Add a return reason (at least 3 characters).");
+
+  const requested = new Map<string, number>();
+  for (const line of input.items) {
+    if (!line.productId || !Number.isFinite(line.quantity) || line.quantity <= 0) {
+      throw new ServiceError("Return quantities must be greater than zero.");
+    }
+    requested.set(line.productId, roundMoney((requested.get(line.productId) ?? 0) + line.quantity));
+  }
+
+  const returnedItems: SaleReturn["items"] = [];
+  const remaining = new Map(requested);
+  const updatedItems: SaleItem[] = [];
+  let returnAmount = 0;
+  let returnCost = 0;
+
+  for (const item of sale.items) {
+    const requestedQty = remaining.get(item.productId) ?? 0;
+    if (requestedQty <= 0) {
+      updatedItems.push(item);
+      continue;
+    }
+    const availableQty = item.qty;
+    const qty = Math.min(availableQty, requestedQty);
+    const lineBase = roundMoney(item.unitPrice * item.qty - item.discount);
+    const saleRatio = sale.subtotal > 0 ? sale.total / sale.subtotal : 0;
+    const lineReturn = roundMoney(lineBase * saleRatio * (qty / availableQty));
+    const lineCost = roundMoney(item.costPrice * qty);
+    returnedItems.push({
+      productId: item.productId,
+      name: item.name,
+      sku: item.sku,
+      quantity: qty,
+      amount: lineReturn,
+      costAmount: lineCost,
+    });
+    returnAmount = roundMoney(returnAmount + lineReturn);
+    returnCost = roundMoney(returnCost + lineCost);
+    remaining.set(item.productId, roundMoney(requestedQty - qty));
+    const nextQty = roundMoney(availableQty - qty);
+    if (nextQty > 0) {
+      updatedItems.push({
+        ...item,
+        qty: nextQty,
+        discount: roundMoney(item.discount * (nextQty / availableQty)),
+      });
+    }
+  }
+
+  for (const quantity of remaining.values()) {
+    if (quantity > 0) throw new ServiceError("Return quantity is greater than the quantity still sold on this sale.");
+  }
+  if (!returnedItems.length) throw new ServiceError("No valid sale items were selected.");
+
+  const allRemainingReturned = sale.items.every((item) =>
+    (requested.get(item.productId) ?? 0) >= sale.items
+      .filter((candidate) => candidate.productId === item.productId)
+      .reduce((sum, candidate) => sum + candidate.qty, 0)
+  );
+  if (allRemainingReturned) returnAmount = roundMoney(sale.total);
+
+  const nextTotal = roundMoney(Math.max(0, sale.total - returnAmount));
+  const nextSubtotal = roundMoney(updatedItems.reduce((sum, item) => sum + item.unitPrice * item.qty - item.discount, 0));
+  const nextDiscount = roundMoney(Math.max(0, nextSubtotal - nextTotal));
+  const nextCostTotal = roundMoney(Math.max(0, sale.costTotal - returnCost));
+  const refundAmount = roundMoney(Math.max(0, sale.paidAmount - nextTotal));
+  if (refundAmount > 0 && !input.refundMethod) {
+    throw new ServiceError(
+      `A refund of ${refundAmount.toFixed(2)} is due because the revised sale is below the amount collected. Complete the refund first, then record its method.`
+    );
+  }
+  const nextPaidAmount = roundMoney(Math.max(0, sale.paidAmount - refundAmount));
+  const nextOutstanding = roundMoney(Math.max(0, nextTotal - nextPaidAmount));
+  const paymentStatus = nextOutstanding <= 0 ? "paid" : nextPaidAmount > 0 ? "partial" : "unpaid";
+  const now = nowIso();
+  const returnId = createId("ret");
+  const returnedQuantity = returnedItems.reduce((sum, item) => sum + item.quantity, 0);
+  const returnRecord: SaleReturn = {
+    id: returnId,
+    businessId: sale.businessId,
+    saleId: sale.id,
+    items: returnedItems,
+    amount: returnAmount,
+    refundAmount,
+    reason,
+    refundMethod: refundAmount > 0 ? input.refundMethod : undefined,
+    refundReference: refundAmount > 0 ? input.refundReference?.trim() || undefined : undefined,
+    createdAt: now,
+  };
+
+  let products = db.products;
+  let movements = db.movements;
+  for (const item of returnedItems) {
+    const product = products.find((entry) => entry.id === item.productId && entry.businessId === sale.businessId);
+    if (!product) throw new ServiceError("A returned product is no longer available in this business.");
+    const nextStock = roundMoney(product.stock + item.quantity);
+    products = replace(products, product.id, { stock: nextStock, updatedAt: now });
+    movements = [{
+      id: createId("mov"),
+      businessId: sale.businessId,
+      productId: product.id,
+      type: "in",
+      quantity: item.quantity,
+      resultingStock: nextStock,
+      reason: `Sale return · ${reason}`,
+      refId: returnId,
+      createdAt: now,
+    }, ...movements];
+  }
+
+  const refundRecords: SaleRefund[] = refundAmount > 0
+    ? [...(sale.refunds ?? []), {
+        id: createId("sref"),
+        amount: refundAmount,
+        method: input.refundMethod!,
+        reference: input.refundReference?.trim() || undefined,
+        refundedAt: now,
+      }]
+    : (sale.refunds ?? []);
+  const updatedSale: Sale = {
+    ...sale,
+    items: updatedItems,
+    subtotal: nextSubtotal,
+    discount: nextDiscount,
+    total: nextTotal,
+    costTotal: nextCostTotal,
+    grossProfit: roundMoney(nextTotal - nextCostTotal),
+    paidAmount: nextPaidAmount,
+    outstanding: nextOutstanding,
+    paymentStatus,
+    refunds: refundRecords,
+  };
+  const activity: Activity = {
+    id: createId("act"),
+    businessId: sale.businessId,
+    customerId: sale.customerId,
+    type: "system",
+    message: `Return recorded for sale ${sale.id.slice(-7).toUpperCase()} · ${returnedQuantity} unit(s) · ${reason}`,
+    refId: returnId,
+    createdAt: now,
+  };
   return {
     ...db,
     products,
     movements,
-    sales: db.sales.filter((s) => s.id !== saleId),
-    activity: db.activity.filter((a) => a.refId !== saleId),
+    sales: replace(db.sales, sale.id, updatedSale),
+    returns: [returnRecord, ...(db.returns ?? [])],
+    activity: [activity, ...db.activity],
   };
+}
+
+/** Legacy deletion entry point intentionally refuses destructive transaction removal. */
+export function deleteSale(_db: WorkspaceDB, _saleId: string): WorkspaceDB {
+  throw new ServiceError("Sales are not deleted. Use reverseSale with a reason to preserve the transaction history.");
 }
 
 export function upsertExpense(
@@ -738,12 +1325,19 @@ export function upsertExpense(
     vendor?: string;
     notes?: string;
     date: string;
+    paymentMethod?: RecordedPaymentMethod;
+    reference?: string;
   },
 ): WorkspaceDB {
   if (!input.category.trim()) throw new ServiceError("Choose a category.");
-  if (!(input.amount > 0)) throw new ServiceError("Amount must be greater than zero.");
+  if (!Number.isFinite(input.amount) || input.amount <= 0) throw new ServiceError("Amount must be a valid number greater than zero.");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date) || Number.isNaN(new Date(input.date + "T00:00:00").getTime())) {
+    throw new ServiceError("Enter a valid expense date.");
+  }
   const now = nowIso();
   if (input.id) {
+    const existing = db.expenses.find((expense) => expense.id === input.id && expense.businessId === input.businessId);
+    if (!existing) throw new ServiceError("Expense not found in this business.");
     return {
       ...db,
       expenses: replace(db.expenses, input.id, {
@@ -752,6 +1346,8 @@ export function upsertExpense(
         vendor: input.vendor?.trim() || undefined,
         notes: input.notes?.trim() || undefined,
         date: input.date,
+        paymentMethod: input.paymentMethod ?? existing.paymentMethod ?? "other",
+        reference: input.reference?.trim() || undefined,
       }),
     };
   }
@@ -763,13 +1359,23 @@ export function upsertExpense(
     vendor: input.vendor?.trim() || undefined,
     notes: input.notes?.trim() || undefined,
     date: input.date,
+    paymentMethod: input.paymentMethod ?? "other",
+    reference: input.reference?.trim() || undefined,
+    archived: false,
     createdAt: now,
   };
   return { ...db, expenses: [expense, ...db.expenses] };
 }
 
-export function deleteExpense(db: WorkspaceDB, id: string): WorkspaceDB {
-  return { ...db, expenses: db.expenses.filter((e) => e.id !== id) };
+export function archiveExpense(db: WorkspaceDB, businessId: string, id: string, archived = true): WorkspaceDB {
+  const expense = db.expenses.find((item) => item.id === id && item.businessId === businessId);
+  if (!expense) throw new ServiceError("Expense not found in this business.");
+  return { ...db, expenses: replace(db.expenses, id, { archived }) };
+}
+
+/** Expense records are part of the financial audit trail; use archiveExpense instead. */
+export function deleteExpense(_db: WorkspaceDB, _id: string): WorkspaceDB {
+  throw new ServiceError("Expenses are archived, not deleted, so historical financial reports remain auditable.");
 }
 
 export function addExpenseCategory(db: WorkspaceDB, businessId: string, name: string): WorkspaceDB {
@@ -826,89 +1432,150 @@ export function deleteTarget(db: WorkspaceDB, id: string): WorkspaceDB {
 export function upsertTask(
   db: WorkspaceDB,
   input: {
-    id?: string;
-    businessId: string;
-    title: string;
-    description?: string;
-    assignedTo?: string;
-    priority: TaskPriority;
-    dueDate?: string;
-    reminder?: string;
-    status?: TaskStatus;
+    id?: string; businessId: string; title: string; description?: string; assignedTo?: string;
+    priority: TaskPriority; dueDate?: string; reminder?: string; status?: TaskStatus;
+    recurrence?: import("@/lib/domain").TaskRecurrence;
   },
 ): WorkspaceDB {
   const title = input.title.trim();
   if (!title) throw new ServiceError("Task title is required.");
   const now = nowIso();
   if (input.id) {
-    return {
-      ...db,
-      tasks: replace(db.tasks, input.id, {
-        title,
-        description: input.description?.trim() || undefined,
-        assignedTo: input.assignedTo || undefined,
-        priority: input.priority,
-        dueDate: input.dueDate || undefined,
-        reminder: input.reminder || undefined,
-        status: input.status,
-        updatedAt: now,
-      }),
-    };
+    const previous = db.tasks.find((task) => task.id === input.id && task.businessId === input.businessId);
+    if (!previous) throw new ServiceError("Task not found in this business.");
+    const updatedDb = { ...db, tasks: replace(db.tasks, input.id, {
+      title, description: input.description?.trim() || undefined, assignedTo: input.assignedTo || undefined,
+      priority: input.priority, dueDate: input.dueDate || undefined, reminder: input.reminder || undefined,
+      recurrence: input.recurrence ?? previous.recurrence ?? "none", updatedAt: now,
+    }) };
+    return input.status && input.status !== previous.status
+      ? setTaskStatus(updatedDb, input.id, input.status)
+      : updatedDb;
   }
   const task: TaskItem = {
-    id: createId("tsk"),
-    businessId: input.businessId,
-    title,
-    description: input.description?.trim() || undefined,
-    assignedTo: input.assignedTo || undefined,
-    priority: input.priority,
-    dueDate: input.dueDate || undefined,
-    reminder: input.reminder || undefined,
-    status: "todo",
-    createdAt: now,
-    updatedAt: now,
+    id: createId("tsk"), businessId: input.businessId, title,
+    description: input.description?.trim() || undefined, assignedTo: input.assignedTo || undefined,
+    priority: input.priority, dueDate: input.dueDate || undefined, reminder: input.reminder || undefined,
+    status: input.status ?? "todo", recurrence: input.recurrence ?? "none",
+    statusHistory: [{ to: input.status ?? "todo", changedAt: now }], createdAt: now, updatedAt: now,
   };
   return { ...db, tasks: [task, ...db.tasks] };
 }
 
 export function setTaskStatus(db: WorkspaceDB, id: string, status: TaskStatus): WorkspaceDB {
-  return { ...db, tasks: replace(db.tasks, id, { status, updatedAt: nowIso() }) };
+  const task = db.tasks.find((item) => item.id === id);
+  if (!task || task.status === status) return db;
+  const now = nowIso();
+  const history = [...(task.statusHistory ?? []), { from: task.status, to: status, changedAt: now }];
+  if (status !== "done" || !task.recurrence || task.recurrence === "none" || task.nextOccurrenceId) {
+    return { ...db, tasks: replace(db.tasks, id, { status, statusHistory: history, updatedAt: now }) };
+  }
+  const nextId = createId("tsk");
+  const nextTask: TaskItem = {
+    id: nextId, businessId: task.businessId, title: task.title, description: task.description,
+    assignedTo: task.assignedTo, priority: task.priority,
+    dueDate: nextTaskDueDate(task.dueDate, task.recurrence, now), status: 'todo', recurrence: task.recurrence,
+    seriesId: task.seriesId ?? task.id, statusHistory: [{ to: 'todo', changedAt: now }],
+    createdAt: now, updatedAt: now,
+  };
+  const completedTask = { ...task, status, statusHistory: history, seriesId: task.seriesId ?? task.id, nextOccurrenceId: nextId, updatedAt: now };
+  return { ...db, tasks: [nextTask, ...replace(db.tasks, id, completedTask)] };
+}
+
+export function addTaskComment(db: WorkspaceDB, id: string, body: string, author = "Workspace"): WorkspaceDB {
+  const task = db.tasks.find((item) => item.id === id);
+  if (!task) throw new ServiceError("Task not found.");
+  const message = body.trim();
+  if (!message) throw new ServiceError("Write a comment before adding it.");
+  if (message.length > 2000) throw new ServiceError("Comments must be 2,000 characters or fewer.");
+  const now = nowIso();
+  const comment = { id: createId("cmt"), author: author.trim() || "Workspace", body: message, createdAt: now };
+  return { ...db, tasks: replace(db.tasks, id, { comments: [...(task.comments ?? []), comment], updatedAt: now }) };
 }
 
 export function deleteTask(db: WorkspaceDB, id: string): WorkspaceDB {
   return { ...db, tasks: db.tasks.filter((t) => t.id !== id) };
 }
+export function upsertBranch(
+  db: WorkspaceDB,
+  input: { id?: string; businessId: string; name: string; code?: string; address?: string; timezone?: string; isActive?: boolean },
+): { db: WorkspaceDB; branch: Branch } {
+  const business = db.businesses.find((item) => item.id === input.businessId);
+  if (!business) throw new ServiceError("Business not found.");
+  const name = input.name.trim();
+  if (name.length < 2) throw new ServiceError("Enter a branch name.");
+  const existing = input.id ? db.branches.find((item) => item.id === input.id && item.businessId === input.businessId) : undefined;
+  if (input.id && !existing) throw new ServiceError("Branch not found in this business.");
+  const code = (input.code?.trim() || name.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").slice(0, 12)).toUpperCase();
+  if (!code || !/^[A-Z0-9-]{2,12}$/.test(code)) throw new ServiceError("Branch code must be 2–12 letters, numbers or hyphens.");
+  if (db.branches.some((item) => item.businessId === input.businessId && item.id !== input.id && (item.code.toUpperCase() === code || item.name.trim().toLowerCase() === name.toLowerCase()))) {
+    throw new ServiceError("A branch with this name or code already exists.");
+  }
+  if (!existing) {
+    const effectivePlanId = getEffectivePlanId(business);
+    const plan = getSubscriptionPlan(effectivePlanId);
+    const currentBranches = db.branches.filter((item) => item.businessId === input.businessId).length;
+    if (!hasAvailableBranchSlot(effectivePlanId, currentBranches)) {
+      throw new ServiceError(plan.title + " includes up to " + plan.maxBranches + " branch" + (plan.maxBranches === 1 ? "" : "es") + ". Upgrade the plan to add another branch.");
+    }
+  }
+  const now = nowIso();
+  const branch: Branch = {
+    id: existing?.id ?? createId("br"), businessId: input.businessId, name, code,
+    address: input.address?.trim() || existing?.address, timezone: input.timezone?.trim() || existing?.timezone || business.timezone,
+    isDefault: existing?.isDefault ?? false, isActive: input.isActive ?? existing?.isActive ?? true,
+    createdAt: existing?.createdAt ?? now, updatedAt: now,
+  };
+  return { db: { ...db, branches: existing ? replace(db.branches, branch.id, branch) : [...db.branches, branch] }, branch };
+}
+
+export function deleteBranch(db: WorkspaceDB, branchId: string): WorkspaceDB {
+  const branch = db.branches.find((item) => item.id === branchId);
+  if (!branch) return db;
+  if (branch.isDefault) throw new ServiceError("The default branch cannot be deleted.");
+  if (db.members.some((member) => member.businessId === branch.businessId && member.branchIds?.includes(branchId))) {
+    throw new ServiceError("This branch is assigned to team members. Reassign them before deleting it.");
+  }
+  return { ...db, branches: db.branches.filter((item) => item.id !== branchId) };
+}
 
 export function upsertMember(
   db: WorkspaceDB,
-  input: { id?: string; businessId: string; name: string; role: TeamMember["role"]; email?: string; phone?: string },
+  input: { id?: string; businessId: string; name: string; role: TeamMember["role"]; email?: string; phone?: string; branchIds?: string[] },
 ): WorkspaceDB {
   const name = input.name.trim();
   if (!name) throw new ServiceError("Name is required.");
+  const business = db.businesses.find((item) => item.id === input.businessId);
+  if (!business) throw new ServiceError("Business not found.");
+  const existing = input.id ? db.members.find((member) => member.id === input.id && member.businessId === input.businessId) : undefined;
+  if (input.id && !existing) throw new ServiceError("Team member not found in this business.");
+  if (!existing) {
+    const effectivePlanId = getEffectivePlanId(business);
+    const plan = getSubscriptionPlan(effectivePlanId);
+    const currentUsers = db.members.filter((member) => member.businessId === input.businessId).length;
+    if (!hasAvailableUserSeat(effectivePlanId, currentUsers)) {
+      throw new ServiceError(`${plan.title} includes up to ${plan.maxUsers} users. Upgrade the plan to add another team member.`);
+    }
+  }
+  const branchIds = Array.from(new Set(input.branchIds ?? existing?.branchIds ?? db.branches.filter((item) => item.businessId === input.businessId && item.isActive).map((item) => item.id)));
+  if (branchIds.some((branchId) => !db.branches.some((item) => item.id === branchId && item.businessId === input.businessId && item.isActive))) {
+    throw new ServiceError("Choose active branches from this business only.");
+  }
   const now = nowIso();
-  if (input.id) {
+  if (existing) {
     return {
       ...db,
-      members: replace(db.members, input.id, {
-        name,
-        role: input.role,
-        email: input.email?.trim() || undefined,
-        phone: input.phone?.trim() || undefined,
+      members: replace(db.members, input.id!, {
+        name, role: input.role, email: input.email?.trim() || undefined, phone: input.phone?.trim() || undefined, branchIds,
       }),
     };
   }
   const member: TeamMember = {
-    id: createId("mem"),
-    businessId: input.businessId,
-    name,
-    role: input.role,
-    email: input.email?.trim() || undefined,
-    phone: input.phone?.trim() || undefined,
-    createdAt: now,
+    id: createId("mem"), businessId: input.businessId, name, role: input.role,
+    email: input.email?.trim() || undefined, phone: input.phone?.trim() || undefined, branchIds, createdAt: now,
   };
   return { ...db, members: [...db.members, member] };
 }
-
 export function deleteMember(db: WorkspaceDB, id: string): WorkspaceDB {
   const member = db.members.find((m) => m.id === id);
   if (member?.role === "owner") {

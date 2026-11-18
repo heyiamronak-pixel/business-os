@@ -1,11 +1,14 @@
 import * as React from "react";
+import { Download } from "lucide-react";
 import { toast } from "sonner";
 import { AppPage, ConfirmBar, PageHeader } from "@/components/app-shell";
+import { SavedViewControls } from "@/components/saved-view-controls";
 import { BottomSheet } from "@/components/sheet";
 import { Badge, Button, EmptyState, Field, Input, Segmented, Select, Textarea } from "@/components/ui";
-import type { TaskItem, TaskPriority, TaskStatus } from "@/lib/domain";
-import { formatDate } from "@/lib/format";
-import { deleteTask, setTaskStatus, upsertTask } from "@/lib/services";
+import type { TaskItem, TaskPriority, TaskRecurrence, TaskStatus } from "@/lib/domain";
+import { downloadCsv } from "@/lib/csv";
+import { formatDate, formatDateTime } from "@/lib/format";
+import { addTaskComment, deleteTask, setTaskStatus, upsertTask } from "@/lib/services";
 import { useAppStore, useBusiness } from "@/lib/store";
 import { startOfDay } from "@/lib/utils";
 
@@ -30,6 +33,13 @@ export function TasksScreen() {
     return t.status !== "done";
   });
 
+  function exportTasks() {
+    downloadCsv("business-sutra-tasks.csv",
+      ["Task", "Description", "Assignee", "Priority", "Status", "Due date", "Reminder", "Recurrence", "Created"],
+      list.map((task) => [task.title, task.description, members.find((member) => member.id === task.assignedTo)?.name ?? "Unassigned", task.priority, task.status, task.dueDate, task.reminder, task.recurrence ?? "none", task.createdAt]));
+    toast.success("Exported " + list.length + " tasks");
+  }
+
   const form = editing === "new" || !editing ? null : editing;
 
   return (
@@ -37,8 +47,9 @@ export function TasksScreen() {
       <PageHeader
         title="Tasks"
         subtitle="What the team needs to finish"
-        action={<Button size="sm" onClick={() => setEditing("new")}>Add</Button>}
+        action={<div className="flex gap-2"><Button size="sm" variant="secondary" onClick={exportTasks} disabled={!list.length}><Download className="size-4" />Export</Button><Button size="sm" onClick={() => setEditing("new")}>Add</Button></div>}
       />
+      <SavedViewControls businessId={business.id} moduleKey="tasks" filters={{ filter }} onApply={(saved) => setFilter((saved.filter as Filter) ?? "open")} />
       <div className="mb-3">
         <Segmented
           value={filter}
@@ -69,12 +80,14 @@ export function TasksScreen() {
                 <button type="button" className="w-full text-left" onClick={() => setEditing(t)}>
                   <div className="flex items-start justify-between gap-2">
                     <p className="font-medium">{t.title}</p>
-                    <Badge tone={t.priority === "high" ? "bad" : t.priority === "medium" ? "warn" : "neutral"}>{t.priority}</Badge>
+                    <Badge tone={t.priority === "urgent" ? "bad" : t.priority === "high" ? "warn" : t.priority === "medium" ? "neutral" : "neutral"}>{t.priority}</Badge>
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {assignee?.name ?? "Unassigned"}
                     {t.dueDate ? ` · ${formatDate(t.dueDate, "d MMM")}` : ""}
                     {overdue ? " · overdue" : ""}
+                    {t.recurrence && t.recurrence !== "none" ? ` · Repeats ${t.recurrence}` : ""}
+                    {(t.comments?.length ?? 0) > 0 ? ` · ${t.comments?.length} comments` : ""}
                   </p>
                 </button>
                 {t.status !== "done" ? (
@@ -83,7 +96,9 @@ export function TasksScreen() {
                       {t.status === "todo" ? "Start" : "Complete"}
                     </Button>
                   </div>
-                ) : null}
+                ) : (
+                  <div className="mt-2"><Button size="sm" variant="ghost" onClick={() => apply(setTaskStatus(useAppStore.getState().db, t.id, "todo"))}>Reopen</Button></div>
+                )}
               </li>
             );
           })}
@@ -95,6 +110,16 @@ export function TasksScreen() {
           members={members}
           onClose={() => setEditing(null)}
           onDelete={form?.id ? () => setConfirm(form.id!) : undefined}
+          onAddComment={form?.id ? (body) => {
+            try {
+              const next = addTaskComment(useAppStore.getState().db, form.id!, body);
+              apply(next);
+              setEditing(next.tasks.find((task) => task.id === form.id) ?? null);
+              toast.success("Comment added");
+            } catch (e) {
+              toast.error(e instanceof Error ? e.message : "Could not add comment");
+            }
+          } : undefined}
           onSave={(input) => {
             try {
               apply(
@@ -142,6 +167,7 @@ function TaskForm({
   onClose,
   onSave,
   onDelete,
+  onAddComment,
 }: {
   task: Partial<TaskItem>;
   members: { id: string; name: string }[];
@@ -154,8 +180,10 @@ function TaskForm({
     dueDate?: string;
     reminder?: string;
     status: TaskStatus;
+    recurrence: TaskRecurrence;
   }) => void;
   onDelete?: () => void;
+  onAddComment?: (body: string) => void;
 }) {
   const [title, setTitle] = React.useState(task.title ?? "");
   const [description, setDescription] = React.useState(task.description ?? "");
@@ -164,6 +192,8 @@ function TaskForm({
   const [dueDate, setDueDate] = React.useState(task.dueDate?.slice(0, 10) ?? "");
   const [reminder, setReminder] = React.useState(task.reminder ?? "");
   const [status, setStatus] = React.useState<TaskStatus>(task.status ?? "todo");
+  const [recurrence, setRecurrence] = React.useState<TaskRecurrence>(task.recurrence ?? "none");
+  const [comment, setComment] = React.useState("");
   return (
     <BottomSheet
       open
@@ -171,7 +201,7 @@ function TaskForm({
       title={task.id ? "Edit task" : "New task"}
       footer={
         <div className="space-y-2">
-          <Button className="w-full" onClick={() => onSave({ title, description, assignedTo: assignedTo || undefined, priority, dueDate: dueDate || undefined, reminder: reminder || undefined, status })}>
+          <Button className="w-full" onClick={() => onSave({ title, description, assignedTo: assignedTo || undefined, priority, dueDate: dueDate || undefined, reminder: reminder || undefined, status, recurrence })}>
             Save task
           </Button>
           {onDelete ? (
@@ -205,6 +235,7 @@ function TaskForm({
               <option value="low">Low</option>
               <option value="medium">Medium</option>
               <option value="high">High</option>
+              <option value="urgent">Urgent</option>
             </Select>
           </Field>
           <Field label="Status">
@@ -221,6 +252,34 @@ function TaskForm({
         <Field label="Reminder">
           <Input type="datetime-local" value={reminder} onChange={(e) => setReminder(e.target.value)} />
         </Field>
+        <Field label="Repeat task">
+          <Select value={recurrence} onChange={(e) => setRecurrence(e.target.value as TaskRecurrence)}>
+            <option value="none">Does not repeat</option><option value="daily">Daily</option>
+            <option value="weekly">Weekly</option><option value="monthly">Monthly</option>
+          </Select>
+          <p className="text-[11px] text-muted-foreground">Completing a recurring task creates its next occurrence automatically.</p>
+        </Field>
+        {task.id ? (
+          <section className="space-y-3 border-t border-border pt-3">
+            <div><p className="text-xs font-semibold">Comments</p>
+              {(task.comments ?? []).length ? <div className="mt-2 space-y-2">{(task.comments ?? []).map((item) => (
+                <div key={item.id} className="rounded-lg bg-muted/45 p-2"><p className="text-xs">{item.body}</p>
+                  <p className="mt-1 text-[10px] text-muted-foreground">{item.author} · {formatDateTime(item.createdAt)}</p></div>
+              ))}</div> : <p className="mt-1 text-xs text-muted-foreground">No comments yet.</p>}
+            </div>
+            {onAddComment ? <div className="space-y-2"><Textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Add a comment…" />
+              <Button size="sm" variant="secondary" disabled={!comment.trim()} onClick={() => { onAddComment(comment); setComment(""); }}>Add comment</Button></div> : null}
+          </section>
+        ) : null}
+        {task.statusHistory?.length ? (
+          <section className="space-y-2 border-t border-border pt-3"><p className="text-xs font-semibold">Status history</p>
+            {task.statusHistory.slice().reverse().map((event, index) => (
+              <p key={event.changedAt + "-" + index} className="text-[11px] text-muted-foreground">
+                {event.from ? event.from + " → " + event.to : "Created as " + event.to} · {formatDateTime(event.changedAt)}
+              </p>
+            ))}
+          </section>
+        ) : null}
       </div>
     </BottomSheet>
   );

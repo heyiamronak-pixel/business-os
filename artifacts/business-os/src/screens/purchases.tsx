@@ -1,12 +1,14 @@
 import * as React from "react";
-import { Plus } from "lucide-react";
+import { Download, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { AppPage, PageHeader, SearchField } from "@/components/app-shell";
+import { SavedViewControls } from "@/components/saved-view-controls";
 import { BottomSheet } from "@/components/sheet";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, Stat, Textarea } from "@/components/ui";
-import type { Purchase } from "@/lib/domain";
+import type { Purchase, RecordedPaymentMethod } from "@/lib/domain";
+import { downloadCsv } from "@/lib/csv";
 import { formatDateTime, money } from "@/lib/format";
-import { createPurchase, updatePurchasePayment } from "@/lib/services";
+import { createPurchase, recordPurchaseReturn, updatePurchasePayment } from "@/lib/services";
 import { useAppStore, useBusiness } from "@/lib/store";
 import { roundMoney } from "@/lib/utils";
 
@@ -23,9 +25,20 @@ export function PurchasesScreen() {
   const [supplierId, setSupplierId] = React.useState("");
   const [lines, setLines] = React.useState<PurchaseLine[]>([blankLine()]);
   const [paidAmount, setPaidAmount] = React.useState("0");
+  const [initialPaymentMethod, setInitialPaymentMethod] = React.useState<RecordedPaymentMethod>("bank");
+  const [initialPaymentReference, setInitialPaymentReference] = React.useState("");
+  const [supplierReference, setSupplierReference] = React.useState("");
+  const [dueDate, setDueDate] = React.useState("");
   const [note, setNote] = React.useState("");
   const [selected, setSelected] = React.useState<Purchase | null>(null);
   const [payment, setPayment] = React.useState("");
+  const [paymentMethod, setPaymentMethod] = React.useState<RecordedPaymentMethod>("bank");
+  const [paymentReference, setPaymentReference] = React.useState("");
+  const [returnPurchase, setReturnPurchase] = React.useState<Purchase | null>(null);
+  const [returnQuantities, setReturnQuantities] = React.useState<Record<string, string>>({});
+  const [returnReason, setReturnReason] = React.useState("");
+  const [returnMethod, setReturnMethod] = React.useState<RecordedPaymentMethod | "">("");
+  const [returnReference, setReturnReference] = React.useState("");
 
   if (!business) return null;
   const businessId = business.id;
@@ -36,23 +49,39 @@ export function PurchasesScreen() {
   const totalValue = purchases.reduce((sum, purchase) => sum + purchase.total, 0);
   const totalPaid = purchases.reduce((sum, purchase) => sum + purchase.paidAmount, 0);
   const totalDue = purchases.reduce((sum, purchase) => sum + purchase.balance, 0);
+  const today = new Date();
+  const todayKey = new Date(today.getTime() - today.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  const overduePayables = purchases.filter((purchase) => purchase.balance > 0 && Boolean(purchase.dueDate) && purchase.dueDate! < todayKey);
+  const overdueAmount = overduePayables.reduce((sum, purchase) => sum + purchase.balance, 0);
   const safeSearch = query.trim().toLowerCase();
   const list = purchases
     .filter((purchase) => filter === "all" || purchase.balance > 0)
     .filter((purchase) =>
       !safeSearch ||
       purchase.supplierName.toLowerCase().includes(safeSearch) ||
-      purchase.id.toLowerCase().includes(safeSearch),
+      purchase.id.toLowerCase().includes(safeSearch) ||
+      purchase.supplierReference?.toLowerCase().includes(safeSearch),
     )
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const subtotal = roundMoney(lines.reduce((sum, line) => sum + Math.max(0, line.quantity) * Math.max(0, line.unitCost), 0));
   const paidPreview = Number(paidAmount);
   const selectedSupplier = suppliers.find((supplier) => supplier.id === supplierId);
 
+  function exportPurchases() {
+    downloadCsv("business-sutra-purchases.csv",
+      ["Purchase reference", "Supplier document reference", "Date", "Due date", "Supplier", "Items", "Subtotal", "Total", "Paid", "Balance", "Payment status", "Note"],
+      list.map((purchase) => [purchase.id, purchase.supplierReference, purchase.createdAt, purchase.dueDate, purchase.supplierName, purchase.items.map((item) => item.name + " x " + item.quantity).join("; "), purchase.subtotal, purchase.total, purchase.paidAmount, purchase.balance, purchase.paymentStatus, purchase.note]));
+    toast.success("Exported " + list.length + " purchases");
+  }
+
   function startPurchase() {
     setSupplierId(activeSuppliers[0]?.id ?? "");
     setLines([blankLine()]);
     setPaidAmount("0");
+    setInitialPaymentMethod("bank");
+    setInitialPaymentReference("");
+    setSupplierReference("");
+    setDueDate("");
     setNote("");
     setCreateOpen(true);
   }
@@ -73,6 +102,10 @@ export function PurchasesScreen() {
         supplierId,
         items: lines.filter((line) => line.productId),
         paidAmount: Number(paidAmount),
+        initialPaymentMethod,
+        initialPaymentReference,
+        supplierReference,
+        dueDate,
         note,
       });
       apply(result.db);
@@ -83,15 +116,49 @@ export function PurchasesScreen() {
     }
   }
 
+
+  function openPurchaseReturn(record: Purchase) {
+    setReturnPurchase(record);
+    setReturnQuantities(Object.fromEntries(record.items.map((item, index) => [`${item.productId}:${index}`, "0"])));
+    setReturnReason("");
+    setReturnMethod("");
+    setReturnReference("");
+  }
+
+  function submitPurchaseReturn() {
+    if (!business || !returnPurchase) return;
+    const quantitiesByProduct = new Map<string, number>();
+    returnPurchase.items.forEach((item, index) => {
+      const quantity = Number(returnQuantities[`${item.productId}:${index}`] ?? 0);
+      if (quantity > 0) quantitiesByProduct.set(item.productId, (quantitiesByProduct.get(item.productId) ?? 0) + quantity);
+    });
+    try {
+      const updatedDb = recordPurchaseReturn(useAppStore.getState().db, returnPurchase.id, {
+        businessId: business.id,
+        items: Array.from(quantitiesByProduct, ([productId, quantity]) => ({ productId, quantity })),
+        reason: returnReason,
+        refundMethod: returnMethod || undefined,
+        refundReference: returnReference,
+      });
+      apply(updatedDb);
+      setSelected(updatedDb.purchases.find((purchase) => purchase.id === returnPurchase.id) ?? null);
+      setReturnPurchase(null);
+      setReturnQuantities({});
+      toast.success("Supplier return recorded and stock reduced");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not record supplier return");
+    }
+  }
   function collectPayment() {
     if (!selected) return;
     try {
       const currentDb = useAppStore.getState().db;
-      const updatedDb = updatePurchasePayment(currentDb, selected.id, Number(payment));
+      const updatedDb = updatePurchasePayment(currentDb, selected.id, Number(payment), paymentMethod, paymentReference);
       apply(updatedDb);
       const updated = updatedDb.purchases.find((purchase) => purchase.id === selected.id) ?? null;
       setSelected(updated);
       setPayment("");
+      setPaymentReference("");
       toast.success("Supplier payment recorded");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not record payment");
@@ -103,14 +170,19 @@ export function PurchasesScreen() {
       <PageHeader
         title="Purchases"
         subtitle="Goods received, supplier payments and stock reconciliation"
-        action={<Button size="sm" onClick={startPurchase}><Plus className="size-4" />Record purchase</Button>}
+        action={<div className="flex gap-2"><Button size="sm" variant="secondary" onClick={exportPurchases} disabled={!list.length}><Download className="size-4" />Export</Button><Button size="sm" onClick={startPurchase}><Plus className="size-4" />Record purchase</Button></div>}
       />
-      <div className="mb-4 grid grid-cols-2 gap-2 lg:grid-cols-3">
+      <div className="mb-4 grid grid-cols-2 gap-2 xl:grid-cols-4">
         <Card><Stat label="Purchase value" value={money(totalValue, business.currency)} /></Card>
         <Card><Stat label="Paid to suppliers" value={money(totalPaid, business.currency)} /></Card>
         <Card className="col-span-2 lg:col-span-1"><Stat label="Outstanding" value={money(totalDue, business.currency)} tone={totalDue > 0 ? "bad" : "good"} /></Card>
+        <Card className="col-span-2 lg:col-span-1"><Stat label="Overdue payables" value={money(overdueAmount, business.currency)} tone={overdueAmount > 0 ? "bad" : "good"} /></Card>
       </div>
       <SearchField value={query} onChange={setQuery} placeholder="Search supplier or purchase reference" />
+      <SavedViewControls businessId={businessId} moduleKey="purchases" filters={{ query, filter }} onApply={(saved) => {
+        setQuery(saved.query ?? "");
+        setFilter((saved.filter as "all" | "due") ?? "all");
+      }} />
       <div className="mb-3 flex gap-2">
         <Button size="sm" variant={filter === "all" ? "default" : "secondary"} onClick={() => setFilter("all")}>All purchases</Button>
         <Button size="sm" variant={filter === "due" ? "default" : "secondary"} onClick={() => setFilter("due")}>Outstanding</Button>
@@ -132,7 +204,11 @@ export function PurchasesScreen() {
                   <div className="min-w-0">
                     <p className="truncate font-semibold">{purchase.supplierName}</p>
                     <p className="mt-1 text-xs text-muted-foreground">{purchase.id.slice(-8).toUpperCase()} · {formatDateTime(purchase.createdAt)} · {purchase.items.length} lines</p>
-                    <div className="mt-2"><Badge tone={purchase.paymentStatus === "paid" ? "good" : purchase.paymentStatus === "partial" ? "warn" : "bad"}>{purchase.paymentStatus}</Badge></div>
+                    {purchase.supplierReference ? <p className="mt-1 truncate text-xs text-muted-foreground">Doc: {purchase.supplierReference}</p> : null}
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      <Badge tone={purchase.paymentStatus === "paid" ? "good" : purchase.paymentStatus === "partial" ? "warn" : "bad"}>{purchase.paymentStatus}</Badge>
+                      {purchase.balance > 0 && purchase.dueDate && purchase.dueDate < todayKey ? <Badge tone="bad">Overdue</Badge> : null}
+                    </div>
                   </div>
                   <div className="text-right">
                     <p className="font-semibold tabular">{money(purchase.total, business.currency)}</p>
@@ -164,6 +240,12 @@ export function PurchasesScreen() {
                 {activeSuppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
               </Select>
             </Field>
+            <Field label="Supplier invoice / document reference" hint="Recommended. Duplicate references for the same supplier are blocked to prevent receiving the same goods twice.">
+              <Input value={supplierReference} onChange={(event) => setSupplierReference(event.target.value)} placeholder="Invoice / challan / bill number" />
+            </Field>
+            <Field label="Payment due date (optional)">
+              <Input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
+            </Field>
             {lines.map((line, index) => (
               <Card key={index} className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -191,6 +273,12 @@ export function PurchasesScreen() {
             <Field label="Amount paid now">
               <Input type="number" min="0" max={subtotal} step="0.01" value={paidAmount} onChange={(event) => setPaidAmount(event.target.value)} />
             </Field>
+            {Number(paidAmount) > 0 ? <>
+              <Field label="Payment method"><Select value={initialPaymentMethod} onChange={(event) => setInitialPaymentMethod(event.target.value as RecordedPaymentMethod)}>
+                <option value="bank">Bank transfer</option><option value="upi">UPI</option><option value="cash">Cash</option><option value="card">Card</option><option value="other">Other</option>
+              </Select></Field>
+              <Field label="Payment reference (optional)"><Input value={initialPaymentReference} onChange={(event) => setInitialPaymentReference(event.target.value)} placeholder="UTR / transaction ID" /></Field>
+            </> : null}
             <div className="grid grid-cols-2 gap-2 rounded-xl bg-muted/50 p-3">
               <div><p className="text-xs text-muted-foreground">Total</p><p className="mt-1 font-semibold tabular">{money(subtotal, business.currency)}</p></div>
               <div><p className="text-xs text-muted-foreground">Balance after payment</p><p className="mt-1 font-semibold tabular">{money(Math.max(0, subtotal - (Number.isFinite(paidPreview) ? paidPreview : 0)), business.currency)}</p></div>
@@ -209,14 +297,22 @@ export function PurchasesScreen() {
         title={selected?.supplierName ?? "Purchase"}
         description={selected ? `Purchase ${selected.id.slice(-8).toUpperCase()} · ${formatDateTime(selected.createdAt)}` : undefined}
         footer={
-          selected && selected.balance > 0 ? (
+          selected ? (
             <div className="space-y-2">
-              <Field label={`Record supplier payment · ${money(selected.balance, business.currency)} due`}>
-                <Input type="number" min="0.01" max={selected.balance} step="0.01" value={payment} onChange={(event) => setPayment(event.target.value)} placeholder="Payment amount" />
-              </Field>
-              <Button className="w-full" onClick={collectPayment}>Record payment</Button>
+              {selected.balance > 0 ? <>
+                <Field label={`Record supplier payment · ${money(selected.balance, business.currency)} due`}>
+                  <Input type="number" min="0.01" max={selected.balance} step="0.01" value={payment} onChange={(event) => setPayment(event.target.value)} placeholder="Payment amount" />
+                </Field>
+                <Field label="Payment method"><Select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as RecordedPaymentMethod)}>
+                  <option value="bank">Bank transfer</option><option value="upi">UPI</option><option value="cash">Cash</option><option value="card">Card</option><option value="other">Other</option>
+                </Select></Field>
+                <Field label="Payment reference (optional)"><Input value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)} placeholder="UTR / transaction ID" /></Field>
+                <Button className="w-full" onClick={collectPayment} disabled={!payment.trim()}>Record payment</Button>
+              </> : null}
+              {selected.items.length ? <Button className="w-full" variant="secondary" onClick={() => openPurchaseReturn(selected)}>Return goods to supplier</Button> : null}
+              <Button className="w-full" variant="ghost" onClick={() => setSelected(null)}>Close</Button>
             </div>
-          ) : <Button className="w-full" variant="secondary" onClick={() => setSelected(null)}>Close</Button>
+          ) : null
         }
       >
         {selected ? (
@@ -234,10 +330,55 @@ export function PurchasesScreen() {
               <div className="flex justify-between"><span className="text-muted-foreground">Paid</span><span className="tabular">{money(selected.paidAmount, business.currency)}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Outstanding</span><span className="tabular font-semibold">{money(selected.balance, business.currency)}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Status</span><Badge tone={selected.paymentStatus === "paid" ? "good" : selected.paymentStatus === "partial" ? "warn" : "bad"}>{selected.paymentStatus}</Badge></div>
+              {selected.supplierReference ? <div className="flex justify-between gap-3"><span className="text-muted-foreground">Supplier document ref.</span><span className="text-right">{selected.supplierReference}</span></div> : null}
+              {selected.dueDate ? <div className="flex justify-between gap-3"><span className="text-muted-foreground">Payment due</span><span className={selected.balance > 0 && selected.dueDate < todayKey ? "font-semibold text-danger" : ""}>{new Date(selected.dueDate + "T00:00:00").toLocaleDateString("en-IN")}{selected.balance > 0 && selected.dueDate < todayKey ? " · Overdue" : ""}</span></div> : null}
             </div>
+            <div className="space-y-2">
+              <p className="text-xs font-semibold">Supplier payment history</p>
+              {(selected.payments ?? []).length ? selected.payments!.map((entry) => (
+                <div key={entry.id} className="flex justify-between gap-3 border-b border-border py-2 text-xs">
+                  <span>{money(entry.amount, business.currency)} · {entry.method.toUpperCase()}{entry.reference ? ` · ${entry.reference}` : ""}</span>
+                  <span className="text-muted-foreground">{formatDateTime(entry.paidAt)}</span>
+                </div>
+              )) : selected.paidAmount > 0 ? <p className="text-xs text-muted-foreground">Previously recorded payment · {money(selected.paidAmount, business.currency)} (method history not available).</p> : <p className="text-xs text-muted-foreground">No supplier payments recorded yet.</p>}
+            </div>
+            {(db.purchaseReturns ?? []).filter((entry) => entry.purchaseId === selected.id).length ? (
+              <div className="space-y-2 border-t border-border pt-3">
+                <p className="text-xs font-semibold">Supplier return history</p>
+                {(db.purchaseReturns ?? []).filter((entry) => entry.purchaseId === selected.id).map((entry) => (
+                  <div key={entry.id} className="rounded-lg border border-border p-2 text-xs">
+                    <div className="flex justify-between gap-2"><span>{entry.items.map((item) => `${item.name} × ${item.quantity}`).join(", ")}</span><span className="tabular">{money(entry.amount, business.currency)}</span></div>
+                    <p className="mt-1 text-muted-foreground">{entry.reason} · {formatDateTime(entry.createdAt)}{entry.refundAmount > 0 ? ` · supplier refunded ${money(entry.refundAmount, business.currency)}` : ""}</p>
+                  </div>
+                ))}
+              </div>
+            ) : null}
             {selected.note ? <p className="text-sm text-muted-foreground">{selected.note}</p> : null}
           </div>
         ) : null}
+      </BottomSheet>
+
+      <BottomSheet
+        open={!!returnPurchase}
+        onOpenChange={(open) => !open && setReturnPurchase(null)}
+        title="Return goods to supplier"
+        description={returnPurchase ? `Purchase ${returnPurchase.id.slice(-8).toUpperCase()} · stock must still be available to return` : undefined}
+        footer={<Button className="w-full" onClick={submitPurchaseReturn} disabled={!returnPurchase || returnReason.trim().length < 3 || !returnPurchase.items.some((item, index) => Number(returnQuantities[`${item.productId}:${index}`] ?? 0) > 0)}>Record supplier return</Button>}
+      >
+        {returnPurchase ? <div className="space-y-3">
+          <p className="text-xs text-muted-foreground">Enter quantities physically sent back. On-hand inventory will decrease. Any supplier refund is recorded only after the money reaches you.</p>
+          {returnPurchase.items.map((item, index) => (
+            <div key={`${item.productId}:${index}`} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
+              <div className="min-w-0"><p className="truncate text-sm font-medium">{item.name}</p><p className="text-xs text-muted-foreground">{item.sku} · {item.quantity} still on this purchase</p></div>
+              <div className="w-24 shrink-0"><Input type="number" min="0" max={item.quantity} step="0.01" value={returnQuantities[`${item.productId}:${index}`] ?? "0"} onChange={(event) => setReturnQuantities((current) => ({ ...current, [`${item.productId}:${index}`]: event.target.value }))} /></div>
+            </div>
+          ))}
+          <Field label="Supplier return reason"><Input value={returnReason} onChange={(event) => setReturnReason(event.target.value)} placeholder="Damaged goods, wrong items, excess supply…" /></Field>
+          <Field label="Supplier refund method (only when money is received)"><Select value={returnMethod} onChange={(event) => setReturnMethod(event.target.value as RecordedPaymentMethod | "")}>
+            <option value="">No refund / credit against balance</option><option value="upi">UPI</option><option value="cash">Cash</option><option value="bank">Bank transfer</option><option value="card">Card</option><option value="other">Other</option>
+          </Select></Field>
+          <Field label="Refund reference (optional)"><Input value={returnReference} onChange={(event) => setReturnReference(event.target.value)} placeholder="UTR / supplier refund reference" /></Field>
+        </div> : null}
       </BottomSheet>
     </AppPage>
   );

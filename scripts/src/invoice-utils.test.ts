@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { calculateInvoiceTotals, financialYearFor, isValidGstin, nextInvoiceNumber, type InvoiceLineDraft } from "../../artifacts/business-os/src/lib/invoice-utils.ts";
+import { calculateInvoiceTotals, financialYearFor, getInvoiceDueSummary, isValidGstin, nextInvoiceNumber, normaliseInvoiceCancellationReason, type InvoiceLineDraft } from "../../artifacts/business-os/src/lib/invoice-utils.ts";
 import type { InvoiceRecord } from "../../artifacts/business-os/src/lib/domain.ts";
 
 const line = (overrides: Partial<InvoiceLineDraft> = {}): InvoiceLineDraft => ({
@@ -37,6 +37,17 @@ const invoice = (invoiceNumber: string, businessId = "biz-1"): InvoiceRecord => 
   total: 0,
   createdAt: "2026-04-10T10:00:00.000Z",
   updatedAt: "2026-04-10T10:00:00.000Z",
+});
+
+test("invoice due status distinguishes paid, due today, overdue and cancelled records", () => {
+  const base = { ...invoice("INV/26-27/001"), total: 100, dueDate: "2026-11-17" };
+  const now = new Date("2026-11-18T12:00:00");
+  assert.deepEqual(getInvoiceDueSummary(base, now), { status: "overdue", balance: 100, overdueDays: 1 });
+  const paid = { ...base, payments: [{ id: "pay-1", amount: 100, method: "upi" as const, receivedAt: "2026-11-18T10:00:00.000Z" }] };
+  assert.deepEqual(getInvoiceDueSummary(paid, now), { status: "paid", balance: 0, overdueDays: 0 });
+  assert.equal(getInvoiceDueSummary({ ...base, dueDate: "2026-11-18" }, now).status, "due");
+  assert.equal(getInvoiceDueSummary({ ...base, dueDate: undefined }, now).status, "no_due_date");
+  assert.equal(getInvoiceDueSummary({ ...base, status: "cancelled" }, now).status, "cancelled");
 });
 
 test("GSTIN format validation accepts valid shape and rejects malformed values", () => {
@@ -87,4 +98,10 @@ test("non-GST invoices do not calculate tax even if a draft has a rate", () => {
   const result = calculateInvoiceTotals([line()], false, "intra");
   assert.equal(result.taxTotal, 0);
   assert.equal(result.total, 1000);
+});
+
+test("invoice cancellation reasons are trimmed and required", () => {
+  assert.equal(normaliseInvoiceCancellationReason("  Duplicate invoice  "), "Duplicate invoice");
+  assert.throws(() => normaliseInvoiceCancellationReason("  "), /cancellation reason/);
+  assert.throws(() => normaliseInvoiceCancellationReason("no"), /at least 3 characters/);
 });
