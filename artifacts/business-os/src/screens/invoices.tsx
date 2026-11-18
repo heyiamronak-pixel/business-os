@@ -6,7 +6,7 @@ import { BottomSheet } from "@/components/sheet";
 import { SavedViewControls } from "@/components/saved-view-controls";
 import { Badge, Button, Card, Field, Input, Select, Switch, Textarea } from "@/components/ui";
 import { DEFAULT_INVOICE_SETTINGS, type Business, type Customer, type InvoiceDesignSettings, type InvoiceRecord, type InvoiceSupplyType } from "@/lib/domain";
-import { addInvoicePayment, calculateInvoiceTotals, getInvoicePaymentSummary, isValidGstin, nextInvoiceNumber, type InvoiceLineDraft } from "@/lib/invoice-utils";
+import { addInvoicePayment, calculateInvoiceTotals, getInvoiceDueSummary, getInvoicePaymentSummary, isValidGstin, nextInvoiceNumber, type InvoiceLineDraft } from "@/lib/invoice-utils";
 import { money } from "@/lib/format";
 import { downloadCsv } from "@/lib/csv";
 import { cancelInvoice } from "@/lib/services";
@@ -64,6 +64,8 @@ function InvoicesWorkspace({ business }: { business: Business }) {
   const invoices = db.invoices.filter((x) => x.businessId === business.id).sort((a, b) => b.issueDate.localeCompare(a.issueDate) || b.createdAt.localeCompare(a.createdAt));
   const selectedInvoice = invoices.find((x) => x.id === selectedId) ?? null;
   const filtered = invoices.filter((x) => (!customerFilter || x.customerId === customerFilter) && [x.invoiceNumber, x.customerName, x.customerGstin ?? ""].some((v) => v.toLowerCase().includes(search.toLowerCase())));
+  const overdueInvoices = invoices.map((invoice) => ({ invoice, due: getInvoiceDueSummary(invoice) })).filter((entry) => entry.due.status === "overdue");
+  const overdueAmount = overdueInvoices.reduce((sum, entry) => sum + entry.due.balance, 0);
   const fmt = (value: number) => money(value, business.currency);
 
   function exportInvoices() {
@@ -220,10 +222,11 @@ function InvoicesWorkspace({ business }: { business: Business }) {
 
       {mode === "list" ? (
         <section className="animate-enter space-y-4">
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <Card className="border-0 bg-gradient-to-br from-[#142E43] to-[#176B73] text-white shadow-[0_14px_36px_rgba(17,63,76,.16)]"><p className="text-[11px] font-medium text-white/70">Invoices saved</p><p className="mt-2 text-3xl font-semibold tabular-nums">{invoices.length}</p><p className="mt-1 text-xs text-white/70">This workspace</p></Card>
             <Card className="card-lift"><p className="text-[11px] text-muted-foreground">Total invoiced</p><p className="mt-2 text-2xl font-semibold tabular-nums">{fmt(invoices.filter((x) => x.status === "issued").reduce((s, x) => s + x.total, 0))}</p><p className="mt-1 text-xs text-muted-foreground">Across saved invoices</p></Card>
             <Card className="card-lift"><p className="text-[11px] text-muted-foreground">Customers billed</p><p className="mt-2 text-2xl font-semibold tabular-nums">{new Set(invoices.map((x) => x.customerId ?? x.customerName)).size}</p><p className="mt-1 text-xs text-muted-foreground">Unique recipients</p></Card>
+            <Card className="card-lift"><p className="text-[11px] text-muted-foreground">Overdue balance</p><p className="mt-2 text-2xl font-semibold tabular-nums">{fmt(overdueAmount)}</p><p className="mt-1 text-xs text-muted-foreground">{overdueInvoices.length} overdue invoice{overdueInvoices.length === 1 ? "" : "s"}</p></Card>
           </div>
           <Card className="animate-enter-delay-1 space-y-4">
             <div className="flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-sm font-semibold">Invoice history</h2><p className="mt-1 text-xs text-muted-foreground">Search and filter by customer, invoice number or GSTIN.</p></div><div className="grid w-full gap-2 sm:max-w-xl sm:grid-cols-[minmax(180px,.8fr)_minmax(220px,1fr)]"><Field label="Customer"><Select value={customerFilter} onChange={(e) => setCustomerFilter(e.target.value)}><option value="">All customers</option>{customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}</Select></Field><Field label="Search"><div className="relative"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" placeholder="Invoice no. / customer / GSTIN" /></div></Field></div></div>
@@ -233,7 +236,8 @@ function InvoicesWorkspace({ business }: { business: Business }) {
             }} />
             {filtered.length ? <div className="divide-y divide-border">{filtered.map((invoice) => <button type="button" key={invoice.id} onClick={() => { setSelectedId(invoice.id); setMode("view"); }} className="group flex w-full items-center gap-3 py-3 text-left transition-colors hover:bg-muted/35">
               <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><FileText className="size-5" /></span>
-              <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{invoice.customerName}</span><span className="mt-1 block truncate text-xs text-muted-foreground">{invoice.invoiceNumber} · {new Date(invoice.issueDate + "T00:00:00").toLocaleDateString("en-IN")}</span></span>
+              <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{invoice.customerName}</span><span className="mt-1 block truncate text-xs text-muted-foreground">{invoice.invoiceNumber} · {new Date(invoice.issueDate + "T00:00:00").toLocaleDateString("en-IN")}</span>
+                {(() => { const due = getInvoiceDueSummary(invoice); return due.status === "overdue" ? <span className="mt-1 block text-xs font-semibold text-danger">Overdue · {due.overdueDays} days</span> : due.status === "due" ? <span className="mt-1 block text-xs text-muted-foreground">Payment due {invoice.dueDate}</span> : null; })()}</span>
               <span className="hidden sm:block"><Badge tone={invoice.status === "issued" ? "good" : "warn"}>{invoice.status}</Badge></span>
               <span className="shrink-0 text-sm font-semibold tabular-nums">{fmt(invoice.total)}</span><span className="text-muted-foreground transition-transform group-hover:translate-x-1">›</span>
             </button>)}</div> : <div className="rounded-2xl border border-dashed border-border px-5 py-10 text-center"><span className="mx-auto grid size-12 place-items-center rounded-2xl bg-primary/10 text-primary"><FileText className="size-6" /></span><h3 className="mt-4 text-base font-semibold">{search ? "No matching invoices" : "Your invoice book is ready"}</h3><p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">{search ? "Try another invoice number or customer name." : "Set up your invoice format once, then create a customer invoice in a few steps. Saved invoices will appear here."}</p><div className="mt-4 flex justify-center gap-2"><Button variant="outline" onClick={() => setMode("template")}><Settings2 className="size-4" />Customise format</Button><Button onClick={openCreate}><Plus className="size-4" />Create invoice</Button></div></div>}
@@ -305,8 +309,9 @@ function InvoicesWorkspace({ business }: { business: Business }) {
             return <Card className="no-print space-y-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div><h2 className="text-sm font-semibold">Payment tracking</h2><p className="mt-1 text-xs text-muted-foreground">Record payments received against this invoice. This does not process a payment.</p></div>
-                <Badge tone={paymentSummary.status === "paid" ? "good" : paymentSummary.status === "partial" ? "warn" : "neutral"}>{paymentSummary.status === "paid" ? "Paid" : paymentSummary.status === "partial" ? "Partially paid" : "Unpaid"}</Badge>
+                <div className="flex flex-wrap gap-1.5"><Badge tone={paymentSummary.status === "paid" ? "good" : paymentSummary.status === "partial" ? "warn" : "neutral"}>{paymentSummary.status === "paid" ? "Paid" : paymentSummary.status === "partial" ? "Partially paid" : "Unpaid"}</Badge>{(() => { const due = getInvoiceDueSummary(selectedInvoice); return due.status === "overdue" ? <Badge tone="bad">Overdue · {due.overdueDays} days</Badge> : due.status === "due" ? <Badge tone="neutral">Due date not passed</Badge> : null; })()}</div>
               </div>
+              {selectedInvoice.dueDate ? <p className="text-xs text-muted-foreground">Payment due: {new Date(selectedInvoice.dueDate + "T00:00:00").toLocaleDateString("en-IN")}</p> : <p className="text-xs text-muted-foreground">No payment due date set.</p>}
               <div className="grid gap-2 sm:grid-cols-3">
                 <div className="rounded-xl bg-muted/45 p-3"><p className="text-[10px] text-muted-foreground">Invoice total</p><p className="mt-1 text-lg font-semibold tabular-nums">{fmt(selectedInvoice.total)}</p></div>
                 <div className="rounded-xl bg-muted/45 p-3"><p className="text-[10px] text-muted-foreground">Received</p><p className="mt-1 text-lg font-semibold tabular-nums">{fmt(paymentSummary.paidAmount)}</p></div>
