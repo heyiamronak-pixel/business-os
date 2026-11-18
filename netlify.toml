@@ -7,6 +7,9 @@
   PORT = "23821"
   BASE_PATH = "/"
 
+[functions]
+  directory = "netlify/functions"
+
 [[redirects]]
   from = "/*"
   to = "/index.html"
