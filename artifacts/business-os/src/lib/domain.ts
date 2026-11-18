@@ -221,6 +221,28 @@ export interface Sale {
   reversedAt?: string;
 }
 
+export interface SaleReturnItem {
+  productId: string;
+  name: string;
+  sku: string;
+  quantity: number;
+  amount: number;
+  costAmount: number;
+}
+
+export interface SaleReturn {
+  id: string;
+  businessId: string;
+  saleId: string;
+  items: SaleReturnItem[];
+  amount: number;
+  refundAmount: number;
+  reason: string;
+  refundMethod?: RecordedPaymentMethod;
+  refundReference?: string;
+  createdAt: string;
+}
+
 export type SupplierStatus = "active" | "inactive";
 export type PurchasePaymentStatus = "paid" | "partial" | "pending";
 
@@ -399,6 +421,7 @@ export interface WorkspaceDB {
   suppliers: Supplier[];
   purchases: Purchase[];
   sales: Sale[];
+  returns: SaleReturn[];
   expenses: Expense[];
   expenseCategories: ExpenseCategory[];
   targets: Target[];
@@ -694,6 +717,7 @@ export function emptyDb(): WorkspaceDB {
     suppliers: [],
     purchases: [],
     sales: [],
+    returns: [],
     expenses: [],
     expenseCategories: [],
     targets: [],

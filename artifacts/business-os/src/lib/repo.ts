@@ -25,6 +25,7 @@ function migrate(raw: unknown): PersistedState {
     ...saved,
     suppliers: Array.isArray(saved.suppliers) ? saved.suppliers : [],
     purchases: Array.isArray(saved.purchases) ? saved.purchases : [],
+    returns: Array.isArray(saved.returns) ? saved.returns : [],
     invoices: Array.isArray(saved.invoices) ? saved.invoices : [],
     leads: Array.isArray(saved.leads) ? saved.leads : [],
     branches: Array.isArray(saved.branches) ? saved.branches : (Array.isArray(saved.businesses) ? saved.businesses.map((business) => ({

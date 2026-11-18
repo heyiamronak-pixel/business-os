@@ -57,7 +57,7 @@ Acceptance: totals must reconcile with source records and selected date range. D
 - [ ] Add barcode/QR generation and camera/device scanning.
 - [x] Add reason-required stock-in/out/adjustment movements with business ownership validation and movement history; stock changes are blocked in product editing and must use Inventory.
 - [ ] Add transfers between branches and complete branch-level movement audit history.
-- [ ] Add reorder levels, supplier-based reorder recommendations and inventory valuation.
+- [x] Add minimum-stock reorder suggestions, most-recent supplier hints and inventory valuation at cost and selling price.
 - [ ] Track listed price, negotiated price, discount and actual selling price separately.
 - [ ] Verify all stock calculations against sales, purchases, returns and reversals.
 
@@ -70,8 +70,9 @@ Acceptance: totals must reconcile with source records and selected date range. D
 - [x] Add sales payment collection history with method, transaction reference and date; record full reversal refunds separately and reconcile them against cash collected.
 - [x] Add reason-required sale reversal that restores stock, retains the original sale and writes a reversal activity/movement.
 - [ ] Add controlled sale edits and full customer payment-method/reference history.
-- [ ] Add returns, refunds, exchange and credit-note workflows with original transaction references.
-- [ ] Ensure a reversed or returned transaction cannot remain counted as normal revenue/profit.
+- [x] Add linked item-level partial returns, stock restoration, return reasons and recorded refunds with original sale references.
+- [ ] Add exchanges and credit-note workflows with linked source transactions.
+- [x] Ensure reversed and partially/fully returned transactions reduce recognised revenue, cost and gross profit correctly.
 - [ ] Add printable sales receipts and clear payment status.
 
 ## 5. Customers and leads / CRM

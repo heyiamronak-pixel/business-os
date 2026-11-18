@@ -23,6 +23,7 @@ import {
   type RecordedPaymentMethod,
   type SalePayment,
   type SaleRefund,
+  type SaleReturn,
   type Supplier,
   type SupplierStatus,
   type Sale,
@@ -180,6 +181,7 @@ export function deleteBusiness(db: WorkspaceDB, id: string): WorkspaceDB {
     suppliers: drop(db.suppliers),
     purchases: drop(db.purchases),
     sales: drop(db.sales),
+    returns: drop(db.returns ?? []),
     expenses: drop(db.expenses),
     expenseCategories: drop(db.expenseCategories),
     targets: drop(db.targets),
@@ -892,10 +894,13 @@ export function reverseSale(
     reference: sale.paymentMethod === "credit" ? "Previous payment · method not recorded" : undefined,
     receivedAt: sale.createdAt,
   }] : []);
-  const refundRecords: SaleRefund[] = sale.paidAmount > 0 ? [{
-    id: createId("sref"), amount: roundMoney(sale.paidAmount), method: refund!.method,
-    reference: refund!.reference?.trim() || undefined, refundedAt: now,
-  }] : sale.refunds ?? [];
+  const refundRecords: SaleRefund[] = sale.paidAmount > 0 ? [
+    ...(sale.refunds ?? []),
+    {
+      id: createId("sref"), amount: roundMoney(sale.paidAmount), method: refund!.method,
+      reference: refund!.reference?.trim() || undefined, refundedAt: now,
+    },
+  ] : sale.refunds ?? [];
   const reversed: Sale = {
     ...sale, status: "reversed", payments: legacyPayments, refunds: refundRecords,
     reversalReason, reversedAt: now,
@@ -907,6 +912,174 @@ export function reverseSale(
   };
   return {
     ...db, products, movements, sales: replace(db.sales, sale.id, reversed),
+    activity: [activity, ...db.activity],
+  };
+}
+
+
+export function recordSaleReturn(
+  db: WorkspaceDB,
+  saleId: string,
+  input: {
+    businessId: string;
+    items: Array<{ productId: string; quantity: number }>;
+    reason: string;
+    refundMethod?: RecordedPaymentMethod;
+    refundReference?: string;
+  },
+): WorkspaceDB {
+  const sale = db.sales.find((item) => item.id === saleId && item.businessId === input.businessId);
+  if (!sale) throw new ServiceError("Sale not found in this business.");
+  if (sale.status === "reversed") throw new ServiceError("A reversed sale cannot receive another return.");
+  if (!input.items.length) throw new ServiceError("Choose at least one item to return.");
+  const reason = input.reason.trim();
+  if (reason.length < 3) throw new ServiceError("Add a return reason (at least 3 characters).");
+
+  const requested = new Map<string, number>();
+  for (const line of input.items) {
+    if (!line.productId || !Number.isFinite(line.quantity) || line.quantity <= 0) {
+      throw new ServiceError("Return quantities must be greater than zero.");
+    }
+    requested.set(line.productId, roundMoney((requested.get(line.productId) ?? 0) + line.quantity));
+  }
+
+  const returnedItems: SaleReturn["items"] = [];
+  const remaining = new Map(requested);
+  const updatedItems: SaleItem[] = [];
+  let returnAmount = 0;
+  let returnCost = 0;
+
+  for (const item of sale.items) {
+    const requestedQty = remaining.get(item.productId) ?? 0;
+    if (requestedQty <= 0) {
+      updatedItems.push(item);
+      continue;
+    }
+    const availableQty = item.qty;
+    const qty = Math.min(availableQty, requestedQty);
+    const lineBase = roundMoney(item.unitPrice * item.qty - item.discount);
+    const saleRatio = sale.subtotal > 0 ? sale.total / sale.subtotal : 0;
+    const lineReturn = roundMoney(lineBase * saleRatio * (qty / availableQty));
+    const lineCost = roundMoney(item.costPrice * qty);
+    returnedItems.push({
+      productId: item.productId,
+      name: item.name,
+      sku: item.sku,
+      quantity: qty,
+      amount: lineReturn,
+      costAmount: lineCost,
+    });
+    returnAmount = roundMoney(returnAmount + lineReturn);
+    returnCost = roundMoney(returnCost + lineCost);
+    remaining.set(item.productId, roundMoney(requestedQty - qty));
+    const nextQty = roundMoney(availableQty - qty);
+    if (nextQty > 0) {
+      updatedItems.push({
+        ...item,
+        qty: nextQty,
+        discount: roundMoney(item.discount * (nextQty / availableQty)),
+      });
+    }
+  }
+
+  for (const quantity of remaining.values()) {
+    if (quantity > 0) throw new ServiceError("Return quantity is greater than the quantity still sold on this sale.");
+  }
+  if (!returnedItems.length) throw new ServiceError("No valid sale items were selected.");
+
+  const allRemainingReturned = sale.items.every((item) =>
+    (requested.get(item.productId) ?? 0) >= sale.items
+      .filter((candidate) => candidate.productId === item.productId)
+      .reduce((sum, candidate) => sum + candidate.qty, 0)
+  );
+  if (allRemainingReturned) returnAmount = roundMoney(sale.total);
+
+  const nextTotal = roundMoney(Math.max(0, sale.total - returnAmount));
+  const nextSubtotal = roundMoney(updatedItems.reduce((sum, item) => sum + item.unitPrice * item.qty - item.discount, 0));
+  const nextDiscount = roundMoney(Math.max(0, nextSubtotal - nextTotal));
+  const nextCostTotal = roundMoney(Math.max(0, sale.costTotal - returnCost));
+  const refundAmount = roundMoney(Math.max(0, sale.paidAmount - nextTotal));
+  if (refundAmount > 0 && !input.refundMethod) {
+    throw new ServiceError(
+      `A refund of ${refundAmount.toFixed(2)} is due because the revised sale is below the amount collected. Complete the refund first, then record its method.`
+    );
+  }
+  const nextPaidAmount = roundMoney(Math.max(0, sale.paidAmount - refundAmount));
+  const nextOutstanding = roundMoney(Math.max(0, nextTotal - nextPaidAmount));
+  const paymentStatus = nextOutstanding <= 0 ? "paid" : nextPaidAmount > 0 ? "partial" : "unpaid";
+  const now = nowIso();
+  const returnId = createId("ret");
+  const returnedQuantity = returnedItems.reduce((sum, item) => sum + item.quantity, 0);
+  const returnRecord: SaleReturn = {
+    id: returnId,
+    businessId: sale.businessId,
+    saleId: sale.id,
+    items: returnedItems,
+    amount: returnAmount,
+    refundAmount,
+    reason,
+    refundMethod: refundAmount > 0 ? input.refundMethod : undefined,
+    refundReference: refundAmount > 0 ? input.refundReference?.trim() || undefined : undefined,
+    createdAt: now,
+  };
+
+  let products = db.products;
+  let movements = db.movements;
+  for (const item of returnedItems) {
+    const product = products.find((entry) => entry.id === item.productId && entry.businessId === sale.businessId);
+    if (!product) throw new ServiceError("A returned product is no longer available in this business.");
+    const nextStock = roundMoney(product.stock + item.quantity);
+    products = replace(products, product.id, { stock: nextStock, updatedAt: now });
+    movements = [{
+      id: createId("mov"),
+      businessId: sale.businessId,
+      productId: product.id,
+      type: "in",
+      quantity: item.quantity,
+      resultingStock: nextStock,
+      reason: `Sale return · ${reason}`,
+      refId: returnId,
+      createdAt: now,
+    }, ...movements];
+  }
+
+  const refundRecords: SaleRefund[] = refundAmount > 0
+    ? [...(sale.refunds ?? []), {
+        id: createId("sref"),
+        amount: refundAmount,
+        method: input.refundMethod!,
+        reference: input.refundReference?.trim() || undefined,
+        refundedAt: now,
+      }]
+    : (sale.refunds ?? []);
+  const updatedSale: Sale = {
+    ...sale,
+    items: updatedItems,
+    subtotal: nextSubtotal,
+    discount: nextDiscount,
+    total: nextTotal,
+    costTotal: nextCostTotal,
+    grossProfit: roundMoney(nextTotal - nextCostTotal),
+    paidAmount: nextPaidAmount,
+    outstanding: nextOutstanding,
+    paymentStatus,
+    refunds: refundRecords,
+  };
+  const activity: Activity = {
+    id: createId("act"),
+    businessId: sale.businessId,
+    customerId: sale.customerId,
+    type: "system",
+    message: `Return recorded for sale ${sale.id.slice(-7).toUpperCase()} · ${returnedQuantity} unit(s) · ${reason}`,
+    refId: returnId,
+    createdAt: now,
+  };
+  return {
+    ...db,
+    products,
+    movements,
+    sales: replace(db.sales, sale.id, updatedSale),
+    returns: [returnRecord, ...(db.returns ?? [])],
     activity: [activity, ...db.activity],
   };
 }

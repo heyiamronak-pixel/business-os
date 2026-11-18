@@ -13,6 +13,7 @@ import {
   deleteCustomer,
   reverseSale,
   recordPayment,
+  recordSaleReturn,
   upsertCustomer,
   upsertExpense,
   upsertProduct,
@@ -247,6 +248,72 @@ test("sale reversal restores stock once, preserves the sale, and requires a reas
   assert.throws(() => recordPayment(reversed, created.sale.id, 1), /cannot receive another payment/);
 });
 
+
+test("partial and full sale returns restore only returned stock and reconcile revenue, profit and cash", () => {
+  const { db } = setup();
+  const created = completeSale(db, {
+    businessId: "business-1",
+    lines: [{ productId: product.id, qty: 2, unitPrice: 80, discount: 0 }],
+    cartDiscount: 0,
+    paymentMethod: "cash",
+    paidAmount: 160,
+  });
+  assert.equal(created.db.products[0].stock, 3);
+  assert.throws(() => recordSaleReturn(created.db, created.sale.id, {
+    businessId: "business-1", items: [{ productId: product.id, quantity: 1 }], reason: "Customer return",
+  }), /refund of 80/);
+
+  const partial = recordSaleReturn(created.db, created.sale.id, {
+    businessId: "business-1", items: [{ productId: product.id, quantity: 1 }],
+    reason: "Customer return", refundMethod: "upi", refundReference: "UTR-RET-1",
+  });
+  const saleAfterPartial = partial.sales.find((sale) => sale.id === created.sale.id)!;
+  assert.equal(saleAfterPartial.total, 80);
+  assert.equal(saleAfterPartial.items[0].qty, 1);
+  assert.equal(saleAfterPartial.paidAmount, 80);
+  assert.equal(saleAfterPartial.outstanding, 0);
+  assert.equal(saleAfterPartial.refunds?.[0].amount, 80);
+  assert.equal(partial.products[0].stock, 4);
+  assert.equal(partial.returns[0].amount, 80);
+  assert.equal(financeSnapshot(partial, "business-1").revenue, 80);
+  assert.equal(financeSnapshot(partial, "business-1").grossProfit, 40);
+  assert.equal(financeSnapshot(partial, "business-1").cashIn, 80);
+
+  const full = recordSaleReturn(partial, created.sale.id, {
+    businessId: "business-1", items: [{ productId: product.id, quantity: 1 }],
+    reason: "Second item returned", refundMethod: "upi", refundReference: "UTR-RET-2",
+  });
+  const finalSale = full.sales.find((sale) => sale.id === created.sale.id)!;
+  assert.equal(finalSale.total, 0);
+  assert.equal(finalSale.paidAmount, 0);
+  assert.equal(finalSale.items.length, 0);
+  assert.equal(full.products[0].stock, 5);
+  assert.equal(finalSale.refunds?.reduce((sum, entry) => sum + entry.amount, 0), 160);
+  assert.equal(financeSnapshot(full, "business-1").revenue, 0);
+  assert.equal(financeSnapshot(full, "business-1").grossProfit, 0);
+  assert.equal(financeSnapshot(full, "business-1").cashIn, 0);
+});
+
+test("sale returns reject excessive quantities and preserve outstanding balances when no refund is due", () => {
+  const { db } = setup();
+  const created = completeSale(db, {
+    businessId: "business-1", lines: [{ productId: product.id, qty: 2, unitPrice: 80, discount: 0 }],
+    cartDiscount: 0, paymentMethod: "credit", paidAmount: 40,
+  });
+  assert.throws(() => recordSaleReturn(created.db, created.sale.id, {
+    businessId: "business-1", items: [{ productId: product.id, quantity: 3 }], reason: "Wrong quantity",
+  }), /greater than the quantity/);
+  const returned = recordSaleReturn(created.db, created.sale.id, {
+    businessId: "business-1", items: [{ productId: product.id, quantity: 1 }], reason: "One item returned",
+  });
+  const sale = returned.sales.find((item) => item.id === created.sale.id)!;
+  assert.equal(sale.total, 80);
+  assert.equal(sale.paidAmount, 40);
+  assert.equal(sale.outstanding, 40);
+  assert.equal(sale.paymentStatus, "partial");
+  assert.equal(returned.products[0].stock, 4);
+  assert.equal(financeSnapshot(returned, "business-1").cashIn, 40);
+});
 
 test("expense dates and amounts are validated and expense updates stay within the business", () => {
   const valid = upsertExpense(emptyDb(), {

@@ -7,7 +7,7 @@ import { BottomSheet } from "@/components/sheet";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, Segmented, Stat } from "@/components/ui";
 import type { RecordedPaymentMethod, Sale } from "@/lib/domain";
 import { formatDateTime, money } from "@/lib/format";
-import { recordPayment, reverseSale } from "@/lib/services";
+import { recordPayment, recordSaleReturn, reverseSale } from "@/lib/services";
 import { useAppStore, useBusiness } from "@/lib/store";
 
 type DateFilter = "all" | "today" | "7d" | "month";
@@ -28,6 +28,11 @@ export function SalesScreen() {
   const [reverseReason, setReverseReason] = React.useState("");
   const [refundMethod, setRefundMethod] = React.useState<RecordedPaymentMethod | "">("");
   const [refundReference, setRefundReference] = React.useState("");
+  const [returnSale, setReturnSale] = React.useState<Sale | null>(null);
+  const [returnQuantities, setReturnQuantities] = React.useState<Record<string, string>>({});
+  const [returnReason, setReturnReason] = React.useState("");
+  const [returnMethod, setReturnMethod] = React.useState<RecordedPaymentMethod | "">("");
+  const [returnReference, setReturnReference] = React.useState("");
 
   if (!business) return null;
   const currency = business.currency;
@@ -98,6 +103,37 @@ export function SalesScreen() {
       setPaymentReference("");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not record payment");
+    }
+  }
+
+  function openReturn(record: Sale) {
+    setReturnSale(record);
+    setReturnQuantities(Object.fromEntries(record.items.map((item) => [item.productId, "0"])));
+    setReturnReason("");
+    setReturnMethod("");
+    setReturnReference("");
+    setSale(null);
+  }
+
+  function submitReturn() {
+    if (!returnSale) return;
+    const items = returnSale.items
+      .map((item) => ({ productId: item.productId, quantity: Number(returnQuantities[item.productId] ?? 0) }))
+      .filter((item) => item.quantity > 0);
+    try {
+      const updated = recordSaleReturn(useAppStore.getState().db, returnSale.id, {
+        businessId: business.id,
+        items,
+        reason: returnReason,
+        refundMethod: returnMethod || undefined,
+        refundReference: returnReference,
+      });
+      apply(updated);
+      toast.success("Return recorded and stock reconciled");
+      setReturnSale(null);
+      setReturnQuantities({});
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not record return");
     }
   }
 
@@ -214,9 +250,12 @@ export function SalesScreen() {
                 </>
               ) : null}
               {sale.status !== "reversed" ? (
-                <Button variant="ghost" className="w-full text-danger" onClick={() => { setReverseReason(""); setRefundMethod(""); setRefundReference(""); setConfirm(true); }}>
-                  Reverse sale
-                </Button>
+                <>
+                  <Button variant="secondary" className="w-full" onClick={() => openReturn(sale)}>Return items</Button>
+                  <Button variant="ghost" className="w-full text-danger" onClick={() => { setReverseReason(""); setRefundMethod(""); setRefundReference(""); setConfirm(true); }}>
+                    Reverse sale
+                  </Button>
+                </>
               ) : <p className="text-sm text-danger">Reversed · {sale.reversalReason ?? "Reason not recorded"}</p>}
             </div>
           ) : null
@@ -253,6 +292,15 @@ export function SalesScreen() {
                   <span>{money(entry.amount, currency)} · {entry.method.toUpperCase()}{entry.reference ? ` · ${entry.reference}` : ""}</span>
                   <span className="text-muted-foreground">{formatDateTime(entry.refundedAt)}</span>
                 </div>)}
+              </> : null}
+              {(db.returns ?? []).filter((entry) => entry.saleId === sale.id).length ? <>
+                <p className="pt-2 text-xs font-semibold">Return history</p>
+                {(db.returns ?? []).filter((entry) => entry.saleId === sale.id).map((entry) => (
+                  <div key={entry.id} className="rounded-lg border border-border p-2 text-xs">
+                    <div className="flex justify-between gap-2"><span>{entry.items.map((item) => `${item.name} × ${item.quantity}`).join(", ")}</span><span className="tabular">{money(entry.amount, currency)}</span></div>
+                    <p className="mt-1 text-muted-foreground">{entry.reason} · {formatDateTime(entry.createdAt)}{entry.refundAmount > 0 ? ` · refunded ${money(entry.refundAmount, currency)}` : ""}</p>
+                  </div>
+                ))}
               </> : null}
             </div>
             {sale.note ? <p className="text-sm text-muted-foreground">{sale.note}</p> : null}
@@ -299,6 +347,36 @@ export function SalesScreen() {
             <Field label="Refund reference (optional)"><Input value={refundReference} onChange={(event) => setRefundReference(event.target.value)} placeholder="UTR / refund reference" /></Field>
           </> : null}
         </div>
+      </BottomSheet>
+
+      <BottomSheet
+        open={!!returnSale}
+        onOpenChange={(open) => !open && setReturnSale(null)}
+        title="Return sale items"
+        description={returnSale ? `Sale ${returnSale.id.slice(-7).toUpperCase()} · revised total and any refund are calculated automatically` : undefined}
+        footer={<Button className="w-full" onClick={submitReturn} disabled={!returnSale || returnReason.trim().length < 3 || !returnSale.items.some((item) => Number(returnQuantities[item.productId] ?? 0) > 0)}>Record return</Button>}
+      >
+        {returnSale ? (
+          <div className="space-y-3">
+            <p className="text-xs text-muted-foreground">Enter the quantity physically received back. Returned stock is added to inventory. Any refund is recorded only after you have actually sent it to the customer.</p>
+            {returnSale.items.map((item) => (
+              <div key={item.productId} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">{item.name}</p>
+                  <p className="text-xs text-muted-foreground">{item.sku} · {item.qty} still sold</p>
+                </div>
+                <div className="w-24 shrink-0">
+                  <Input type="number" min="0" max={item.qty} step="0.01" inputMode="decimal" value={returnQuantities[item.productId] ?? "0"} onChange={(event) => setReturnQuantities((current) => ({ ...current, [item.productId]: event.target.value }))} />
+                </div>
+              </div>
+            ))}
+            <Field label="Return reason"><Input value={returnReason} onChange={(event) => setReturnReason(event.target.value)} placeholder="Damaged, incorrect item, customer return…" /></Field>
+            <Field label="Refund method (only when a refund is due)"><Select value={returnMethod} onChange={(event) => setReturnMethod(event.target.value as RecordedPaymentMethod | "")}>
+              <option value="">No refund / not yet recorded</option><option value="upi">UPI</option><option value="cash">Cash</option><option value="bank">Bank transfer</option><option value="card">Card</option><option value="other">Other</option>
+            </Select></Field>
+            <Field label="Refund reference (optional)"><Input value={returnReference} onChange={(event) => setReturnReference(event.target.value)} placeholder="UTR / refund reference" /></Field>
+          </div>
+        ) : null}
       </BottomSheet>
     </AppPage>
   );
