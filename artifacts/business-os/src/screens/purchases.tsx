@@ -8,7 +8,7 @@ import { Badge, Button, Card, EmptyState, Field, Input, Select, Stat, Textarea }
 import type { Purchase, RecordedPaymentMethod } from "@/lib/domain";
 import { downloadCsv } from "@/lib/csv";
 import { formatDateTime, money } from "@/lib/format";
-import { createPurchase, updatePurchasePayment } from "@/lib/services";
+import { createPurchase, recordPurchaseReturn, updatePurchasePayment } from "@/lib/services";
 import { useAppStore, useBusiness } from "@/lib/store";
 import { roundMoney } from "@/lib/utils";
 
@@ -34,6 +34,11 @@ export function PurchasesScreen() {
   const [payment, setPayment] = React.useState("");
   const [paymentMethod, setPaymentMethod] = React.useState<RecordedPaymentMethod>("bank");
   const [paymentReference, setPaymentReference] = React.useState("");
+  const [returnPurchase, setReturnPurchase] = React.useState<Purchase | null>(null);
+  const [returnQuantities, setReturnQuantities] = React.useState<Record<string, string>>({});
+  const [returnReason, setReturnReason] = React.useState("");
+  const [returnMethod, setReturnMethod] = React.useState<RecordedPaymentMethod | "">("");
+  const [returnReference, setReturnReference] = React.useState("");
 
   if (!business) return null;
   const businessId = business.id;
@@ -111,6 +116,39 @@ export function PurchasesScreen() {
     }
   }
 
+
+  function openPurchaseReturn(record: Purchase) {
+    setReturnPurchase(record);
+    setReturnQuantities(Object.fromEntries(record.items.map((item, index) => [`${item.productId}:${index}`, "0"])));
+    setReturnReason("");
+    setReturnMethod("");
+    setReturnReference("");
+  }
+
+  function submitPurchaseReturn() {
+    if (!business || !returnPurchase) return;
+    const quantitiesByProduct = new Map<string, number>();
+    returnPurchase.items.forEach((item, index) => {
+      const quantity = Number(returnQuantities[`${item.productId}:${index}`] ?? 0);
+      if (quantity > 0) quantitiesByProduct.set(item.productId, (quantitiesByProduct.get(item.productId) ?? 0) + quantity);
+    });
+    try {
+      const updatedDb = recordPurchaseReturn(useAppStore.getState().db, returnPurchase.id, {
+        businessId: business.id,
+        items: Array.from(quantitiesByProduct, ([productId, quantity]) => ({ productId, quantity })),
+        reason: returnReason,
+        refundMethod: returnMethod || undefined,
+        refundReference: returnReference,
+      });
+      apply(updatedDb);
+      setSelected(updatedDb.purchases.find((purchase) => purchase.id === returnPurchase.id) ?? null);
+      setReturnPurchase(null);
+      setReturnQuantities({});
+      toast.success("Supplier return recorded and stock reduced");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not record supplier return");
+    }
+  }
   function collectPayment() {
     if (!selected) return;
     try {
@@ -259,18 +297,22 @@ export function PurchasesScreen() {
         title={selected?.supplierName ?? "Purchase"}
         description={selected ? `Purchase ${selected.id.slice(-8).toUpperCase()} · ${formatDateTime(selected.createdAt)}` : undefined}
         footer={
-          selected && selected.balance > 0 ? (
+          selected ? (
             <div className="space-y-2">
-              <Field label={`Record supplier payment · ${money(selected.balance, business.currency)} due`}>
-                <Input type="number" min="0.01" max={selected.balance} step="0.01" value={payment} onChange={(event) => setPayment(event.target.value)} placeholder="Payment amount" />
-              </Field>
-              <Field label="Payment method"><Select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as RecordedPaymentMethod)}>
-                <option value="bank">Bank transfer</option><option value="upi">UPI</option><option value="cash">Cash</option><option value="card">Card</option><option value="other">Other</option>
-              </Select></Field>
-              <Field label="Payment reference (optional)"><Input value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)} placeholder="UTR / transaction ID" /></Field>
-              <Button className="w-full" onClick={collectPayment} disabled={!payment.trim()}>Record payment</Button>
+              {selected.balance > 0 ? <>
+                <Field label={`Record supplier payment · ${money(selected.balance, business.currency)} due`}>
+                  <Input type="number" min="0.01" max={selected.balance} step="0.01" value={payment} onChange={(event) => setPayment(event.target.value)} placeholder="Payment amount" />
+                </Field>
+                <Field label="Payment method"><Select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as RecordedPaymentMethod)}>
+                  <option value="bank">Bank transfer</option><option value="upi">UPI</option><option value="cash">Cash</option><option value="card">Card</option><option value="other">Other</option>
+                </Select></Field>
+                <Field label="Payment reference (optional)"><Input value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)} placeholder="UTR / transaction ID" /></Field>
+                <Button className="w-full" onClick={collectPayment} disabled={!payment.trim()}>Record payment</Button>
+              </> : null}
+              {selected.items.length ? <Button className="w-full" variant="secondary" onClick={() => openPurchaseReturn(selected)}>Return goods to supplier</Button> : null}
+              <Button className="w-full" variant="ghost" onClick={() => setSelected(null)}>Close</Button>
             </div>
-          ) : <Button className="w-full" variant="secondary" onClick={() => setSelected(null)}>Close</Button>
+          ) : null
         }
       >
         {selected ? (
@@ -300,9 +342,43 @@ export function PurchasesScreen() {
                 </div>
               )) : selected.paidAmount > 0 ? <p className="text-xs text-muted-foreground">Previously recorded payment · {money(selected.paidAmount, business.currency)} (method history not available).</p> : <p className="text-xs text-muted-foreground">No supplier payments recorded yet.</p>}
             </div>
+            {(db.purchaseReturns ?? []).filter((entry) => entry.purchaseId === selected.id).length ? (
+              <div className="space-y-2 border-t border-border pt-3">
+                <p className="text-xs font-semibold">Supplier return history</p>
+                {(db.purchaseReturns ?? []).filter((entry) => entry.purchaseId === selected.id).map((entry) => (
+                  <div key={entry.id} className="rounded-lg border border-border p-2 text-xs">
+                    <div className="flex justify-between gap-2"><span>{entry.items.map((item) => `${item.name} × ${item.quantity}`).join(", ")}</span><span className="tabular">{money(entry.amount, business.currency)}</span></div>
+                    <p className="mt-1 text-muted-foreground">{entry.reason} · {formatDateTime(entry.createdAt)}{entry.refundAmount > 0 ? ` · supplier refunded ${money(entry.refundAmount, business.currency)}` : ""}</p>
+                  </div>
+                ))}
+              </div>
+            ) : null}
             {selected.note ? <p className="text-sm text-muted-foreground">{selected.note}</p> : null}
           </div>
         ) : null}
+      </BottomSheet>
+
+      <BottomSheet
+        open={!!returnPurchase}
+        onOpenChange={(open) => !open && setReturnPurchase(null)}
+        title="Return goods to supplier"
+        description={returnPurchase ? `Purchase ${returnPurchase.id.slice(-8).toUpperCase()} · stock must still be available to return` : undefined}
+        footer={<Button className="w-full" onClick={submitPurchaseReturn} disabled={!returnPurchase || returnReason.trim().length < 3 || !returnPurchase.items.some((item, index) => Number(returnQuantities[`${item.productId}:${index}`] ?? 0) > 0)}>Record supplier return</Button>}
+      >
+        {returnPurchase ? <div className="space-y-3">
+          <p className="text-xs text-muted-foreground">Enter quantities physically sent back. On-hand inventory will decrease. Any supplier refund is recorded only after the money reaches you.</p>
+          {returnPurchase.items.map((item, index) => (
+            <div key={`${item.productId}:${index}`} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
+              <div className="min-w-0"><p className="truncate text-sm font-medium">{item.name}</p><p className="text-xs text-muted-foreground">{item.sku} · {item.quantity} still on this purchase</p></div>
+              <div className="w-24 shrink-0"><Input type="number" min="0" max={item.quantity} step="0.01" value={returnQuantities[`${item.productId}:${index}`] ?? "0"} onChange={(event) => setReturnQuantities((current) => ({ ...current, [`${item.productId}:${index}`]: event.target.value }))} /></div>
+            </div>
+          ))}
+          <Field label="Supplier return reason"><Input value={returnReason} onChange={(event) => setReturnReason(event.target.value)} placeholder="Damaged goods, wrong items, excess supply…" /></Field>
+          <Field label="Supplier refund method (only when money is received)"><Select value={returnMethod} onChange={(event) => setReturnMethod(event.target.value as RecordedPaymentMethod | "")}>
+            <option value="">No refund / credit against balance</option><option value="upi">UPI</option><option value="cash">Cash</option><option value="bank">Bank transfer</option><option value="card">Card</option><option value="other">Other</option>
+          </Select></Field>
+          <Field label="Refund reference (optional)"><Input value={returnReference} onChange={(event) => setReturnReference(event.target.value)} placeholder="UTR / supplier refund reference" /></Field>
+        </div> : null}
       </BottomSheet>
     </AppPage>
   );

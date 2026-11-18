@@ -79,7 +79,7 @@ export function financeSnapshot(db: WorkspaceDB, businessId: string, range?: Dat
 }
 
 export type CashbookDirection = "in" | "out";
-export type CashbookEntryType = "sale_receipt" | "sale_refund" | "supplier_payment" | "expense";
+export type CashbookEntryType = "sale_receipt" | "sale_refund" | "supplier_payment" | "supplier_refund" | "expense";
 export interface CashbookEntry {
   id: string;
   date: string;
@@ -151,6 +151,20 @@ export function cashbookEntries(db: WorkspaceDB, businessId: string, range?: Dat
         description: `Supplier payment · ${purchase.supplierReference || purchase.id.slice(-7).toUpperCase()}`,
       });
     }
+  }
+  for (const returned of (db.purchaseReturns ?? []).filter((item) => item.businessId === businessId && item.refundAmount > 0 && item.refundMethod)) {
+    if (!included(returned.createdAt)) continue;
+    entries.push({
+      id: `supplier-refund:${returned.id}`,
+      date: returned.createdAt,
+      direction: "in",
+      type: "supplier_refund",
+      amount: roundMoney(returned.refundAmount),
+      method: returned.refundMethod!,
+      reference: returned.refundReference,
+      party: returned.supplierName,
+      description: `Supplier refund against purchase ${returned.purchaseId.slice(-7).toUpperCase()}`,
+    });
   }
   for (const expense of db.expenses.filter((item) => item.businessId === businessId && !item.archived)) {
     const date = new Date(expense.date + "T00:00:00").toISOString();

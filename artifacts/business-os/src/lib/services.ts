@@ -20,6 +20,7 @@ import {
   type Purchase,
   type PurchaseItem,
   type PurchasePayment,
+  type PurchaseReturn,
   type RecordedPaymentMethod,
   type SalePayment,
   type SaleRefund,
@@ -180,6 +181,7 @@ export function deleteBusiness(db: WorkspaceDB, id: string): WorkspaceDB {
     leads: drop(db.leads),
     suppliers: drop(db.suppliers),
     purchases: drop(db.purchases),
+    purchaseReturns: drop(db.purchaseReturns ?? []),
     sales: drop(db.sales),
     returns: drop(db.returns ?? []),
     expenses: drop(db.expenses),
@@ -709,6 +711,133 @@ export function updatePurchasePayment(
   };
 }
 
+
+
+export function recordPurchaseReturn(
+  db: WorkspaceDB,
+  purchaseId: string,
+  input: {
+    businessId: string;
+    items: Array<{ productId: string; quantity: number }>;
+    reason: string;
+    refundMethod?: RecordedPaymentMethod;
+    refundReference?: string;
+  },
+): WorkspaceDB {
+  const purchase = db.purchases.find((item) => item.id === purchaseId && item.businessId === input.businessId);
+  if (!purchase) throw new ServiceError("Purchase not found in this business.");
+  if (!input.items.length) throw new ServiceError("Choose at least one item to return.");
+  const reason = input.reason.trim();
+  if (reason.length < 3) throw new ServiceError("Add a supplier return reason (at least 3 characters).");
+
+  const requested = new Map<string, number>();
+  for (const line of input.items) {
+    if (!line.productId || !Number.isFinite(line.quantity) || line.quantity <= 0) {
+      throw new ServiceError("Return quantities must be greater than zero.");
+    }
+    requested.set(line.productId, roundMoney((requested.get(line.productId) ?? 0) + line.quantity));
+  }
+
+  const returnedItems: PurchaseReturn["items"] = [];
+  const remaining = new Map(requested);
+  const nextItems: PurchaseItem[] = [];
+  let returnAmount = 0;
+  for (const item of purchase.items) {
+    const requestedQty = remaining.get(item.productId) ?? 0;
+    if (requestedQty <= 0) {
+      nextItems.push(item);
+      continue;
+    }
+    const quantity = Math.min(item.quantity, requestedQty);
+    const amount = roundMoney(quantity * item.unitCost);
+    returnedItems.push({
+      productId: item.productId,
+      name: item.name,
+      sku: item.sku,
+      quantity,
+      amount,
+    });
+    returnAmount = roundMoney(returnAmount + amount);
+    remaining.set(item.productId, roundMoney(requestedQty - quantity));
+    const nextQty = roundMoney(item.quantity - quantity);
+    if (nextQty > 0) nextItems.push({
+      ...item,
+      quantity: nextQty,
+      total: roundMoney(nextQty * item.unitCost),
+    });
+  }
+  for (const quantity of remaining.values()) {
+    if (quantity > 0) throw new ServiceError("Return quantity is greater than the quantity still recorded on this purchase.");
+  }
+  if (!returnedItems.length) throw new ServiceError("No valid purchase items were selected.");
+
+  const now = nowIso();
+  let products = db.products;
+  let movements = db.movements;
+  for (const item of returnedItems) {
+    const product = products.find((entry) => entry.id === item.productId && entry.businessId === input.businessId);
+    if (!product) throw new ServiceError("A returned product is no longer available in this business.");
+    if (product.stock < item.quantity) {
+      throw new ServiceError(`Cannot return ${item.quantity} ${product.unit} of ${product.name}; only ${product.stock} remains in stock. Reconcile stock before returning to the supplier.`);
+    }
+    const nextStock = roundMoney(product.stock - item.quantity);
+    products = replace(products, product.id, { stock: nextStock, updatedAt: now });
+    movements = [{
+      id: createId("mov"),
+      businessId: input.businessId,
+      productId: product.id,
+      type: "out",
+      quantity: -item.quantity,
+      resultingStock: nextStock,
+      reason: `Supplier return · ${reason}`,
+      refId: purchaseId,
+      createdAt: now,
+    }, ...movements];
+  }
+
+  const nextTotal = roundMoney(Math.max(0, purchase.total - returnAmount));
+  const refundAmount = roundMoney(Math.max(0, purchase.paidAmount - nextTotal));
+  if (refundAmount > 0 && !input.refundMethod) {
+    throw new ServiceError(
+      `The returned goods create a supplier refund due of ${refundAmount.toFixed(2)}. Record the refund method only after the supplier has actually refunded you.`
+    );
+  }
+  const nextPaid = roundMoney(Math.max(0, purchase.paidAmount - refundAmount));
+  const nextBalance = roundMoney(Math.max(0, nextTotal - nextPaid));
+  const paymentStatus = nextBalance <= 0 ? "paid" : nextPaid > 0 ? "partial" : "pending";
+  const returnId = createId("pret");
+  const returnRecord: PurchaseReturn = {
+    id: returnId,
+    businessId: purchase.businessId,
+    purchaseId: purchase.id,
+    supplierId: purchase.supplierId,
+    supplierName: purchase.supplierName,
+    items: returnedItems,
+    amount: returnAmount,
+    refundAmount,
+    reason,
+    refundMethod: refundAmount > 0 ? input.refundMethod : undefined,
+    refundReference: refundAmount > 0 ? input.refundReference?.trim() || undefined : undefined,
+    createdAt: now,
+  };
+  const updatedPurchase: Purchase = {
+    ...purchase,
+    items: nextItems,
+    subtotal: nextTotal,
+    total: nextTotal,
+    paidAmount: nextPaid,
+    balance: nextBalance,
+    paymentStatus,
+    updatedAt: now,
+  };
+  return {
+    ...db,
+    products,
+    movements,
+    purchases: replace(db.purchases, purchase.id, updatedPurchase),
+    purchaseReturns: [returnRecord, ...(db.purchaseReturns ?? [])],
+  };
+}
 export function addCustomerNote(db: WorkspaceDB, businessId: string, customerId: string, note: string): WorkspaceDB {
   const text = note.trim();
   if (!text) throw new ServiceError("Write a note first.");

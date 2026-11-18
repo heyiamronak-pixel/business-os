@@ -14,6 +14,7 @@ import {
   reverseSale,
   recordPayment,
   recordSaleReturn,
+  recordPurchaseReturn,
   upsertCustomer,
   upsertExpense,
   upsertProduct,
@@ -87,6 +88,67 @@ test("supplier document references prevent duplicate receipts and due dates are 
     paidAmount: 0,
     dueDate: "2026-02-31",
   }), /valid supplier payment due date/);
+});
+
+test("supplier purchase returns reduce stock, purchase balances and record supplier refunds", () => {
+  const { db, supplier } = setup();
+  const purchaseResult = createPurchase(db, {
+    businessId: "business-1",
+    supplierId: supplier.id,
+    items: [{ productId: product.id, quantity: 2, unitCost: 40 }],
+    paidAmount: 80,
+    initialPaymentMethod: "bank",
+  });
+  assert.equal(purchaseResult.db.products[0].stock, 7);
+  assert.throws(() => recordPurchaseReturn(purchaseResult.db, purchaseResult.purchase.id, {
+    businessId: "business-1",
+    items: [{ productId: product.id, quantity: 1 }],
+    reason: "Return damaged goods",
+  }), /supplier refund due/);
+  const partial = recordPurchaseReturn(purchaseResult.db, purchaseResult.purchase.id, {
+    businessId: "business-1",
+    items: [{ productId: product.id, quantity: 1 }],
+    reason: "Return damaged goods",
+    refundMethod: "upi",
+    refundReference: "SUP-REF-1",
+  });
+  const updated = partial.purchases.find((entry) => entry.id === purchaseResult.purchase.id)!;
+  assert.equal(updated.total, 40);
+  assert.equal(updated.paidAmount, 40);
+  assert.equal(updated.balance, 0);
+  assert.equal(updated.items[0].quantity, 1);
+  assert.equal(partial.products[0].stock, 6);
+  assert.equal(partial.purchaseReturns[0].amount, 40);
+  assert.equal(partial.purchaseReturns[0].refundAmount, 40);
+  assert.throws(() => recordPurchaseReturn(partial, purchaseResult.purchase.id, {
+    businessId: "business-1",
+    items: [{ productId: product.id, quantity: 2 }],
+    reason: "Too many goods",
+  }), /greater than the quantity/);
+});
+
+test("supplier purchase returns cannot reduce stock below zero or update another business", () => {
+  const { db, supplier } = setup();
+  const purchaseResult = createPurchase(db, {
+    businessId: "business-1",
+    supplierId: supplier.id,
+    items: [{ productId: product.id, quantity: 2, unitCost: 40 }],
+    paidAmount: 0,
+  });
+  const lowStock = {
+    ...purchaseResult.db,
+    products: purchaseResult.db.products.map((entry) => ({ ...entry, stock: 0 })),
+  };
+  assert.throws(() => recordPurchaseReturn(lowStock, purchaseResult.purchase.id, {
+    businessId: "business-1",
+    items: [{ productId: product.id, quantity: 1 }],
+    reason: "Return to supplier",
+  }), /only 0 remains in stock/);
+  assert.throws(() => recordPurchaseReturn(purchaseResult.db, purchaseResult.purchase.id, {
+    businessId: "business-2",
+    items: [{ productId: product.id, quantity: 1 }],
+    reason: "Cross business attempt",
+  }), /not found in this business/);
 });
 
 test("purchase receipt increases stock and stores a partial supplier balance", () => {

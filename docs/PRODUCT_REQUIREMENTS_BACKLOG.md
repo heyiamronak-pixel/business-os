@@ -94,7 +94,7 @@ Acceptance: totals must reconcile with source records and selected date range. D
 - [x] Add supplier payment history with method, transaction reference and date.
 - [x] Add optional supplier payment due dates, overdue payable totals and recorded document references on purchases.
 - [ ] Add receipt attachments and detailed ageing/payables drill-down reporting.
-- [ ] Support purchase returns and stock reconciliation.
+- [x] Support linked partial purchase returns, on-hand stock checks, supplier balance reconciliation and supplier refund records.
 - [x] Block duplicate purchases when the same supplier document reference is recorded again.
 - [ ] Add idempotent goods-receipt confirmation even when the supplier reference is missing.
 

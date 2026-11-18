@@ -270,6 +270,27 @@ export interface PurchaseItem {
   total: number;
 }
 
+export interface PurchaseReturnItem {
+  productId: string;
+  name: string;
+  sku: string;
+  quantity: number;
+  amount: number;
+}
+export interface PurchaseReturn {
+  id: string;
+  businessId: string;
+  purchaseId: string;
+  supplierId: string;
+  supplierName: string;
+  items: PurchaseReturnItem[];
+  amount: number;
+  refundAmount: number;
+  reason: string;
+  refundMethod?: RecordedPaymentMethod;
+  refundReference?: string;
+  createdAt: string;
+}
 export interface Purchase {
   id: string;
   businessId: string;
@@ -422,6 +443,7 @@ export interface WorkspaceDB {
   leads: Lead[];
   suppliers: Supplier[];
   purchases: Purchase[];
+  purchaseReturns: PurchaseReturn[];
   sales: Sale[];
   returns: SaleReturn[];
   expenses: Expense[];
@@ -718,6 +740,7 @@ export function emptyDb(): WorkspaceDB {
     leads: [],
     suppliers: [],
     purchases: [],
+    purchaseReturns: [],
     sales: [],
     returns: [],
     expenses: [],
